@@ -1,0 +1,232 @@
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;500;600;650;700;750;800&display=swap">
+<style>
+  #scenario-directions { width:100%; }
+  #scenario-directions .sd-app {
+    --sd-bg:light-dark(#f3f7f4,#182722); --sd-paper:light-dark(#ffffff,#21342c);
+    --sd-ink:light-dark(#233d33,#e4eee8); --sd-muted:light-dark(#546b60,#adc3b5);
+    --sd-line:light-dark(#dbe5dd,#3c5548); --sd-accent:light-dark(#245c47,#acd6b9);
+    --sd-soft:light-dark(#e6efe8,#304d3b); --sd-action:light-dark(#245c47,#acd6b9);
+    --sd-on-action:light-dark(#ffffff,#17291e); --sd-rail:light-dark(#244c3c,#15251d);
+    --sd-rail-ink:#f4f8ef; --sd-rail-muted:#c0d2c5;
+    --sd-a:light-dark(#e0ece4,#304d3b); --sd-b:light-dark(#e1eaf3,#2e4354);
+    --sd-c:light-dark(#f4ebce,#4e472e); --sd-note:light-dark(#fcf5df,#443f28);
+    --sd-note-ink:light-dark(#715b24,#e9d390); --sd-head-font:'Nunito Sans',sans-serif;
+    --sd-ui-font:'Nunito Sans',sans-serif; --sd-radius:13px; --sd-row-pad:12px;
+    font-family:var(--sd-ui-font); font-size:14px; line-height:1.45;
+    color:var(--sd-ink); background:var(--sd-bg); min-height:1050px;
+    display:grid; grid-template-columns:172px minmax(0,1fr);
+    border:1px solid var(--sd-line); border-radius:14px; overflow:clip; text-align:left;
+  }
+  #scenario-directions .sd-app[hidden] { display:none; }
+  #scenario-directions .sd-app * { box-sizing:border-box; }
+  #scenario-directions .sd-app h1,#scenario-directions .sd-app h2,#scenario-directions .sd-app h3,#scenario-directions .sd-app p { margin:0; }
+  #scenario-directions .sd-app button,#scenario-directions .sd-app select { font:inherit; color:inherit; }
+  #scenario-directions .sd-app button { cursor:var(--cursor-interaction,pointer); }
+  #scenario-directions .sd-app button:disabled { cursor:default; }
+  #scenario-directions .sd-rail { background:var(--sd-rail);color:var(--sd-rail-ink);padding:25px 15px 18px;display:flex;flex-direction:column;gap:31px; }
+  #scenario-directions .sd-brand { display:flex;align-items:center;gap:9px;font-size:16px;font-weight:750;line-height:1.15; }
+  #scenario-directions .sd-brand svg { width:27px;height:27px;flex:none; }
+  #scenario-directions .sd-project { font-weight:650;font-size:14px;line-height:1.5; }
+  #scenario-directions .sd-project small { display:block;font-size:12px;color:var(--sd-rail-muted);font-weight:400;margin-top:4px; }
+  #scenario-directions .sd-stages { margin:0;padding:0;list-style:none;display:grid;gap:7px; }
+  #scenario-directions .sd-stages li { display:flex;gap:9px;align-items:center;padding:9px 8px;font-size:12px;color:var(--sd-rail-muted);border-radius:7px; }
+  #scenario-directions .sd-stages .sd-current { background:var(--sd-c);color:var(--sd-ink);font-weight:750; }
+  #scenario-directions .sd-step { display:grid;place-items:center;flex:none;width:20px;height:20px;border:1px solid currentColor;border-radius:50%;font-size:11px; }
+  #scenario-directions .sd-done .sd-step { border-color:transparent; }
+  #scenario-directions .sd-stages .sd-done { color:var(--sd-rail-ink); }
+  #scenario-directions .sd-rail-bottom { margin-top:auto;display:grid;gap:18px;font-size:12px;color:var(--sd-rail-muted); }
+  #scenario-directions .sd-ensemble { display:flex;gap:5px;margin:8px 0 6px; }
+  #scenario-directions .sd-model { display:grid;place-items:center;width:26px;height:26px;border:1px solid currentColor;border-radius:6px;font-size:11px;color:var(--sd-rail-ink); }
+  #scenario-directions .sd-shell { min-width:0;display:flex;flex-direction:column; }
+  #scenario-directions .sd-top { min-height:61px;padding:17px 27px;display:flex;align-items:center;gap:12px;justify-content:space-between;border-bottom:1px solid var(--sd-line);font-size:12px;background:var(--sd-paper); }
+  #scenario-directions .sd-top-left { display:flex;align-items:center;gap:9px;flex-wrap:wrap; }
+  #scenario-directions .sd-top-right { color:var(--sd-muted);display:flex;align-items:center;gap:7px;white-space:nowrap; }
+  #scenario-directions .sd-top svg { width:14px;height:14px; }
+  #scenario-directions .sd-mode { border:1px solid var(--sd-line);padding:3px 7px;border-radius:5px;font-size:11px; }
+  #scenario-directions .sd-work { padding:25px 27px 19px;flex:1;min-width:0; }
+  #scenario-directions .sd-heading { display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:21px; }
+  #scenario-directions .sd-heading h2 { font-family:var(--sd-head-font);font-size:29px;line-height:1.18;font-weight:750;letter-spacing:-.65px; }
+  #scenario-directions .sd-heading p { margin-top:8px;color:var(--sd-muted);font-size:13px;max-width:59ch; }
+  #scenario-directions .sd-count { color:var(--sd-accent);font-size:12px;font-weight:650;background:var(--sd-soft);padding:6px 10px;border-radius:7px;white-space:nowrap; }
+  #scenario-directions .sd-sectionbar { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:13px;font-size:12px;color:var(--sd-muted); }
+  #scenario-directions .sd-legend { display:flex;gap:12px;flex-wrap:wrap; }
+  #scenario-directions .sd-legend span { display:flex;align-items:center;gap:5px; }
+  #scenario-directions .sd-key { width:7px;height:7px;background:var(--sd-accent);border-radius:50%; }
+  #scenario-directions .sd-key-hollow { background:transparent;border:1px solid var(--sd-muted);border-radius:50%; }
+  #scenario-directions .sd-board { min-width:0; }
+  #scenario-directions .sd-grid-wrap { width:100%;overflow-x:auto; }
+  #scenario-directions .sd-grid { width:100%;border-collapse:separate;border-spacing:6px 5px;table-layout:fixed;margin:-5px -6px 0;width:calc(100% + 12px); }
+  #scenario-directions .sd-grid th { text-align:left;font-weight:600;vertical-align:bottom; }
+  #scenario-directions .sd-grid thead th { padding:0 0 8px; }
+  #scenario-directions .sd-grid thead th:first-child { width:119px;padding:12px 9px 14px 0;color:var(--sd-muted);font-size:12px;font-weight:500; }
+  #scenario-directions .sd-chain-head { padding:13px 12px 12px;border-radius:var(--sd-radius) var(--sd-radius) 5px 5px;min-height:89px;display:flex;flex-direction:column;justify-content:space-between;gap:7px; }
+  #scenario-directions .sd-chain-name { font-family:var(--sd-head-font);font-size:16px;line-height:1.2;font-weight:750;letter-spacing:-.2px; }
+  #scenario-directions .sd-chain-meta { font-size:11px;font-weight:500;display:flex;align-items:center;gap:5px; }
+  #scenario-directions [data-chain="0"] { background:var(--sd-a); }
+  #scenario-directions [data-chain="1"] { background:var(--sd-b); }
+  #scenario-directions [data-chain="2"] { background:var(--sd-c); }
+  #scenario-directions .sd-grid tbody th { padding:8px 9px 8px 0;font-size:12px;line-height:1.35; }
+  #scenario-directions .sd-grid tbody th small { display:block;font-weight:400;font-size:11px;color:var(--sd-muted);margin-top:4px; }
+  #scenario-directions .sd-app[data-hide-tags="true"] .sd-grid tbody th small { display:none; }
+  #scenario-directions .sd-grid td { padding:0;vertical-align:stretch; }
+  #scenario-directions .sd-cell { text-align:left;width:100%;height:100%;min-height:65px;display:flex;align-items:center;gap:5px;justify-content:space-between;padding:var(--sd-row-pad);background:var(--sd-paper);border:1px solid transparent;border-radius:6px;font-size:12px!important;line-height:1.4;transition:background .14s,border-color .14s; }
+  #scenario-directions .sd-cell:hover { border-color:var(--sd-muted); }
+  #scenario-directions .sd-cell[aria-pressed="true"] { background:var(--sd-soft);border:1.5px solid var(--sd-accent);padding:calc(var(--sd-row-pad) - .5px); }
+  #scenario-directions .sd-cell svg { width:12px;height:12px;flex:none;opacity:.65; }
+  #scenario-directions .sd-board-foot { display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:11px 0 18px;font-size:11px;color:var(--sd-muted); }
+  #scenario-directions .sd-inspector { background:var(--sd-paper);border:1px solid var(--sd-line);border-radius:var(--sd-radius);padding:17px 18px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:21px; }
+  #scenario-directions .sd-inspector h3 { font-size:14px;font-weight:750;margin-bottom:7px; }
+  #scenario-directions .sd-inspector p { font-size:12px;line-height:1.6; }
+  #scenario-directions .sd-inspector-label { display:flex;align-items:center;gap:6px;font-size:11px;color:var(--sd-muted);margin-bottom:7px; }
+  #scenario-directions .sd-inspector-label svg { width:13px;height:13px; }
+  #scenario-directions .sd-selection-label { display:block;font-size:11px;font-weight:650;margin-bottom:6px; }
+  #scenario-directions .sd-select { display:block;width:100%;min-height:37px;border:1px solid var(--sd-line);background:var(--sd-bg);border-radius:6px;font-size:12px!important;padding:7px 24px 7px 9px; }
+  #scenario-directions .sd-editor-note { font-size:11px!important;color:var(--sd-muted);margin-top:8px!important; }
+  #scenario-directions .sd-model-tabs { display:flex;gap:4px;margin:13px 0 8px; }
+  #scenario-directions .sd-model-tab { background:transparent;border:1px solid var(--sd-line);padding:4px 7px;border-radius:4px;font-size:11px!important; }
+  #scenario-directions .sd-model-tab[aria-pressed="true"] { background:var(--sd-soft);border-color:var(--sd-accent); }
+  #scenario-directions .sd-footer { background:var(--sd-paper);border-top:1px solid var(--sd-line);padding:15px 27px;display:flex;align-items:center;gap:14px;justify-content:space-between; }
+  #scenario-directions .sd-footer-status { font-size:12px;display:flex;align-items:center;gap:8px; }
+  #scenario-directions .sd-footer-status svg { width:16px;height:16px;flex:none;color:var(--sd-accent); }
+  #scenario-directions .sd-footer-status small { display:block;color:var(--sd-muted);font-size:11px;margin-top:2px; }
+  #scenario-directions .sd-primary { border:0;border-radius:8px;background:var(--sd-action);color:var(--sd-on-action)!important;padding:11px 14px;font-weight:700;font-size:12px!important;white-space:nowrap; }
+  #scenario-directions .sd-change-note { display:none;background:var(--sd-note);color:var(--sd-note-ink);border-radius:6px;padding:9px 11px;margin-top:12px;font-size:12px; }
+  #scenario-directions .sd-change-note[data-visible="true"] { display:block; }
+  #scenario-directions .sd-mobile-label { display:none; }
+
+  @media(max-width:850px) {
+    #scenario-directions .sd-app { min-height:1210px;grid-template-columns:142px minmax(0,1fr); }
+    #scenario-directions .sd-work { padding:22px 18px 18px; }
+    #scenario-directions .sd-rail { padding-inline:10px; }
+    #scenario-directions .sd-brand { font-size:14px; }
+    #scenario-directions .sd-stages li { font-size:11px;padding-inline:4px;gap:6px; }
+    #scenario-directions .sd-heading { flex-wrap:wrap; }
+    #scenario-directions .sd-grid thead th:first-child { width:96px; }
+    #scenario-directions .sd-chain-name { font-size:14px; }
+    #scenario-directions .sd-cell { font-size:11px!important;padding:9px;min-height:82px; }
+    #scenario-directions .sd-cell[aria-pressed="true"] { padding:8.5px; }
+    #scenario-directions .sd-cell svg { display:none; }
+    #scenario-directions .sd-chain-head { padding:11px 8px; }
+    #scenario-directions .sd-top { padding-inline:18px;flex-wrap:wrap; }
+    #scenario-directions .sd-top-right { font-size:11px; }
+    #scenario-directions .sd-footer { padding-inline:18px;flex-wrap:wrap; }
+  }
+  @media(max-width:600px) {
+    #scenario-directions .sd-app { grid-template-columns:minmax(0,1fr);min-height:1250px; }
+    #scenario-directions .sd-rail { padding:15px 18px;display:flex;flex-direction:row;align-items:center;gap:12px;flex-wrap:wrap; }
+    #scenario-directions .sd-brand { font-size:14px; }
+    #scenario-directions .sd-brand br { display:none; }
+    #scenario-directions .sd-project,#scenario-directions .sd-stages,#scenario-directions .sd-rail-bottom { display:none; }
+    #scenario-directions .sd-mobile-label { display:block;font-size:12px;margin-left:auto; }
+    #scenario-directions .sd-work { padding:20px 14px; }
+    #scenario-directions .sd-heading h2 { font-size:25px!important; }
+    #scenario-directions .sd-top { padding:12px 14px; }
+    #scenario-directions .sd-grid { min-width:540px; }
+    #scenario-directions .sd-grid-wrap { padding-bottom:6px; }
+    #scenario-directions .sd-footer { padding:14px; }
+  }
+  @media(prefers-reduced-motion:reduce) { #scenario-directions .sd-cell { transition:none; } }
+</style>
+<div id="scenario-directions" aria-label="Common Ground design reference">
+  <section class="sd-app sd-common" data-variant="Common Ground" aria-label="Common Ground workbench">
+    <aside class="sd-rail"></aside>
+    <div class="sd-shell">
+      <header class="sd-top"><div class="sd-top-left"><span>UK financial hardship</span><span class="sd-mode">Quick mode</span></div><span class="sd-top-right"><i data-lucide="hard-drive" aria-hidden="true"></i> Saved on this device</span></header>
+      <main class="sd-work">
+        <div class="sd-heading"><div><h2>Make room for different futures.</h2><p>Compare how five uncertainties could combine. Each column tells a different story.</p></div></div>
+        <div class="sd-sectionbar"><span>Construct chains</span><span class="sd-count">3 main scenarios / 0 wildcards</span></div>
+        <div class="sd-board"><div class="sd-grid-wrap"></div><div class="sd-board-foot"><span>Select a hypothesis to inspect or change it.</span><span>Illustrative exercise</span></div><section class="sd-inspector" aria-label="Selected hypothesis"></section></div>
+        <div class="sd-change-note" role="status"></div>
+      </main><footer class="sd-footer"></footer>
+    </div>
+  </section>
+
+</div>
+<script>
+(() => {
+  const root = document.getElementById('scenario-directions');
+  const stages = ['Explore drivers','Assess drivers','Select uncertainties','Develop hypotheses','Construct chains','Write scenarios','Review & complete'];
+  const chainNames = ['Local lifelines','The digital divide','Public renewal'];
+  const rows = [
+    {name:'Household energy',tag:'Economic',options:['Prices remain volatile','Lower costs, unequal gains','Stable regulated bills'],reason:'Energy costs shape what remains for food, housing and transport. This state needs to fit the income support and housing choices in the same chain.'},
+    {name:'Income support',tag:'Political',options:['Local emergency funds','Automated, tightly targeted','Broader national support'],reason:'Targeted support could ease pressure for people the system reaches. Digital barriers could leave others without help, even as energy costs fall.'},
+    {name:'Work & incomes',tag:'Economic / social',options:['Portfolio incomes expand','Automation reshapes work','Public service jobs grow'],reason:'Changes in work affect both household resources and access to support. Consider people whose hours, health or caring responsibilities limit their options.'},
+    {name:'Housing access',tag:'Social / political',options:['Rents keep rising','Access becomes fragmented','Social housing grows slowly'],reason:'Housing changes often take longer than financial support. The chain needs to account for households whose rent pressures persist through the horizon.'},
+    {name:'Community capacity',tag:'Social',options:['Mutual aid expands','Digital-first assistance','Formal local partnerships'],reason:'Local capacity affects who can reach help. A plausible pathway should explain how organisations gain the staff, funding and trust needed for this future.'}
+  ];
+  const initial = {};
+  const designs = {};
+  const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const persist = () => {};
+  const validState = value => {
+    const state = value && typeof value === 'object' ? value : {};
+    return {
+      row:Number.isInteger(state.row)&&state.row>=0&&state.row<5 ? state.row : 1,
+      col:Number.isInteger(state.col)&&state.col>=0&&state.col<3 ? state.col : 1,
+      model:[0,1,2].includes(state.model) ? state.model : 0,
+      changes:state.changes&&typeof state.changes==='object' ? Object.fromEntries(Object.entries(state.changes).filter(([key,v])=>/^[0-4]-[0-2]$/.test(key)&&Number.isInteger(v)&&v>=0&&v<=3)) : {},
+      approved:state.approved===true,touched:state.touched===true
+    };
+  };
+  root.querySelectorAll('.sd-app').forEach((app,index) => {
+    const name = app.dataset.variant;
+    let state = designs[name] = validState(initial[name]);
+    const gridWrap = app.querySelector('.sd-grid-wrap');
+    const inspector = app.querySelector('.sd-inspector');
+    const footer = app.querySelector('.sd-footer');
+    const notice = app.querySelector('.sd-change-note');
+    app.querySelector('.sd-rail').innerHTML = `<div class="sd-brand"><i data-lucide="waypoints" aria-hidden="true"></i><span>Scenario<br> Designer</span></div><div class="sd-project">Financial hardship<small>United Kingdom<br>2026–2029</small></div><ol class="sd-stages" aria-label="Exercise stages">${stages.map((s,i)=>`<li class="${i<4?'sd-done':i===4?'sd-current':''}" ${i===4?'aria-current="step"':''}><span class="sd-step">${i<4?'✓':i+1}</span><span>${s}</span></li>`).join('')}</ol><div class="sd-rail-bottom"><div>Independent perspectives<div class="sd-ensemble"><span class="sd-model">A</span><span class="sd-model">B</span><span class="sd-model">C</span></div>3 example models</div><div>Example spend<br><strong>$1.24 used</strong> / $5 budget</div></div><span class="sd-mobile-label">5. Construct chains</span>`;
+    const valueAt = (r,c) => state.changes[`${r}-${c}`] ?? c;
+    const hypothesis = (r,c) => valueAt(r,c)===3 ? 'Unresolved' : rows[r].options[valueAt(r,c)];
+    function renderGrid() {
+      gridWrap.innerHTML = `<table class="sd-grid" aria-label="Compare scenario chains"><thead><tr><th scope="col">Critical uncertainty</th>${chainNames.map((name,c)=>`<th scope="col"><div class="sd-chain-head" data-chain="${c}"><span class="sd-chain-name">${name}</span><span class="sd-chain-meta">${state.approved?'✓ Analyst-approved':'○ AI-proposed chain'}</span></div></th>`).join('')}</tr></thead><tbody>${rows.map((row,r)=>`<tr><th scope="row">${row.name}<small>${row.tag}</small></th>${chainNames.map((name,c)=>`<td><button type="button" class="sd-cell cursor-interaction" data-r="${r}" data-c="${c}" aria-pressed="${r===state.row&&c===state.col}" aria-label="${escape(name+': '+row.name+'. '+hypothesis(r,c)+'. Inspect or change hypothesis.')}"><span>${escape(hypothesis(r,c))}</span><i data-lucide="chevron-down" aria-hidden="true"></i></button></td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    }
+    function reasoning() {
+      const chosen = hypothesis(state.row,state.col);
+      if (chosen==='Unresolved') return 'This uncertainty remains open. The narrative should preserve that gap rather than invent an outcome. Request a coherence recheck when you are ready.';
+      if (Object.hasOwn(state.changes,`${state.row}-${state.col}`)) return 'You changed this hypothesis. The earlier model reasoning has been preserved, but it may no longer apply. A coherence recheck would need an explicit request.';
+      if (state.model===1) return 'A competing view: implementation could matter more than the policy choice itself. Check who can access support, who is excluded, and what the chain assumes about local capacity.';
+      if (state.model===2) return 'An assumption to examine: households and local organisations can adapt within three years. The pathway should explain the resources and time that adaptation would require.';
+      if (state.row===1 && state.col===0) return 'Local funds and mutual aid could bridge immediate gaps. Their reach depends on uneven local resources, while volatile energy bills keep demand unpredictable.';
+      if (state.row===1 && state.col===2) return 'Broader national support and regulated bills could improve household stability. The chain still needs to explain how support reaches people facing persistent housing pressures.';
+      return rows[state.row].reason;
+    }
+    function renderInspector() {
+      const row = rows[state.row];
+      inspector.innerHTML = `<div class="sd-reason"><div class="sd-inspector-label"><i data-lucide="git-branch" aria-hidden="true"></i>${escape(chainNames[state.col])} / ${escape(row.name)}</div><h3>What connects these choices?</h3><p class="sd-reason-text">${escape(reasoning())}</p><div class="sd-model-tabs" aria-label="Example model perspectives">${[0,1,2].map(m=>`<button type="button" class="sd-model-tab cursor-interaction" data-model="${m}" aria-pressed="${state.model===m}">Model ${String.fromCharCode(65+m)}</button>`).join('')}</div><p class="sd-editor-note">Illustrative model reasoning, for design review.</p></div><div class="sd-edit"><label class="sd-selection-label" for="sd-hypothesis-${index}">${escape(row.name)} hypothesis</label><select id="sd-hypothesis-${index}" class="sd-select">${[...row.options,'Unresolved'].map((op,i)=>`<option value="${i}" ${valueAt(state.row,state.col)===i?'selected':''}>${escape(op)}</option>`).join('')}</select><p class="sd-editor-note">${Object.hasOwn(state.changes,`${state.row}-${state.col}`)?'Analyst-edited. Coherence review suggested.':'AI-proposed. Your judgement decides.'}</p><p class="sd-editor-note">Editing preserves your work. Rechecks run only when you request them.</p></div>`;
+    }
+    function renderFooter() {
+      const changed = Object.keys(state.changes).length;
+      footer.innerHTML = `<div class="sd-footer-status"><i data-lucide="${state.approved?'check-check':changed?'circle-alert':'layers'}" aria-hidden="true"></i><div>${state.approved?'Three chains approved':changed?'Review suggested':'Your judgement, at every stage'}<small>${state.approved?'Ready to choose a drafting model.':changed?'Changes retained. No AI recheck has run.':'Inspect the combinations before approving.'}</small></div></div><button type="button" class="sd-primary cursor-interaction" data-approve>${state.approved?'Undo approval':'Approve 3 chains'}</button>`;
+      notice.dataset.visible = changed ? 'true' : 'false';
+      notice.textContent = changed ? `${changed} ${changed===1?'hypothesis changed':'hypotheses changed'}. Earlier coherence notes may need review. No model calls were made.` : '';
+    }
+    function icons() { if (globalThis.lucide) lucide.createIcons({attrs:{width:16,height:16}}); }
+    function render() { renderGrid();renderInspector();renderFooter();icons(); }
+    function save() { state.touched=true;persist(); }
+    gridWrap.addEventListener('click',event=>{
+      const button=event.target.closest('button[data-r]');if(!button)return;
+      state.row=Number(button.dataset.r);state.col=Number(button.dataset.c);
+      gridWrap.querySelectorAll('button[data-r]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));
+      renderInspector();icons();save();
+    });
+    inspector.addEventListener('click',event=>{
+      const button=event.target.closest('[data-model]');if(!button)return;
+      state.model=Number(button.dataset.model);renderInspector();icons();
+      inspector.querySelector(`[data-model="${state.model}"]`).focus();save();
+    });
+    inspector.addEventListener('change',event=>{
+      if(!event.target.matches('select'))return;
+      const value=Number(event.target.value);const key=`${state.row}-${state.col}`;
+      if(value===state.col)delete state.changes[key];else state.changes[key]=value;
+      state.approved=false;render();inspector.querySelector('select').focus();save();
+    });
+    footer.addEventListener('click',event=>{
+      if(!event.target.closest('[data-approve]'))return;
+      state.approved=!state.approved;renderGrid();renderFooter();icons();footer.querySelector('button').focus();save();
+    });
+    render();
+  });
+
+})();
+</script>
