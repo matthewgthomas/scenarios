@@ -1,0 +1,1050 @@
+<script lang="ts">
+  import { onMount, tick } from 'svelte';
+  import '@fontsource-variable/nunito-sans';
+  import '../../design/tokens.css';
+  import '$lib/styles.css';
+  import {
+    GitBranch,
+    Check,
+    Circle,
+    Layers,
+    Settings2,
+    FolderOpen,
+    HardDrive,
+    Download,
+    Plus,
+    ArrowRight,
+    ArrowUpRight,
+    Sun,
+    Moon,
+    HelpCircle,
+    Sprout,
+    Zap,
+    Upload,
+    Trash2,
+    Clock,
+    ExternalLink,
+    X,
+    RefreshCw,
+    AlertTriangle,
+    BookOpen,
+    Undo2,
+    Redo2
+  } from '@lucide/svelte';
+  import {
+    stages,
+    newProject,
+    parseProject,
+    id,
+    now,
+    activeDrivers,
+    uncertainties,
+    spent,
+    reserved,
+    uncertainSpend,
+    prerequisite,
+    modelName,
+    type Project,
+    type Change,
+    type Run
+  } from '$lib/domain/project';
+  import { exampleProject } from '$lib/domain/example';
+  import {
+    listProjects,
+    saveProject,
+    deleteProject,
+    preference,
+    recoverInterrupted
+  } from '$lib/storage/projects';
+  import {
+    launch,
+    getModels,
+    testKey,
+    contextFor,
+    estimate,
+    type Model,
+    type Operation,
+    type Task
+  } from '$lib/ai/openrouter';
+  import { download, projectJSON, filename } from '$lib/export/files';
+  import Chains from '$lib/components/Chains.svelte';
+  import Drivers from '$lib/components/Drivers.svelte';
+  import Assessment from '$lib/components/Assessment.svelte';
+  import Hypotheses from '$lib/components/Hypotheses.svelte';
+  import Writing from '$lib/components/Writing.svelte';
+  import Setup from '$lib/components/Setup.svelte';
+  import Exports from '$lib/components/Exports.svelte';
+  import Modal from '$lib/components/Modal.svelte';
+
+  let project = $state<Project | null>(null);
+  let projects = $state<Project[]>([]);
+  let loaded = $state(false);
+  let saveState = $state('');
+  let announcement = $state('');
+  let error = $state('');
+  let theme = $state('light');
+  let dialog = $state<'settings' | 'paid' | 'delete' | 'help' | ''>('');
+  let deleteId = $state('');
+  let key = $state('');
+  let keyStatus = $state('');
+  let testing = $state(false);
+  let catalogue = $state<Model[]>([]);
+  let catalogueStatus = $state('Not loaded');
+  let catalogueLoading = $state(false);
+  let modelSearch = $state('');
+  let modelScope = $state('default');
+  let paidTask = $state<Task>('drivers');
+  let paidTargets = $state<string[] | undefined>();
+  let paidModels = $state<string[]>([]);
+  let retryId = $state<string | undefined>();
+  let paidError = $state('');
+  let busy = $state(false);
+  let operation: Operation | null = null;
+  let offline = $state(false);
+  let importInput: HTMLInputElement;
+  let saveTimer: ReturnType<typeof setTimeout>;
+  let saveQueue: Promise<void> = Promise.resolve();
+  let undoStack = $state<Project[]>([]);
+  let redoStack = $state<Project[]>([]);
+  let lastUndoAt = 0;
+  const p = $derived(project);
+  const configuredModels = $derived(
+    p ? (modelScope === 'default' ? p.models : (p.overrides[modelScope] ?? p.models)) : []
+  );
+  const filteredModels = $derived(
+    catalogue
+      .filter((m) => `${m.name} ${m.id}`.toLowerCase().includes(modelSearch.toLowerCase()))
+      .slice(0, 40)
+  );
+  const stageRuns = $derived(p?.runs.filter((r) => r.stage === p.stage) ?? []);
+  const blocked = $derived(p ? prerequisite(p, p.stage) : null);
+  const paidEstimates = $derived(
+    p
+      ? paidModels.map((m) =>
+          estimate(
+            catalogue.find((c) => c.id === m),
+            contextFor(p, paidTask, paidTargets),
+            paidTask
+          )
+        )
+      : []
+  );
+  const paidEstimate = $derived(
+    paidEstimates.every((e) => e !== null)
+      ? paidEstimates.reduce<number>((s, e) => s + e!, 0)
+      : null
+  );
+  const iconSet = [
+    Settings2,
+    Sprout,
+    Layers,
+    GitBranch,
+    Layers,
+    GitBranch,
+    BookOpen,
+    Check,
+    Download
+  ];
+
+  async function persist(snapshot: Project) {
+    saveQueue = saveQueue
+      .catch(() => {})
+      .then(async () => {
+        try {
+          await saveProject(snapshot);
+          projects = await listProjects();
+          if (project?.id === snapshot.id && project.revision === snapshot.revision) {
+            saveState = 'Saved on this device';
+            if (
+              error ===
+              'Device storage failed. Retry saving or download a project backup before closing this page.'
+            )
+              error = '';
+          }
+        } catch {
+          if (project?.id === snapshot.id) {
+            saveState = 'Changes not saved';
+            error =
+              'Device storage failed. Retry saving or download a project backup before closing this page.';
+          }
+        }
+      });
+    await saveQueue;
+  }
+  function updateProject(fn: Parameters<Change>[0], message?: string, recordUndo = true) {
+    if (!project) return;
+    if (recordUndo && !busy) {
+      if (message || Date.now() - lastUndoAt > 700) {
+        undoStack.push(structuredClone($state.snapshot(project)));
+        if (undoStack.length > 20) undoStack.shift();
+      }
+      lastUndoAt = Date.now();
+      redoStack = [];
+    }
+    const next = structuredClone($state.snapshot(project));
+    fn(next);
+    next.revision++;
+    next.updatedAt = now();
+    if (message) {
+      announcement = message;
+      next.events.push({ at: now(), revision: next.revision, message });
+    }
+    project = next;
+    saveState = 'Saving…';
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => persist(structuredClone(next)), 250);
+  }
+  const change: Change = (fn, message) => updateProject(fn, message);
+  function undoProject(redo = false) {
+    if (!project || busy) return;
+    const source = redo ? redoStack : undoStack;
+    const destination = redo ? undoStack : redoStack;
+    if (!source.length) return;
+    const current = structuredClone($state.snapshot(project));
+    const previous = structuredClone($state.snapshot(source.pop()!));
+    destination.push(current);
+    previous.runs = current.runs;
+    previous.events = current.events;
+    previous.stage = current.stage;
+    previous.revision = current.revision;
+    project = previous;
+    updateProject(
+      () => {},
+      redo
+        ? 'Change redone. Model usage records preserved.'
+        : 'Change undone. Model usage records preserved.',
+      false
+    );
+    lastUndoAt = 0;
+  }
+  async function openProject(value: Project) {
+    if (busy) return;
+    if (project) {
+      clearTimeout(saveTimer);
+      await persist(structuredClone($state.snapshot(project)));
+    }
+    project = structuredClone($state.snapshot(value));
+    undoStack = [];
+    redoStack = [];
+    lastUndoAt = 0;
+    error = '';
+    saveState = 'Saving…';
+    const interrupted = recoverInterrupted(project);
+    if (interrupted)
+      announcement = `${interrupted} model request(s) were interrupted. Work is preserved; dispatched calls may have been billed.`;
+    await preference('last-project', project.id).catch(() => {});
+    await persist(structuredClone($state.snapshot(project)));
+  }
+  async function home() {
+    if (busy) return;
+    if (project) {
+      clearTimeout(saveTimer);
+      await persist(structuredClone($state.snapshot(project)));
+    }
+    project = null;
+    await preference('last-project', '').catch(() => {});
+    error = '';
+  }
+  function navigate(stage: number) {
+    updateProject((p) => (p.stage = stage), undefined, false);
+    error = '';
+    void tick().then(() => {
+      window.scrollTo(0, 0);
+      document.getElementById('main')?.focus();
+    });
+  }
+  async function loadCatalogue() {
+    catalogueLoading = true;
+    catalogueStatus = 'Loading catalogue…';
+    try {
+      catalogue = await getModels();
+      catalogueStatus = `${catalogue.length} models · live OpenRouter prices`;
+    } catch (e) {
+      catalogueStatus =
+        e instanceof Error ? e.message : 'Catalogue unavailable. Try again when connected.';
+    } finally {
+      catalogueLoading = false;
+    }
+  }
+  function settings() {
+    modelScope = 'default';
+    dialog = 'settings';
+    if (!catalogue.length && !catalogueLoading) void loadCatalogue();
+  }
+  function toggleModel(modelId: string) {
+    const updated = configuredModels.includes(modelId)
+      ? configuredModels.filter((m) => m !== modelId)
+      : [...configuredModels, modelId];
+    if (!updated.length) return;
+    change((p) => {
+      if (modelScope === 'default') {
+        p.models = updated;
+        if (!updated.includes(p.writer)) p.writer = updated[0];
+      } else p.overrides[modelScope] = updated;
+    });
+  }
+  function request(task: Task, targets?: string[], writer?: string, retry?: Run) {
+    if (!p || busy) return;
+    paidTask = task;
+    paidTargets = targets;
+    retryId = retry?.id;
+    paidModels = retry
+      ? [retry.modelId]
+      : task === 'narrative' || task === 'consolidate'
+        ? [writer || p.writer]
+        : [...(p.overrides[String(p.stage)] ?? p.models)];
+    paidError = '';
+    dialog = 'paid';
+    if (!catalogue.length && !catalogueLoading) void loadCatalogue();
+  }
+  async function run() {
+    if (!project) return;
+    let started = false;
+    try {
+      operation = launch(
+        () => $state.snapshot(project!),
+        (fn, message) => updateProject(fn, message, false),
+        key,
+        catalogue,
+        paidTask,
+        [...paidModels],
+        paidTargets,
+        retryId
+      );
+      started = true;
+      dialog = '';
+      undoStack = [];
+      redoStack = [];
+      busy = true;
+      error = '';
+      announcement = 'Model operation started. Progress is shown below.';
+      await operation.done;
+      announcement =
+        'Operation finished. Review contributions and any missing results before approval.';
+    } catch (e) {
+      paidError = e instanceof Error ? e.message : 'Could not start operation.';
+    } finally {
+      busy = false;
+      operation = null;
+      if (started) {
+        undoStack = [];
+        redoStack = [];
+        lastUndoAt = 0;
+      }
+    }
+  }
+  function retry(run: Run) {
+    let targets = run.targetIds.length ? run.targetIds : undefined;
+    if (run.task === 'ratings' && p)
+      targets = activeDrivers(p)
+        .filter(
+          (d) =>
+            d.approved &&
+            !d.ratings.some((r) => r.modelId === run.modelId && r.driverRevision === d.revision)
+        )
+        .map((d) => d.id);
+    request(run.task, targets, undefined, run);
+  }
+  async function importFile(event: Event) {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    try {
+      if (file.size > 30_000_000)
+        throw new Error('This file is too large. Choose a project backup smaller than 30 MB.');
+      const imported = parseProject(JSON.parse(await file.text()));
+      imported.id = id('exercise');
+      imported.title += ' (imported)';
+      await openProject(imported);
+      announcement = 'Project imported. Your API key was not included.';
+    } catch (e) {
+      error =
+        e instanceof Error && !e.message.startsWith('[')
+          ? e.message
+          : 'This is not a supported version 1.0 project backup. Select a .scenario.json project file.';
+    } finally {
+      importInput.value = '';
+    }
+  }
+  onMount(() => {
+    let alive = true;
+    (async () => {
+      try {
+        projects = await listProjects();
+        const [last, appearance] = await Promise.all([
+          preference('last-project'),
+          preference('theme')
+        ]);
+        if (!alive) return;
+        theme =
+          appearance || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.dataset.cgTheme = theme;
+        const saved = projects.find((p) => p.id === last);
+        if (saved) await openProject(saved);
+      } catch {
+        error =
+          'Local storage is unavailable. You can work here, but download a project backup before closing.';
+      } finally {
+        loaded = true;
+      }
+    })();
+    const connection = () => (offline = !navigator.onLine);
+    connection();
+    addEventListener('online', connection);
+    addEventListener('offline', connection);
+    const leave = (event: BeforeUnloadEvent) => {
+      if (saveState === 'Saving…' || saveState === 'Changes not saved' || busy)
+        event.preventDefault();
+    };
+    addEventListener('beforeunload', leave);
+    return () => {
+      alive = false;
+      removeEventListener('online', connection);
+      removeEventListener('offline', connection);
+      removeEventListener('beforeunload', leave);
+    };
+  });
+</script>
+
+<svelte:head
+  ><title
+    >{p ? `${p.title} · Scenario Designer` : 'Scenario Designer — imagine futures together'}</title
+  ><meta
+    name="description"
+    content="An analyst-led workbench for exploring humanitarian futures with independent AI perspectives. Quick Mode, local projects, and decisions that stay yours."
+  /></svelte:head
+>
+<a class="skip-link" href="#main">Skip to workspace</a>
+<input
+  bind:this={importInput}
+  type="file"
+  accept=".json,application/json"
+  class="sr-only"
+  tabindex="-1"
+  aria-label="Import project file"
+  onchange={importFile}
+/>
+<div class="desktop-note">
+  Designed for desktop analysis. Use a larger screen for comparing and editing scenarios. Your saved
+  work remains accessible here.
+</div>
+<div class="app-shell">
+  <aside class="sidebar" aria-label="Exercise navigation">
+    <button class="brand" onclick={home} disabled={busy}
+      ><GitBranch size={27} strokeWidth={1.5} /><span
+        >Scenario<br />Designer<span class="brand-sub">A workspace for possible futures</span></span
+      ></button
+    >
+    {#if p}<button class="project-context" onclick={() => navigate(0)}
+        ><strong>{p.title}</strong><span>{p.horizon || 'Set your time horizon'}</span></button
+      >
+      <nav aria-label="Workflow stages">
+        {#each stages as stage, i}{@const Icon = iconSet[i]}<button
+            class:current={p.stage === i}
+            class:stage-completed={p.completed.includes(i)}
+            aria-current={p.stage === i ? 'step' : undefined}
+            onclick={() => navigate(i)}
+            ><span class="stage-number"
+              >{p.stale.includes(i)
+                ? '◒'
+                : p.completed.includes(i)
+                  ? '✓'
+                  : i === 0
+                    ? '◇'
+                    : i === 8
+                      ? '↗'
+                      : i}</span
+            ><span
+              >{stage}<small
+                >{p.stale.includes(i)
+                  ? 'Review suggested'
+                  : p.completed.includes(i)
+                    ? 'Complete'
+                    : p.stage === i
+                      ? 'Working'
+                      : prerequisite(p, i)
+                        ? 'Blocked'
+                        : 'Not started'}</small
+              ></span
+            ></button
+          >{/each}
+      </nav>
+    {:else}<div class="sidebar-intro">
+        <p>Possible futures.<br />AI-augmented perspectives.<br />Your judgement.</p>
+      </div>
+      <nav aria-label="Main navigation">
+        <button class="current" onclick={home}><FolderOpen size={18} /> Your exercises</button
+        ><button onclick={() => (dialog = 'help')}><HelpCircle size={18} /> How it works</button>
+      </nav>{/if}
+    <div class="sidebar-bottom">
+      {#if p}<button class="sidebar-models" onclick={settings}
+          ><span>AI models</span>
+          <div>
+            {#each p.models as model, i}<span class="sidebar-model" title={model}
+                >{['●', '■', '▲', '◆'][i % 4]}</span
+              >{/each}<Settings2 size={16} />
+          </div>
+          <small>{p.models.length} models · manage ensemble</small></button
+        ><button class="sidebar-spend" onclick={settings}
+          ><span>Budget</span><strong
+            >${spent(p).toFixed(3)} confirmed{p.budget !== null ? ` / $${p.budget}` : ''}</strong
+          >{#if reserved(p)}<small>${reserved(p).toFixed(3)} reserved</small
+            >{/if}{#if uncertainSpend(p)}<small
+              >Unknown charges · est. ${uncertainSpend(p).toFixed(3)}</small
+            >{/if}</button
+        ><button class="sidebar-link" onclick={home} disabled={busy}
+          ><FolderOpen size={16} /> All exercises</button
+        >{:else}<GitBranch size={25} />
+        <p>Open source. Runs in your browser.</p>
+        {/if}
+    </div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar">
+      <div class="topbar-context">
+        {#if p}<button class="title-button" onclick={() => navigate(0)}>{p.title}</button><span
+            class="mode-badge">Quick mode</span
+          >{#if p.example}<span class="example-label">Example</span>{/if}{:else}<span
+            >Your exercises</span
+          ><span class="mode-badge">Quick mode</span>{/if}
+      </div>
+      <div class="topbar-tools">
+        {#if p}<span class:error-text={saveState === 'Changes not saved'} class="save-status"
+            ><HardDrive size={16} />{saveState}</span
+          >{#if saveState === 'Changes not saved'}<button
+              class="text-button"
+              onclick={() => p && persist(structuredClone($state.snapshot(p)))}>Retry save</button
+            >{/if}<button
+            class="icon-button"
+            title="Download project backup"
+            aria-label="Download project backup"
+            onclick={() =>
+              download(projectJSON(p), `${filename(p)}.scenario.json`, 'application/json')}
+            ><Download size={19} /></button
+          ><button
+            class="icon-button"
+            title="Models and budget"
+            aria-label="Models and budget"
+            onclick={settings}><Settings2 size={19} /></button
+          ><button
+            class="icon-button"
+            aria-label="Undo exercise change"
+            title="Undo exercise change"
+            disabled={busy || !undoStack.length}
+            onclick={() => undoProject()}><Undo2 size={18} /></button
+          ><button
+            class="icon-button"
+            aria-label="Redo exercise change"
+            title="Redo exercise change"
+            disabled={busy || !redoStack.length}
+            onclick={() => undoProject(true)}><Redo2 size={18} /></button
+          >{/if}<button
+          class="icon-button"
+          title={theme === 'light' ? 'Switch to dark appearance' : 'Switch to light appearance'}
+          aria-label={theme === 'light'
+            ? 'Switch to dark appearance'
+            : 'Switch to light appearance'}
+          onclick={() => {
+            theme = theme === 'light' ? 'dark' : 'light';
+            document.documentElement.dataset.cgTheme = theme;
+            void preference('theme', theme).catch(() => {});
+          }}
+          >{#if theme === 'light'}<Moon size={18} />{:else}<Sun size={18} />{/if}</button
+        >
+      </div>
+    </header>
+    <main id="main" tabindex="-1">
+      <div class="workspace-content">
+        {#if offline}<p class="notice review">
+            You’re offline. Saved work remains editable. Reconnect to run models.
+          </p>{/if}
+        {#if error}<div class="notice error" role="alert">
+            <span>{error}</span><button
+              class="icon-button"
+              aria-label="Dismiss error"
+              onclick={() => (error = '')}><X size={17} /></button
+            >
+          </div>{/if}
+        {#if !loaded}<div class="loading-state">
+            <GitBranch size={30} />
+            <p>Opening your workspace…</p>
+          </div>
+        {:else if p}
+          {#if p.example}<div class="example-notice">
+              <BookOpen size={16} /><span
+                >Example exercise. Scores, reasoning and drafts are authored illustrations, not live
+                model results.</span
+              >
+            </div>{/if}
+          {#if p.stale.includes(p.stage)}<div class="notice review">
+              <AlertTriangle size={18} /><span
+                >Review suggested after an upstream change. Your decisions and edits are preserved.</span
+              >
+            </div>{/if}
+          {#if blocked}<div class="empty-state">
+              <GitBranch size={34} />
+              <h1>{stages[p.stage]}</h1>
+              <p>{blocked}</p>
+              <button class="primary" onclick={() => navigate(Math.max(0, p.stage - 1))}
+                >Go to previous stage <ArrowRight size={16} /></button
+              >
+            </div>
+          {:else}{#key `${p.id}:${p.stage}`}
+              {#if p.stage === 0}<Setup {p} {change} {settings} next={() => navigate(1)} />
+              {:else if p.stage === 1}<Drivers
+                  {p}
+                  {change}
+                  request={(task) => request(task ?? 'drivers')}
+                  next={() => navigate(2)}
+                />
+              {:else if p.stage === 2 || p.stage === 3}<Assessment
+                  {p}
+                  {change}
+                  selection={p.stage === 3}
+                  request={() => request('ratings')}
+                  next={() => navigate(p.stage + 1)}
+                />
+              {:else if p.stage === 4}<Hypotheses
+                  {p}
+                  {change}
+                  request={(task) => request(task ?? 'hypotheses')}
+                  next={() => navigate(5)}
+                />
+              {:else if p.stage === 5}<Chains
+                  {p}
+                  {change}
+                  request={(task, ids) => request(task, ids)}
+                  next={() => navigate(6)}
+                />
+              {:else if p.stage === 6 || p.stage === 7}<Writing
+                  {p}
+                  {change}
+                  review={p.stage === 7}
+                  request={(id, writer) => request('narrative', [id], writer)}
+                  next={() => navigate(p.stage + 1)}
+                />
+              {:else}<Exports {p} />{/if}
+            {/key}{/if}
+          {#if stageRuns.length}<section class="run-list" aria-label="Model operations">
+              <div class="section-line">
+                <h2>Model contributions</h2>
+                {#if busy}<button class="secondary" onclick={() => operation?.cancel()}
+                    >Cancel queued work</button
+                  >{/if}
+              </div>
+              <p class="small muted">
+                Successful contributions remain available if another model fails. Cancellation
+                cannot guarantee refunds for dispatched calls.
+              </p>
+              {#each stageRuns.slice().reverse() as r (r.id)}<div class="run-row">
+                  <span
+                    class:approved={r.status === 'succeeded'}
+                    class:review={r.status === 'failed'}
+                    class="badge">{r.status}</span
+                  >
+                  <div class="run-description">
+                    <strong>{modelName(r.modelId)}</strong><small>{r.modelId} · {r.task}</small
+                    >{#if r.error}<p class="small error-text">{r.error}</p>{/if}
+                    <details>
+                      <summary class="small">Operation record</summary>
+                      <p class="small">
+                        {r.id} · input revision {r.inputRevision} · {r.at}<br />Prompt version {r.promptTemplateVersion}<br
+                        />{r.confirmed === null
+                          ? 'Confirmed cost unavailable'
+                          : `Confirmed cost $${r.confirmed.toFixed(5)}`} · estimate ${r.estimated.toFixed(
+                          5
+                        )}
+                      </p>
+                      {#if r.output}<pre>{JSON.stringify(r.output, null, 2)}</pre>{/if}
+                    </details>
+                  </div>
+                  {#if ['failed', 'cancelled'].includes(r.status)}<div class="toolbar-group">
+                      <button class="secondary" disabled={busy} onclick={() => retry(r)}
+                        >Retry / replace</button
+                      ><button
+                        class="text-button"
+                        onclick={() =>
+                          change((p) => {
+                            p.runs.find((v) => v.id === r.id)!.status = 'skipped';
+                          }, 'Missing contribution explicitly skipped. Partial coverage retained.')}
+                        >Proceed without</button
+                      >
+                    </div>{/if}
+                </div>{/each}
+            </section>{/if}
+        {:else}
+          <section class="home-hero">
+            <div class="home-hero-copy">
+              <div class="home-symbol"><GitBranch size={34} strokeWidth={1.4} /></div>
+              <h1>Make room for<br />different futures.</h1>
+              <p>
+                Explore how change might unfold. A scenario design process controlled by you and augmented by AI.
+              </p>
+              <div class="toolbar-group">
+                <button class="primary large" onclick={() => openProject(newProject())}
+                  ><Plus size={18} /> New exercise</button
+                ><button class="text-button" onclick={() => openProject(exampleProject())}
+                  >Explore an example <ArrowRight size={17} /></button
+                >
+              </div>
+              <span class="home-small"
+                ><HardDrive size={14} /> Everything is saved on your device. No account needed.</span
+              >
+            </div>
+            <div
+              class="home-preview"
+              aria-label="Three different futures, connected by your choices"
+            >
+              <div class="preview-label">One question, different possibilities.</div>
+              <div class="preview-branches">
+                <svg viewBox="0 0 360 72" aria-hidden="true"
+                  ><path
+                    d="M180 0V20Q180 32 168 32H72Q60 32 60 44V72M180 20V72M180 20Q180 32 192 32H288Q300 32 300 44V72"
+                  /></svg
+                >
+              </div>
+              <div class="preview-columns">
+                {#each ['Local lifelines', 'The digital divide', 'Public renewal'] as title, i}<div>
+                    <h3 class="scenario-{i + 1}">{title}</h3>
+                    {#each [['Local support', 'Targeted support', 'National support'], ['Mutual aid', 'Digital assistance', 'Local partnerships'], ['Volatile costs', 'Unequal gains', 'Stable bills']] as row}<div
+                        class="preview-cell"
+                      >
+                        {row[i]}
+                      </div>{/each}
+                  </div>{/each}
+              </div>
+            </div>
+          </section>
+          <section class="projects-section">
+            <div class="section-line">
+              <h2>Your exercises <span class="count">{projects.length}</span></h2>
+              <button class="secondary" onclick={() => importInput.click()}
+                ><Upload size={16} /> Import project</button
+              >
+            </div>
+            {#if projects.length}<div class="project-list">
+                {#each projects as saved}<article class="project-row">
+                    <button class="project-open" onclick={() => openProject(saved)}
+                      ><span class="project-icon"><GitBranch size={23} /></span><span
+                        ><strong>{saved.title}</strong><span
+                          >{saved.horizon || 'Not configured'}{saved.example
+                            ? ' · Example'
+                            : ''}</span
+                        ><small
+                          >{stages[saved.stage]} · saved {new Date(
+                            saved.updatedAt
+                          ).toLocaleDateString(undefined, {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}</small
+                        ></span
+                      ><ArrowRight size={19} /></button
+                    ><button
+                      class="icon-button danger-text"
+                      aria-label={`Delete ${saved.title}`}
+                      title="Delete exercise"
+                      onclick={() => {
+                        deleteId = saved.id;
+                        dialog = 'delete';
+                      }}><Trash2 size={17} /></button
+                    >
+                  </article>{/each}
+              </div>{:else}<div class="project-empty">
+                <FolderOpen size={24} />
+                <p>Your first question is a good place to start.</p>
+                <span>Create an exercise, explore the example, or import a project backup.</span>
+              </div>{/if}
+          </section>
+          <div class="home-footnote">
+            <span><Zap size={17} /> Quick Mode · no external research</span>
+            <button class="text-button" onclick={() => (dialog = 'help')}
+              >How it works <ArrowUpRight size={15} /></button
+            >
+          </div>
+          <p class="privacy-line">
+            For publicly shareable, non-sensitive analysis only. Model requests are sent through
+            OpenRouter to selected providers.
+          </p>
+        {/if}
+      </div>
+    </main>
+  </div>
+</div>
+<div class="sr-only" role="status" aria-live="polite">{announcement}</div>
+
+{#if dialog === 'settings' && p}<Modal title="Models & spending" close={() => (dialog = '')} wide
+    ><div class="settings-columns">
+      <section>
+        <h3>Connect OpenRouter</h3>
+        <p class="small muted">
+          Your key stays in memory for this page session. It is never saved with your project.
+        </p>
+        <label
+          >API key<input
+            type="password"
+            bind:value={key}
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Paste your OpenRouter key"
+            oninput={() => (keyStatus = '')}
+          /></label
+        >
+        <div class="toolbar-group spaced">
+          <button
+            class="secondary"
+            disabled={!key.trim() || testing}
+            onclick={async () => {
+              testing = true;
+              keyStatus = '';
+              try {
+                await testKey(key);
+                keyStatus = 'Connected. Check your account has credits before running models.';
+              } catch (e) {
+                keyStatus = e instanceof Error ? e.message : 'Connection failed.';
+              } finally {
+                testing = false;
+              }
+            }}>{testing ? 'Testing…' : 'Test connection'}</button
+          ><button
+            class="text-button"
+            onclick={() => {
+              key = '';
+              keyStatus = 'Key removed from this session.';
+            }}>Forget key</button
+          >
+        </div>
+        {#if keyStatus}<p role="status" class="small">{keyStatus}</p>{/if}
+        <p class="small external-links">
+          <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer"
+            >Create a key <ExternalLink size={12} /></a
+          ><a href="https://openrouter.ai/settings/credits" target="_blank" rel="noreferrer"
+            >Add credits <ExternalLink size={12} /></a
+          ><a href="https://openrouter.ai/docs/quickstart" target="_blank" rel="noreferrer"
+            >Setup guide <ExternalLink size={12} /></a
+          >
+        </p>
+        <hr />
+        <h3>Exercise budget</h3>
+        <label
+          >USD allowance (optional)<input
+            type="number"
+            min="0.01"
+            step="0.5"
+            value={p.budget ?? ''}
+            placeholder="No budget"
+            onchange={(e) => {
+              const value = e.currentTarget.value;
+              const amount = Number(value);
+              if (value === '' || amount > 0)
+                change((p) => (p.budget = value === '' ? null : amount));
+            }}
+          /></label
+        >
+        <dl class="spend-detail">
+          <div>
+            <dt>Confirmed</dt>
+            <dd>${spent(p).toFixed(4)}</dd>
+          </div>
+          <div>
+            <dt>Reserved estimates</dt>
+            <dd>${reserved(p).toFixed(4)}</dd>
+          </div>
+          <div>
+            <dt>Unknown charges, estimated</dt>
+            <dd>${uncertainSpend(p).toFixed(4)}</dd>
+          </div>
+        </dl>
+        <p class="small muted">
+          The app blocks operations that exceed the estimated allowance. This is not a hard external
+          spending cap. Use a spending-limited OpenRouter key too.
+        </p>
+      </section>
+      <section>
+        <h3>Independent model ensemble</h3>
+        <p class="small muted">
+          Start with three models from different developers. Exact identifiers and current catalogue
+          prices are shown below.
+        </p>
+        <label
+          >Model scope<select bind:value={modelScope}
+            ><option value="default">Whole exercise</option
+            >{#each stages.slice(1, 8) as name, i}<option value={String(i + 1)}>{name}</option
+              >{/each}</select
+          ></label
+        >{#if modelScope !== 'default'}<button
+            class="text-button small"
+            onclick={() => change((p) => delete p.overrides[modelScope])}
+            >Use whole-exercise ensemble</button
+          >{/if}
+        <div class="selected-models">
+          {#each configuredModels as model, i}{@const info = catalogue.find((m) => m.id === model)}
+            <div class="selected-model-row">
+              <span class="model-mark">{['●', '■', '▲', '◆'][i % 4]}</span>
+              <div>
+                <strong>{info?.name ?? modelName(model)}</strong><small>{model}</small><small
+                  >{info
+                    ? `$${(Number(info.pricing.prompt) * 1e6).toFixed(2)} input / $${(Number(info.pricing.completion) * 1e6).toFixed(2)} output per million tokens`
+                    : 'Availability and prices need catalogue verification'}</small
+                >
+              </div>
+              <button
+                class="icon-button"
+                disabled={configuredModels.length === 1}
+                aria-label={`Remove ${model}`}
+                onclick={() => toggleModel(model)}><X size={16} /></button
+              >
+            </div>{/each}
+        </div>
+        <div class="section-line">
+          <span class="small muted">{catalogueStatus}</span><button
+            class="icon-button"
+            aria-label="Refresh model catalogue"
+            disabled={catalogueLoading}
+            onclick={loadCatalogue}><RefreshCw size={16} /></button
+          >
+        </div>
+        <label class="spaced"
+          >Find a model<input
+            bind:value={modelSearch}
+            placeholder="Search name or developer…"
+          /></label
+        >
+        <div class="model-catalogue">
+          {#each filteredModels as model}<button
+              class="catalogue-model"
+              onclick={() => toggleModel(model.id)}
+              ><span>{configuredModels.includes(model.id) ? '✓' : '+'}</span><span
+                ><strong>{model.name}</strong><small
+                  >{model.id} · {model.context_length.toLocaleString()} token context</small
+                ></span
+              ></button
+            >{/each}
+        </div>
+      </section>
+    </div>
+    <div class="notice review small">
+      Only use non-sensitive, publicly shareable information. Your analysis leaves this browser when
+      you run models. Local project storage is not confidential storage.
+    </div>
+    <button class="primary" onclick={() => (dialog = '')}>Done</button></Modal
+  >
+{:else if dialog === 'paid' && p}<Modal
+    title={retryId
+      ? 'Retry or replace this contribution'
+      : paidTask === 'coherence'
+        ? 'Recheck coherence'
+        : paidTask === 'narrative'
+          ? 'Draft a narrative'
+          : paidTask === 'consolidate'
+            ? 'Suggest overlapping contributions'
+            : `Generate ${paidTask === 'ratings' ? 'independent scores' : paidTask}`}
+    close={() => (dialog = '')}
+    ><p>Review the models and estimate before sending this analysis to OpenRouter.</p>
+    {#if paidTargets?.length}<p class="small">
+        <strong>Scope:</strong>
+        {paidTargets
+          .map(
+            (id) =>
+              p.chains.find((c) => c.id === id)?.title ??
+              p.drivers.find((d) => d.id === id)?.title ??
+              id
+          )
+          .join(', ')}
+      </p>{/if}
+    <div class="paid-models">
+      {#each paidModels as model, i}<label
+          >Contributor {i + 1}<select
+            value={model}
+            onchange={(e) => {
+              const value = e.currentTarget.value;
+              paidModels = paidModels.map((m, j) => (j === i ? value : m));
+            }}
+            ><option value={model}>{catalogue.find((c) => c.id === model)?.name ?? model}</option
+            >{#each catalogue
+              .filter((c) => c.id !== model && (p.models.includes(c.id) || (modelSearch && c.name
+                        .toLowerCase()
+                        .includes(modelSearch.toLowerCase()))))
+              .slice(0, 40) as m}<option value={m.id}>{m.name}</option>{/each}</select
+          ><small>{model}</small></label
+        >{/each}
+    </div>
+    <div class="estimate-box">
+      <span>Estimated maximum allowance</span><strong
+        >{paidEstimate === null ? 'Price unavailable' : `$${paidEstimate.toFixed(4)} USD`}</strong
+      ><small
+        >Based on current catalogue prices, input allowance and up to 6,000 output tokens per model.
+        Actual charges can vary.</small
+      >
+    </div>
+    {#if !key.trim()}<p class="notice review">
+        Connect your OpenRouter key in Model settings first.
+      </p>
+      <button class="secondary" onclick={settings}>Open model settings</button
+      >{/if}{#if !catalogue.length}<p class="small muted">{catalogueStatus}</p>
+      <button class="secondary" disabled={catalogueLoading} onclick={loadCatalogue}
+        >Refresh catalogue</button
+      >{/if}{#if paidError}<p class="notice error" role="alert">{paidError}</p>
+      <button class="text-button" onclick={settings}>Adjust models & budget</button>{/if}
+    <p class="small muted">
+      {paidTask === 'narrative'
+        ? 'This creates an initial draft. After selection, revisions are manual.'
+        : paidTask === 'consolidate'
+          ? 'This model reviews the independent contributions for overlap. Every proposed merge requires your acceptance.'
+          : 'Models work independently from the same analyst context. No searches or web tools are used.'}
+      Successful existing contributions are preserved.
+    </p>
+    <div class="dialog-actions">
+      <button class="secondary" onclick={() => (dialog = '')}>Cancel</button><button
+        class="primary"
+        disabled={!key.trim() ||
+          paidEstimate === null ||
+          new Set(paidModels).size !== paidModels.length ||
+          offline}
+        onclick={run}
+        >Run {paidModels.length}
+        {paidModels.length === 1 ? 'model' : 'models'}
+        <ArrowRight size={16} /></button
+      >
+    </div></Modal
+  >
+{:else if dialog === 'delete'}<Modal title="Delete this exercise?" close={() => (dialog = '')}
+    ><p>
+      “{projects.find((p) => p.id === deleteId)?.title}” will be removed from this browser,
+      including its decisions and drafts. Download a backup first if you want to keep it.
+    </p>
+    <div class="dialog-actions">
+      <button class="secondary" onclick={() => (dialog = '')}>Keep exercise</button><button
+        class="danger"
+        onclick={async () => {
+          try {
+            await deleteProject(deleteId);
+            projects = await listProjects();
+            dialog = '';
+            announcement = 'Exercise deleted from this browser.';
+          } catch {
+            error = 'Could not delete this exercise. Try again.';
+            dialog = '';
+          }
+        }}>Delete exercise</button
+      >
+    </div></Modal
+  >
+{:else if dialog === 'help'}<Modal title="A guided process, led by you" close={() => (dialog = '')}
+    ><p>
+      Scenario Designer helps you construct different plausible futures for a humanitarian question.
+      These are explorations, not forecasts.
+    </p>
+    <ol class="how-it-works">
+      <li>Frame your question and time horizon.</li>
+      <li>Explore drivers with independent model perspectives.</li>
+      <li>Compare humanitarian impact and uncertainty scores.</li>
+      <li>Choose critical uncertainties and develop future states.</li>
+      <li>Combine hypotheses into coherent, contrasting chains.</li>
+      <li>Choose narrative drafts, edit manually and export your work.</li>
+    </ol>
+    <p>
+      This app will tell you whenever an action costs money. AI models do not run when you edit, approve decisions or navigate.
+      Your projects stay in this browser; use project backups to move or keep them.
+    </p>
+    <button class="primary" onclick={() => (dialog = '')}>Back to the workspace</button></Modal
+  >{/if}
