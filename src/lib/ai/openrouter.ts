@@ -332,11 +332,11 @@ export function responseText(run: Run): string | undefined {
 }
 
 function responseFormat(model: Model, task: Task) {
-  if (task === 'ratings' && model.supported_parameters?.includes('structured_outputs'))
+  if (model.supported_parameters?.includes('structured_outputs'))
     return {
       response_format: {
         type: 'json_schema',
-        json_schema: { name: 'ratings', strict: true, schema: z.toJSONSchema(schemas.ratings) }
+        json_schema: { name: task, strict: true, schema: z.toJSONSchema(schemas[task]) }
       },
       provider: { require_parameters: true }
     };

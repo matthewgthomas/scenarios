@@ -8,7 +8,8 @@ import {
   estimate,
   planRequests,
   responseText,
-  type Model
+  type Model,
+  type Task
 } from './openrouter';
 
 const models: Model[] = ['one/a', 'two/b', 'three/c'].map((id) => ({
@@ -421,30 +422,6 @@ describe('response diagnostics and structured output', () => {
     }
   });
 
-  it.each([
-    { supported: ['response_format', 'structured_outputs'], format: 'json_schema' },
-    { supported: ['response_format'], format: 'json_object' },
-    { supported: [], format: undefined }
-  ])('uses $format for the advertised capabilities', async ({ supported, format }) => {
-    vi.stubGlobal('navigator', { onLine: true });
-    const catalogue = [{ ...models[0], supported_parameters: supported }];
-    const fetcher = vi.fn().mockResolvedValue(response(scores(['driver_0'])));
-    vi.stubGlobal('fetch', fetcher);
-    const h = harness(ratingProject(1));
-    await launch(h.get, h.change, 'test-key', catalogue, 'ratings', [models[0].id]).done;
-    const body = JSON.parse(fetcher.mock.calls[0][1].body);
-    expect(body.response_format?.type).toBe(format);
-    if (format === 'json_schema') {
-      expect(body.provider).toEqual({ require_parameters: true });
-      expect(body.response_format.json_schema.strict).toBe(true);
-      expect(body.response_format.json_schema.schema.additionalProperties).toBe(false);
-      expect(
-        body.response_format.json_schema.schema.properties.ratings.items.additionalProperties
-      ).toBe(false);
-    } else expect(body.provider).toBeUndefined();
-    expect(h.get().runs[0].status).toBe('succeeded');
-  });
-
   it('renders raw and legacy response strings without adding quotes or escapes', async () => {
     vi.stubGlobal('navigator', { onLine: true });
     const raw = '{"ratings":[\n{"rationale":"';
@@ -458,6 +435,249 @@ describe('response diagnostics and structured output', () => {
       JSON.stringify({ ratings: [] }, null, 2)
     );
   });
+});
+
+describe.each<Task>([
+  'consolidate',
+  'drivers',
+  'ratings',
+  'hypotheses',
+  'chains',
+  'coherence',
+  'narrative'
+])('%s response formats', (task) => {
+  it.each([
+    { supported: ['response_format', 'structured_outputs'], format: 'json_schema' },
+    { supported: ['structured_outputs'], format: 'json_schema' },
+    { supported: ['response_format'], format: 'json_object' },
+    { supported: [], format: undefined },
+    { supported: undefined, format: undefined }
+  ])('uses $format with capabilities $supported', async ({ supported, format }) => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const catalogue = [{ ...models[0], supported_parameters: supported }];
+    const p = exampleProject();
+    const chain = p.chains[0];
+    chain.approvedRevision = chain.revision;
+    const outputs: Record<Task, Record<string, unknown>> = {
+      consolidate: { groups: [] },
+      drivers: proposal('A new driver'),
+      ratings: scores(p.drivers.map((d) => d.id)),
+      hypotheses: {
+        hypotheses: p.drivers
+          .filter((d) => d.selected)
+          .map((d) => ({
+            driverId: d.id,
+            title: 'A new future state',
+            description: 'A plausible alternative future.'
+          }))
+      },
+      chains: {
+        chains: [
+          {
+            title: 'A new chain',
+            kind: 'main',
+            items: p.drivers
+              .filter((d) => d.selected)
+              .map((d) => ({ driverId: d.id, hypothesisId: null })),
+            reasoning: 'An unresolved alternative.',
+            tensions: [],
+            assumptions: [],
+            distinctiveness: 'Preserves uncertainty.',
+            novelDrivers: []
+          }
+        ]
+      },
+      coherence: {
+        checks: [
+          { chainId: chain.id, reasoning: 'Compatible states.', tensions: [], assumptions: [] }
+        ]
+      },
+      narrative: { chainId: chain.id, text: 'A possible future.' }
+    };
+    const output = outputs[task];
+    const fetcher = vi.fn().mockResolvedValue(response(output));
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness(p);
+    const targets = task === 'coherence' || task === 'narrative' ? [chain.id] : undefined;
+    await launch(h.get, h.change, 'test-key', catalogue, task, [models[0].id], targets).done;
+    const body = JSON.parse(fetcher.mock.calls[0][1].body);
+    expect(body.response_format?.type).toBe(format);
+    if (format === 'json_schema') {
+      expect(body.provider).toEqual({ require_parameters: true });
+      const { name, strict, schema } = body.response_format.json_schema;
+      expect(name).toBe(task);
+      expect(strict).toBe(true);
+      expect(schema.type).toBe('object');
+      expect(schema.additionalProperties).toBe(false);
+      expect(Object.keys(schema.properties).sort()).toEqual(Object.keys(output).sort());
+      expect(schema.required.sort()).toEqual(Object.keys(output).sort());
+      if (task !== 'narrative') {
+        const list = schema.properties[Object.keys(output)[0]];
+        expect(list.type).toBe('array');
+        expect(list.items.additionalProperties).toBe(false);
+      }
+    } else expect(body.provider).toBeUndefined();
+    expect(h.get().runs[0].status).toBe('succeeded');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('hypothesis response failures', () => {
+  const catalogue = models.map((model) => ({
+    ...model,
+    supported_parameters: ['response_format', 'structured_outputs']
+  }));
+  const project = () => {
+    const p = ratingProject(4);
+    p.stage = 4;
+    p.drivers.forEach((d) => (d.selected = true));
+    return p;
+  };
+  const proposals = (ids: string[], modelId = models[0].id) => ({
+    hypotheses: ids.flatMap((driverId) =>
+      [1, 2].map((i) => ({
+        driverId,
+        title: `${modelId} future state ${i}`,
+        description: 'A plausible alternative future.'
+      }))
+    )
+  });
+  const extraBraces = (output: ReturnType<typeof proposals>) =>
+    `{"hypotheses":[${output.hypotheses.map((h) => `${JSON.stringify(h)}}`).join(',')}]}`;
+
+  it('retains a redundant-brace response and its charges without repairing or retrying', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const h = harness(project());
+    const raw = extraBraces(proposals(h.get().drivers.map((d) => d.id)));
+    const fetcher = vi.fn().mockResolvedValue(rawResponse(raw));
+    vi.stubGlobal('fetch', fetcher);
+    await launch(h.get, h.change, 'test-key', catalogue, 'hypotheses', [models[0].id]).done;
+    const run = h.get().runs[0];
+    expect(run.status).toBe('failed');
+    expect(run.error).toContain('malformed JSON');
+    expect(run.error).toContain('retry explicitly');
+    expect(run.rawOutput).toBe(raw);
+    expect(run.output).toBe(raw);
+    expect(responseText(run)).toBe(raw);
+    expect(run.finishReason).toBe('stop');
+    expect(run.nativeFinishReason).toBe('provider_stop');
+    expect(run.confirmed).toBe(0.003);
+    expect(run.unknownCharge).toBe(false);
+    expect(run.inputTokens).toBe(150);
+    expect(run.outputTokens).toBe(6000);
+    expect(h.get().hypotheses).toEqual([]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves two successful contributions and explicitly retries only the malformed model', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    let fail = true;
+    const fetcher = vi.fn().mockImplementation((_url, options) => {
+      const { model } = JSON.parse(options.body);
+      const output = proposals(requestIds(options.body), model);
+      return model === models[2].id && fail ? rawResponse(extraBraces(output)) : response(output);
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness(project());
+    await launch(
+      h.get,
+      h.change,
+      'test-key',
+      catalogue,
+      'hypotheses',
+      models.map((m) => m.id)
+    ).done;
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(h.get().runs.filter((r) => r.status === 'succeeded')).toHaveLength(2);
+    expect(h.get().hypotheses).toHaveLength(16);
+    const successful = structuredClone(h.get().hypotheses);
+    const failed = structuredClone(h.get().runs.find((r) => r.status === 'failed')!);
+    expect(failed.modelId).toBe(models[2].id);
+    expect(failed.error).toContain('malformed JSON');
+    expect(h.get().runs.reduce((sum, r) => sum + r.confirmed!, 0)).toBeCloseTo(0.007);
+
+    fail = false;
+    await launch(
+      h.get,
+      h.change,
+      'test-key',
+      catalogue,
+      'hypotheses',
+      [failed.modelId],
+      undefined,
+      failed.id
+    ).done;
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    const retryBody = JSON.parse(fetcher.mock.calls[3][1].body);
+    const originalBody = JSON.parse(
+      fetcher.mock.calls.find((call) => JSON.parse(call[1].body).model === failed.modelId)![1].body
+    );
+    expect(retryBody.model).toBe(failed.modelId);
+    expect(retryBody.messages).toEqual(originalBody.messages);
+    expect(h.get().runs.at(-1)).toMatchObject({
+      status: 'succeeded',
+      modelId: failed.modelId,
+      retryOf: failed.id
+    });
+    expect(h.get().runs.find((r) => r.id === failed.id)).toEqual(failed);
+    expect(h.get().hypotheses).toHaveLength(24);
+    for (const hypothesis of successful)
+      expect(h.get().hypotheses.find((h) => h.id === hypothesis.id)).toEqual(hypothesis);
+    for (const hypothesis of h.get().hypotheses) {
+      const origin = hypothesis.origins[0];
+      const run = h.get().runs.find((r) => r.id === origin.runId)!;
+      expect(run.status).toBe('succeeded');
+      expect(run.modelId).toBe(origin.modelId);
+    }
+    expect(h.get().runs.reduce((sum, r) => sum + r.confirmed!, 0)).toBeCloseTo(0.009);
+  });
+
+  it.each([
+    { invalid: 'schema', error: 'hypotheses.2.description' },
+    { invalid: 'driver', error: 'unexpected driver' }
+  ])(
+    'rejects an invalid $invalid without committing earlier valid hypotheses',
+    async ({ invalid, error }) => {
+      vi.stubGlobal('navigator', { onLine: true });
+      const p = exampleProject();
+      p.stage = 4;
+      const original = structuredClone(p);
+      const existing = p.hypotheses[0];
+      const output = {
+        hypotheses: [
+          {
+            driverId: existing.driverId,
+            title: existing.title,
+            description: 'Another contribution.'
+          },
+          {
+            driverId: existing.driverId,
+            title: 'A new future state',
+            description: 'A valid state.'
+          },
+          {
+            driverId: invalid === 'driver' ? 'unexpected' : existing.driverId,
+            title: 'An invalid future state',
+            description: invalid === 'schema' ? '' : 'An unknown reference.'
+          }
+        ]
+      };
+      const raw = JSON.stringify(output);
+      const fetcher = vi.fn().mockResolvedValue(rawResponse(raw));
+      vi.stubGlobal('fetch', fetcher);
+      const h = harness(p);
+      await launch(h.get, h.change, 'test-key', catalogue, 'hypotheses', [models[0].id]).done;
+      expect(h.get().runs[0].status).toBe('failed');
+      expect(h.get().runs[0].error).toContain(error);
+      expect(h.get().runs[0].rawOutput).toBe(raw);
+      expect(h.get().runs[0].output).toEqual(output);
+      expect(h.get().hypotheses).toEqual(original.hypotheses);
+      expect(h.get().drivers).toEqual(original.drivers);
+      expect(h.get().chains).toEqual(original.chains);
+      expect(h.get().narratives).toEqual(original.narratives);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    }
+  );
 });
 
 describe('independent OpenRouter orchestration', () => {
