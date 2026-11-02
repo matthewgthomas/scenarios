@@ -144,7 +144,7 @@ const instructions: Record<Task, string> = {
   drivers:
     'Independently explore 12–20 distinct drivers relevant to this question and horizon. Use PESTLE as a prompt, not a constraint. Include unusual contributions and keep titles concise. Do not assess them yet.',
   ratings:
-    'Independently score EACH supplied driver with integer scores 1–5, giving a specific rationale. HUMANITARIAN IMPACT: 1 negligible; 2 limited; 3 substantial for some populations; 4 serious or widespread; 5 severe, potentially systemic. UNCERTAINTY: 1 highly predictable; 2 relatively predictable; 3 several credible trajectories; 4 considerable uncertainty; 5 radically different plausible outcomes. Impact is humanitarian consequence, not influence or probability.',
+    'Independently score EACH supplied driver with integer scores 1–5, giving a specific rationale in 1–2 concise sentences. Return exactly one rating per supplied driver ID. HUMANITARIAN IMPACT: 1 negligible; 2 limited; 3 substantial for some populations; 4 serious or widespread; 5 severe, potentially systemic. UNCERTAINTY: 1 highly predictable; 2 relatively predictable; 3 several credible trajectories; 4 considerable uncertainty; 5 radically different plausible outcomes. Impact is humanitarian consequence, not influence or probability.',
   hypotheses:
     'Independently propose distinct, plausible alternative future states for EACH selected driver. Choose a suitable variable count (usually 2–4); avoid forcing optimistic/central/pessimistic. Describe future states, not long narratives. Use supplied stable driver IDs.',
   chains:
@@ -230,7 +230,13 @@ export function contextFor(p: Project, task: Task, targetIds?: string[]): Record
   return context;
 }
 const OUTPUT_TOKENS = 6000;
-export function estimate(model: Model | undefined, context: unknown, task: Task): number | null {
+const RATINGS_BATCH_SIZE = 10;
+export function estimate(
+  model: Model | undefined,
+  context: unknown,
+  task: Task,
+  maxOutputTokens = OUTPUT_TOKENS
+): number | null {
   if (!model) return null;
   const inputTokens = Math.ceil(
     (JSON.stringify(context).length +
@@ -242,7 +248,101 @@ export function estimate(model: Model | undefined, context: unknown, task: Task)
   const prompt = Number(model.pricing.prompt),
     completion = Number(model.pricing.completion);
   if (![prompt, completion].every((n) => Number.isFinite(n) && n >= 0)) return null;
-  return inputTokens * prompt + OUTPUT_TOKENS * completion;
+  return inputTokens * prompt + maxOutputTokens * completion;
+}
+
+export interface PlannedRequest {
+  modelId: string;
+  context: Record<string, unknown>;
+  targetIds: string[];
+  maxOutputTokens: number;
+  estimated: number | null;
+  batchIndex?: number;
+  batchCount?: number;
+}
+export interface RequestPlan {
+  requests: PlannedRequest[];
+  estimatedTotal: number | null;
+}
+export function planRequests(
+  p: Project,
+  catalogue: Model[],
+  task: Task,
+  models: string[],
+  targetIds?: string[],
+  retryOf?: string
+): RequestPlan {
+  const retry = retryOf ? p.runs.find((r) => r.id === retryOf) : undefined;
+  if (retryOf && (!retry || retry.task !== task))
+    throw new Error('The original contribution is unavailable for this retry.');
+  const requests: PlannedRequest[] = [];
+  for (const modelId of models) {
+    let scopes: (string[] | undefined)[] = [targetIds];
+    if (task === 'ratings') {
+      // Old runs have no batch metadata; their saved context still defines their scope.
+      const retryContext = retry?.context as { drivers?: { id: string }[] } | undefined;
+      const retryScope = retry
+        ? retry.targetIds.length
+          ? retry.targetIds
+          : retryContext?.drivers?.map((d) => d.id)
+        : undefined;
+      const ids = activeDrivers(p)
+        .filter(
+          (d) =>
+            d.approved &&
+            (!targetIds || targetIds.includes(d.id)) &&
+            (!retryScope || retryScope.includes(d.id)) &&
+            (!retry ||
+              !d.ratings.some((r) => r.modelId === modelId && r.driverRevision === d.revision))
+        )
+        .map((d) => d.id);
+      scopes = [];
+      for (let i = 0; i < ids.length; i += RATINGS_BATCH_SIZE)
+        scopes.push(ids.slice(i, i + RATINGS_BATCH_SIZE));
+    }
+    scopes.forEach((scope, i) => {
+      const context = contextFor(p, task, scope);
+      requests.push({
+        modelId,
+        context,
+        targetIds: scope ?? [],
+        maxOutputTokens: OUTPUT_TOKENS,
+        estimated: estimate(
+          catalogue.find((m) => m.id === modelId),
+          context,
+          task
+        ),
+        ...(task === 'ratings' ? { batchIndex: i + 1, batchCount: scopes.length } : {})
+      });
+    });
+  }
+  return {
+    requests,
+    estimatedTotal: requests.every((r) => r.estimated !== null)
+      ? requests.reduce((sum, r) => sum + r.estimated!, 0)
+      : null
+  };
+}
+
+export function responseText(run: Run): string | undefined {
+  return (
+    run.rawOutput ??
+    (typeof run.output === 'string' ? run.output : JSON.stringify(run.output, null, 2))
+  );
+}
+
+function responseFormat(model: Model, task: Task) {
+  if (task === 'ratings' && model.supported_parameters?.includes('structured_outputs'))
+    return {
+      response_format: {
+        type: 'json_schema',
+        json_schema: { name: 'ratings', strict: true, schema: z.toJSONSchema(schemas.ratings) }
+      },
+      provider: { require_parameters: true }
+    };
+  return model.supported_parameters?.includes('response_format')
+    ? { response_format: { type: 'json_object' } }
+    : {};
 }
 const normalise = (text: string) =>
   text
@@ -446,6 +546,16 @@ export interface Operation {
   cancel: () => void;
   done: Promise<void>;
 }
+interface CompletionResponse {
+  choices?: {
+    message?: { content?: unknown };
+    finish_reason?: string | null;
+    native_finish_reason?: string | null;
+    error?: unknown;
+  }[];
+  usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: unknown };
+  error?: unknown;
+}
 export function launch(
   get: () => Project,
   change: Change,
@@ -461,49 +571,43 @@ export function launch(
   if (!navigator.onLine)
     throw new Error('Reconnect to run models. Saved work remains editable offline.');
   const p = get();
-  const context = contextFor(p, task, targetIds);
+  const plan = planRequests(p, catalogue, task, models, targetIds, retryOf);
+  if (!plan.requests.length)
+    throw new Error('No missing ratings remain in this scope. No requests were sent.');
   if (
     task === 'narrative' &&
     p.chains.some((c) => targetIds?.includes(c.id) && c.approvedRevision !== c.revision)
   )
     throw new Error('Approve the current chain revision before drafting.');
-  const estimates = models.map((m) =>
-    estimate(
-      catalogue.find((c) => c.id === m),
-      context,
-      task
-    )
-  );
-  if (estimates.some((e) => e === null))
+  if (plan.estimatedTotal === null)
     throw new Error(
       'Select available models with known prices in Model settings. Refresh the catalogue if needed.'
     );
-  if (
-    !canSpend(
-      p,
-      estimates.reduce<number>((s, e) => s + e!, 0)
-    )
-  )
+  if (!canSpend(p, plan.estimatedTotal))
     throw new Error(
       'This operation exceeds the estimated remaining budget. Adjust the budget or models in Model settings before continuing.'
     );
   const operationId = id('operation');
-  const runs: Run[] = models.map((modelId, i) => ({
+  const runs: Run[] = plan.requests.map((request) => ({
     id: id('run'),
     operationId,
     exerciseId: p.id,
     stage: p.stage,
     task,
-    modelId,
-    promptTemplateVersion: 'quick-1',
+    modelId: request.modelId,
+    promptTemplateVersion: task === 'ratings' ? 'quick-2' : 'quick-1',
     inputRevision: p.revision,
     status: 'queued',
     at: now(),
-    estimated: estimates[i]!,
+    estimated: request.estimated!,
     confirmed: null,
     unknownCharge: false,
-    context: structuredClone(context),
-    targetIds: targetIds ?? [],
+    context: structuredClone(request.context),
+    targetIds: [...request.targetIds],
+    maxOutputTokens: request.maxOutputTokens,
+    ...(request.batchIndex
+      ? { batchIndex: request.batchIndex, batchCount: request.batchCount }
+      : {}),
     ...(retryOf ? { retryOf } : {})
   }));
   change((p) => p.runs.push(...runs));
@@ -518,6 +622,7 @@ export function launch(
     while (!cancelled) {
       const next = runs.find((r) => r.status === 'queued');
       if (!next) return;
+      const context = next.context;
       next.status = 'running';
       mutateRun(next.id, (r) => {
         r.status = 'running';
@@ -530,6 +635,7 @@ export function launch(
         controller.signal.addEventListener('abort', abortRequest, { once: true });
         const timeout = setTimeout(abortRequest, 180_000);
         let response: Response;
+        let data: CompletionResponse = {};
         try {
           response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
@@ -541,10 +647,8 @@ export function launch(
             },
             body: JSON.stringify({
               model: next.modelId,
-              max_tokens: OUTPUT_TOKENS,
-              ...(model.supported_parameters?.includes('response_format')
-                ? { response_format: { type: 'json_object' } }
-                : {}),
+              max_tokens: next.maxOutputTokens,
+              ...responseFormat(model, task),
               messages: [
                 {
                   role: 'system',
@@ -559,6 +663,7 @@ export function launch(
               ]
             })
           });
+          if (response.ok) data = await response.json();
         } finally {
           clearTimeout(timeout);
           controller.signal.removeEventListener('abort', abortRequest);
@@ -580,26 +685,47 @@ export function launch(
               `OpenRouter request failed (${response.status}). Retry or choose another model.`
           );
         }
-        const data = await response.json();
-        const raw = data.choices?.[0]?.message?.content;
+        const choice = data.choices?.[0];
+        const raw = choice?.message?.content;
         mutateRun(next.id, (r) => {
           r.inputTokens = data.usage?.prompt_tokens;
           r.outputTokens = data.usage?.completion_tokens;
           const cost = data.usage?.cost;
           r.confirmed = typeof cost === 'number' && cost >= 0 ? cost : null;
           r.unknownCharge = r.confirmed === null;
+          if (typeof choice?.finish_reason === 'string') r.finishReason = choice.finish_reason;
+          if (typeof choice?.native_finish_reason === 'string')
+            r.nativeFinishReason = choice.native_finish_reason;
+          if (typeof raw === 'string') {
+            r.rawOutput = raw;
+            r.output = raw;
+          }
         });
+        if (cancelled) throw new Error('Cancelled before applying the response.');
+        if (choice?.finish_reason === 'length')
+          throw new Error(
+            'Response stopped at the output limit. Response and usage retained; retry this batch explicitly.'
+          );
+        if (choice?.finish_reason === 'content_filter')
+          throw new Error(
+            'The provider filtered this response. Retry or choose another model explicitly.'
+          );
+        if (data.error || choice?.error || choice?.finish_reason === 'error')
+          throw new Error(
+            'The provider reported a generation error. Retry or choose another model explicitly.'
+          );
+        if (choice?.finish_reason && choice.finish_reason !== 'stop')
+          throw new Error(
+            `Model stopped unexpectedly (${choice.finish_reason}). Retry explicitly.`
+          );
         if (typeof raw !== 'string')
           throw new Error('Model returned no text. No replacement was called.');
         let parsed: unknown;
         try {
           parsed = JSON.parse(raw.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, ''));
-        } catch {
-          mutateRun(next.id, (r) => {
-            r.output = raw;
-          });
+        } catch (error) {
           throw new Error(
-            'Model returned malformed JSON. Response retained for inspection; retry explicitly.'
+            `Model returned malformed JSON: ${error instanceof Error ? error.message : 'Invalid JSON syntax'}. Response retained for inspection; retry explicitly.`
           );
         }
         const result = schemas[task].safeParse(parsed);
@@ -608,14 +734,24 @@ export function launch(
         });
         if (!result.success)
           throw new Error(
-            'Model output did not match the expected structure. Missing or invalid values were not filled in. Retry explicitly.'
+            'Model output did not match the expected structure: ' +
+              result.error.issues
+                .slice(0, 3)
+                .map((issue) => `${issue.path.join('.') || 'root'}: ${issue.message}`)
+                .join('; ') +
+              '. Missing or invalid values were not filled in. Retry explicitly.'
           );
         let partial: string | null = null;
         // Apply to a clone so an invalid reference cannot leave half an output committed.
         const candidate = structuredClone(get());
         if (
-          JSON.stringify(contextFor({ ...candidate, stage: next.stage }, task, targetIds)) !==
-          JSON.stringify(context)
+          JSON.stringify(
+            contextFor(
+              { ...candidate, stage: next.stage },
+              task,
+              next.targetIds.length ? next.targetIds : undefined
+            )
+          ) !== JSON.stringify(context)
         )
           throw new Error(
             'Inputs changed while this model was running. Response preserved in the operation record; run again from the updated inputs.'
@@ -643,6 +779,7 @@ export function launch(
               : 'Request failed. Check your connection and retry explicitly.';
         });
       }
+      // The queue is separate from persisted run records; only its dispatch state matters here.
       next.status = 'succeeded';
     }
   }

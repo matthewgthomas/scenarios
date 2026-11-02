@@ -138,7 +138,7 @@ export const runSchema = z.object({
     'consolidate'
   ]),
   modelId: z.string(),
-  promptTemplateVersion: z.literal('quick-1'),
+  promptTemplateVersion: z.enum(['quick-1', 'quick-2']),
   inputRevision: z.number(),
   status: z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled', 'skipped']),
   at: z.string(),
@@ -150,6 +150,12 @@ export const runSchema = z.object({
   unknownCharge: z.boolean(),
   inputTokens: z.number().optional(),
   outputTokens: z.number().optional(),
+  maxOutputTokens: z.number().int().positive().optional(),
+  batchIndex: z.number().int().positive().optional(),
+  batchCount: z.number().int().positive().optional(),
+  rawOutput: z.string().optional(),
+  finishReason: z.string().optional(),
+  nativeFinishReason: z.string().optional(),
   output: z.unknown().optional(),
   context: z.unknown(),
   targetIds: z.array(z.string())

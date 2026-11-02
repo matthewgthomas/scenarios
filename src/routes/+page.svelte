@@ -37,7 +37,6 @@
     parseProject,
     id,
     now,
-    activeDrivers,
     uncertainties,
     spent,
     reserved,
@@ -60,8 +59,8 @@
     launch,
     getModels,
     testKey,
-    contextFor,
-    estimate,
+    planRequests,
+    responseText,
     type Model,
     type Operation,
     type Task
@@ -117,23 +116,16 @@
       .slice(0, 40)
   );
   const stageRuns = $derived(p?.runs.filter((r) => r.stage === p.stage) ?? []);
-  const blocked = $derived(p ? prerequisite(p, p.stage) : null);
-  const paidEstimates = $derived(
-    p
-      ? paidModels.map((m) =>
-          estimate(
-            catalogue.find((c) => c.id === m),
-            contextFor(p, paidTask, paidTargets),
-            paidTask
-          )
-        )
-      : []
+  const latestOperationRuns = $derived(
+    stageRuns.filter((r) => r.operationId === stageRuns.at(-1)?.operationId)
   );
-  const paidEstimate = $derived(
-    paidEstimates.every((e) => e !== null)
-      ? paidEstimates.reduce<number>((s, e) => s + e!, 0)
+  const blocked = $derived(p ? prerequisite(p, p.stage) : null);
+  const paidPlan = $derived(
+    p && dialog === 'paid'
+      ? planRequests(p, catalogue, paidTask, paidModels, paidTargets, retryId)
       : null
   );
+  const paidEstimate = $derived(paidPlan?.estimatedTotal ?? null);
   const iconSet = [
     Settings2,
     Sprout,
@@ -334,16 +326,7 @@
     }
   }
   function retry(run: Run) {
-    let targets = run.targetIds.length ? run.targetIds : undefined;
-    if (run.task === 'ratings' && p)
-      targets = activeDrivers(p)
-        .filter(
-          (d) =>
-            d.approved &&
-            !d.ratings.some((r) => r.modelId === run.modelId && r.driverRevision === d.revision)
-        )
-        .map((d) => d.id);
-    request(run.task, targets, undefined, run);
+    request(run.task, run.targetIds.length ? run.targetIds : undefined, undefined, run);
   }
   async function importFile(event: Event) {
     const file = (event.target as HTMLInputElement).files?.[0];
@@ -495,7 +478,7 @@
           ><FolderOpen size={16} /> All exercises</button
         >{:else}<GitBranch size={25} />
         <p>Open source. Runs in your browser.</p>
-        {/if}
+      {/if}
     </div>
   </aside>
   <div class="workspace">
@@ -635,6 +618,14 @@
                 Successful contributions remain available if another model fails. Cancellation
                 cannot guarantee refunds for dispatched calls.
               </p>
+              <p class="small" role="status">
+                Latest operation: {latestOperationRuns.filter(
+                  (r) => !['queued', 'running'].includes(r.status)
+                ).length}
+                of {latestOperationRuns.length} requests finished ·
+                {latestOperationRuns.filter((r) => r.status === 'succeeded').length} succeeded ·
+                {latestOperationRuns.filter((r) => r.status === 'failed').length} failed
+              </p>
               {#each stageRuns.slice().reverse() as r (r.id)}<div class="run-row">
                   <span
                     class:approved={r.status === 'succeeded'}
@@ -642,7 +633,10 @@
                     class="badge">{r.status}</span
                   >
                   <div class="run-description">
-                    <strong>{modelName(r.modelId)}</strong><small>{r.modelId} · {r.task}</small
+                    <strong>{modelName(r.modelId)}</strong><small
+                      >{r.modelId} · {r.task}{#if r.batchIndex}{' · '}batch {r.batchIndex} of {r.batchCount}
+                        · {r.targetIds.length}
+                        {r.targetIds.length === 1 ? 'driver' : 'drivers'}{/if}</small
                     >{#if r.error}<p class="small error-text">{r.error}</p>{/if}
                     <details>
                       <summary class="small">Operation record</summary>
@@ -654,7 +648,17 @@
                           5
                         )}
                       </p>
-                      {#if r.output}<pre>{JSON.stringify(r.output, null, 2)}</pre>{/if}
+                      {#if r.finishReason || r.nativeFinishReason || r.inputTokens !== undefined || r.outputTokens !== undefined}<p
+                          class="small"
+                        >
+                          Completion: {r.finishReason ?? 'unavailable'}{r.nativeFinishReason
+                            ? ` (${r.nativeFinishReason})`
+                            : ''} · input tokens: {r.inputTokens ?? 'unavailable'} · output tokens: {r.outputTokens ??
+                            'unavailable'}{r.maxOutputTokens
+                            ? ` / ${r.maxOutputTokens} allowance`
+                            : ''}
+                        </p>{/if}
+                      {#if responseText(r) !== undefined}<pre>{responseText(r)}</pre>{/if}
                     </details>
                   </div>
                   {#if ['failed', 'cancelled'].includes(r.status)}<div class="toolbar-group">
@@ -677,7 +681,8 @@
               <div class="home-symbol"><GitBranch size={34} strokeWidth={1.4} /></div>
               <h1>Make room for<br />different futures.</h1>
               <p>
-                Explore how change might unfold. A scenario design process controlled by you and augmented by AI.
+                Explore how change might unfold. A scenario design process controlled by you and
+                augmented by AI.
               </p>
               <div class="toolbar-group">
                 <button class="primary large" onclick={() => openProject(newProject())}
@@ -952,7 +957,10 @@
           .join(', ')}
       </p>{/if}
     <div class="paid-models">
-      {#each paidModels as model, i}<label
+      {#each paidModels as model, i}
+        {@const modelRequests = paidPlan?.requests.filter((r) => r.modelId === model) ?? []}
+        {@const driverCount = modelRequests.reduce((sum, r) => sum + r.targetIds.length, 0)}
+        <label
           >Contributor {i + 1}<select
             value={model}
             onchange={(e) => {
@@ -965,17 +973,29 @@
                         .toLowerCase()
                         .includes(modelSearch.toLowerCase()))))
               .slice(0, 40) as m}<option value={m.id}>{m.name}</option>{/each}</select
-          ><small>{model}</small></label
+          ><small>{model}</small>{#if paidTask === 'ratings'}<small>
+              {modelRequests.length}
+              {modelRequests.length === 1 ? 'batch' : 'batches'} ·
+              {driverCount}
+              {driverCount === 1 ? 'driver' : 'drivers'}
+            </small>{/if}</label
         >{/each}
     </div>
     <div class="estimate-box">
       <span>Estimated maximum allowance</span><strong
         >{paidEstimate === null ? 'Price unavailable' : `$${paidEstimate.toFixed(4)} USD`}</strong
       ><small
-        >Based on current catalogue prices, input allowance and up to 6,000 output tokens per model.
-        Actual charges can vary.</small
+        >{paidPlan?.requests.length ?? 0}
+        {paidPlan?.requests.length === 1 ? 'request' : 'requests'} across {paidModels.length}
+        {paidModels.length === 1 ? 'model' : 'models'}. Based on current catalogue prices, input
+        allowance and up to 6,000 output tokens per request. Actual charges can vary.</small
       >
     </div>
+    {#if !paidPlan?.requests.length}<p class="notice review">
+        {retryId
+          ? 'No missing ratings remain for the selected model in this scope. Choose a replacement model with missing ratings or close this dialog.'
+          : 'No approved drivers are available to assess.'}
+      </p>{/if}
     {#if !key.trim()}<p class="notice review">
         Connect your OpenRouter key in Model settings first.
       </p>
@@ -998,6 +1018,7 @@
         class="primary"
         disabled={!key.trim() ||
           paidEstimate === null ||
+          !paidPlan?.requests.length ||
           new Set(paidModels).size !== paidModels.length ||
           offline}
         onclick={run}
@@ -1043,8 +1064,9 @@
       <li>Choose narrative drafts, edit manually and export your work.</li>
     </ol>
     <p>
-      This app will tell you whenever an action costs money. AI models do not run when you edit, approve decisions or navigate.
-      Your projects stay in this browser; use project backups to move or keep them.
+      This app will tell you whenever an action costs money. AI models do not run when you edit,
+      approve decisions or navigate. Your projects stay in this browser; use project backups to move
+      or keep them.
     </p>
     <button class="primary" onclick={() => (dialog = '')}>Back to the workspace</button></Modal
   >{/if}

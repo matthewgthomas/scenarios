@@ -5,10 +5,12 @@ Review date: 2 November 2026. This records checks actually performed; it is not 
 ## Automated checks
 
 - `npm run check`: zero Svelte/TypeScript errors or warnings.
-- `npm test`: 25 tests across three suites.
+- `npm test`: 50 tests across three suites, including batched driver-assessment regressions.
 - Static production build succeeds, including a `/scenarios` base path and generated service worker. The root-path static build was also exercised during implementation.
 
 Tests cover per-axis medians (5/4/2 → 4 and 3/4 → 3.5), missing and invalid scores, explicit unresolved values, versioned import validation, invalid analytical references, credential-field exclusion, immutable chain snapshots, hypothesis histories and downstream review notices. They also cover independent contexts and exact model IDs, no research tools, partial failure/retry lineage, malformed outputs, changes during in-flight requests, cancellation, budget reservation, unknown charges and interrupted-run recovery. Consolidation tests verify that suggestions are advisory, cross-uncertainty merges are rejected, and acceptance preserves archived records and provenance.
+
+Assessment regression tests cover 0/10/11/44 drivers, identical ten-driver batches across models, complete model/run attribution, aggregate budget admission and reservation, two-request concurrency, incremental results, cancellation during response downloading, failed-batch retry and replacement scopes, legacy retries and metadata round trips. Response tests distinguish output-limit truncation (including empty/null content), JSON syntax, schema validation and provider failures, and exercise strict-schema, JSON-mode and prompt-only request formats.
 
 ## Browser checks
 
@@ -26,6 +28,8 @@ Exercised in the available desktop Chromium automation browser. Actual screen si
 - Served the production build at `/scenarios/`. Confirmed service-worker activation at that scope and offline cache population. Reloaded the imported project offline, opened the lazy-loaded editor, edited saved text, used exercise undo/redo and restored the edit after a reload. No OpenRouter entries appeared in the application cache.
 - Injected a simulated IndexedDB quota failure in the QA browser. The app displayed `Changes not saved`, did not falsely display `Saved on this device`, kept the working text, and successfully saved it after restoring storage and activating `Retry save`.
 - Browser console checks on the exercised production path reported no errors or warnings.
+
+The assessment fix was also exercised in desktop Chromium against the development server with all OpenRouter traffic intercepted. A 44-driver assessment showed five batches per model and 15 requests in its confirmation dialog. A simulated truncated batch retained its raw text, completion reasons, token usage and cost while the other 14 batches succeeded. Choosing a replacement model with complete coverage reduced the scope and estimate to zero and disabled dispatch. Retrying the original model sent exactly one additional ten-driver request; all 44 drivers then had three ratings. IndexedDB retained all 16 runs and the truncation diagnostics after reload. The dialog and operation records were visually inspected; console checks reported no errors or warnings. These were mocked calls, not paid provider validation. Screenshots are saved as `output/playwright/assessment-batch-confirmation.png` and `output/playwright/assessment-truncated-batch.png`.
 
 Keyboard semantics, labels, visible focus, native table controls, modal focus return, status announcements and reduced-motion rules are implemented. These checks do **not** replace a complete keyboard-only/screen-reader audit. The 640px reflow exercise is not a claim of testing every control with actual 200% browser zoom.
 

@@ -77,6 +77,31 @@ describe('analyst decisions and provenance', () => {
     expect(restored.chains[0].items[p.drivers[0].id]).toBeNull();
     expect(markdown(restored, true, true)).toContain('Unresolved uncertainties: Household energy');
   });
+  it('round-trips batch diagnostics alongside historical version 1.0 runs', () => {
+    const p = exampleProject();
+    const historical = run();
+    const batch = run({
+      id: 'batch',
+      task: 'ratings',
+      promptTemplateVersion: 'quick-2',
+      status: 'failed',
+      batchIndex: 2,
+      batchCount: 5,
+      maxOutputTokens: 6000,
+      inputTokens: 200,
+      outputTokens: 6000,
+      rawOutput: '{"ratings":[\n{"rationale":"',
+      output: '{"ratings":[\n{"rationale":"',
+      finishReason: 'length',
+      nativeFinishReason: 'max_tokens',
+      targetIds: [p.drivers[0].id],
+      retryOf: historical.id
+    });
+    p.runs = [historical, batch];
+    const restored = parseProject(JSON.parse(projectJSON(p)));
+    expect(restored.schemaVersion).toBe('1.0');
+    expect(restored.runs).toEqual([historical, batch]);
+  });
   it('records only one immutable snapshot per chain revision', () => {
     const p = exampleProject();
     const c = p.chains[0];

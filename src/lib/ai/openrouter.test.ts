@@ -1,7 +1,15 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { exampleProject } from '$lib/domain/example';
-import { newProject, type Project, type Run } from '$lib/domain/project';
-import { launch, applyOutput, contextFor, estimate, type Model } from './openrouter';
+import { newProject, reserved, type Project, type Run } from '$lib/domain/project';
+import {
+  launch,
+  applyOutput,
+  contextFor,
+  estimate,
+  planRequests,
+  responseText,
+  type Model
+} from './openrouter';
 
 const models: Model[] = ['one/a', 'two/b', 'three/c'].map((id) => ({
   id,
@@ -21,6 +29,52 @@ const response = (output: unknown, cost: number | undefined = 0.002) =>
 const proposal = (title: string) => ({
   drivers: [{ title, summary: 'A possible driver of humanitarian change.', tags: ['Social'] }]
 });
+function ratingProject(count: number): Project {
+  const p = newProject();
+  const template = exampleProject().drivers[0];
+  p.stage = 2;
+  p.drivers = Array.from({ length: count }, (_, i) => ({
+    ...structuredClone(template),
+    id: `driver_${i}`,
+    title: `Driver ${i}`,
+    ratings: [],
+    decision: undefined,
+    approved: true
+  }));
+  return p;
+}
+const scores = (ids: string[]) => ({
+  ratings: ids.map((driverId) => ({
+    driverId,
+    impact: 4,
+    uncertainty: 3,
+    rationale: 'Specific impact.'
+  }))
+});
+const requestIds = (body: string): string[] => {
+  const message = JSON.parse(body).messages[1].content;
+  return JSON.parse(message.split('\nANALYST CONTEXT:\n')[1]).drivers.map(
+    (d: { id: string }) => d.id
+  );
+};
+const rawResponse = (
+  content: string | null,
+  finishReason = 'stop',
+  extra: Record<string, unknown> = {}
+) =>
+  new Response(
+    JSON.stringify({
+      choices: [
+        {
+          message: { content },
+          finish_reason: finishReason,
+          native_finish_reason: 'provider_stop',
+          ...extra
+        }
+      ],
+      usage: { cost: 0.003, prompt_tokens: 150, completion_tokens: 6000 }
+    })
+  );
 function harness(initial?: Project) {
   let p = initial ?? newProject();
   p.question = 'How could access to essentials evolve?';
@@ -36,6 +90,375 @@ function harness(initial?: Project) {
   };
 }
 afterEach(() => vi.unstubAllGlobals());
+
+describe('batched driver assessments', () => {
+  it.each([0, 10, 11, 44])('plans complete, bounded coverage for %i approved drivers', (count) => {
+    const p = ratingProject(count);
+    const plan = planRequests(
+      p,
+      models,
+      'ratings',
+      models.map((m) => m.id)
+    );
+    expect(plan.requests).toHaveLength(Math.ceil(count / 10) * models.length);
+    for (const model of models) {
+      const requests = plan.requests.filter((r) => r.modelId === model.id);
+      expect(requests.flatMap((r) => r.targetIds)).toEqual(p.drivers.map((d) => d.id));
+      expect(requests.every((r) => r.targetIds.length <= 10 && r.maxOutputTokens === 6000)).toBe(
+        true
+      );
+    }
+    expect(plan.estimatedTotal).toBe(plan.requests.reduce((sum, r) => sum + r.estimated!, 0));
+  });
+
+  it('does not dispatch an assessment with no approved drivers', () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness(ratingProject(0));
+    expect(() => launch(h.get, h.change, 'test-key', models, 'ratings', [models[0].id])).toThrow(
+      'No missing ratings'
+    );
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(h.get().runs).toHaveLength(0);
+  });
+
+  it('collects all 44 ratings from each model using identical independent batch contexts', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const fetcher = vi
+      .fn()
+      .mockImplementation((_url, options) => response(scores(requestIds(options.body))));
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness(ratingProject(44));
+    const plan = planRequests(
+      h.get(),
+      models,
+      'ratings',
+      models.map((m) => m.id)
+    );
+    await launch(
+      h.get,
+      h.change,
+      'test-key',
+      models,
+      'ratings',
+      models.map((m) => m.id)
+    ).done;
+    expect(fetcher).toHaveBeenCalledTimes(15);
+    const bodies = fetcher.mock.calls.map((call) => JSON.parse(call[1].body));
+    const first = bodies.filter((b) => b.model === models[0].id).map((b) => b.messages);
+    for (const model of models) {
+      expect(bodies.filter((b) => b.model === model.id).map((b) => b.messages)).toEqual(first);
+    }
+    expect(bodies.every((b) => b.max_tokens === 6000 && !b.tools && !b.plugins && !b.models)).toBe(
+      true
+    );
+    expect(
+      h.get().runs.every((r) => r.status === 'succeeded' && r.promptTemplateVersion === 'quick-2')
+    ).toBe(true);
+    expect(h.get().runs.reduce((sum, r) => sum + r.estimated, 0)).toBe(plan.estimatedTotal);
+    for (const d of h.get().drivers) {
+      expect(d.ratings.map((r) => r.modelId)).toEqual(models.map((m) => m.id));
+      for (const rating of d.ratings) {
+        const run = h.get().runs.find((r) => r.id === rating.runId)!;
+        expect(run.targetIds).toContain(d.id);
+        expect(rating.driverRevision).toBe(d.revision);
+      }
+    }
+  });
+
+  it('reserves the full plan, commits batches immediately, and cancels with at most two requests in flight', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const h = harness(ratingProject(44));
+    const plan = planRequests(h.get(), models, 'ratings', [models[0].id]);
+    const pending: { ids: string[]; resolve: (r: Response) => void }[] = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const fetcher = vi.fn().mockImplementation((_url, options) => {
+      expect(reserved(h.get())).toBeGreaterThan(0);
+      if (!pending.length) expect(reserved(h.get())).toBe(plan.estimatedTotal);
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      return new Promise<Response>((resolve, reject) => {
+        pending.push({
+          ids: requestIds(options.body),
+          resolve: (r) => {
+            inFlight--;
+            resolve(r);
+          }
+        });
+        options.signal.addEventListener('abort', () => {
+          inFlight--;
+          reject(new Error('aborted'));
+        });
+      });
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const op = launch(h.get, h.change, 'test-key', models, 'ratings', [models[0].id]);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    pending[0].resolve(response(scores(pending[0].ids)));
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3));
+    expect(h.get().drivers.filter((d) => d.ratings.length)).toHaveLength(10);
+    op.cancel();
+    await op.done;
+    expect(maxInFlight).toBe(2);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(h.get().runs.map((r) => r.status)).toEqual([
+      'succeeded',
+      'cancelled',
+      'cancelled',
+      'cancelled',
+      'cancelled'
+    ]);
+    expect(
+      h
+        .get()
+        .runs.slice(3)
+        .every((r) => !r.unknownCharge)
+    ).toBe(true);
+    expect(reserved(h.get())).toBe(0);
+  });
+
+  it('rejects a budget that covers one request but cannot cover the entire assessment', () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+    const p = ratingProject(44);
+    const plan = planRequests(p, models, 'ratings', [models[0].id]);
+    p.budget = plan.requests[0].estimated! + 0.000001;
+    const h = harness(p);
+    expect(() => launch(h.get, h.change, 'test-key', models, 'ratings', [models[0].id])).toThrow(
+      'budget'
+    );
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(h.get().runs).toHaveLength(0);
+  });
+
+  it('aborts cancellation during response downloading and never applies a late response', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    let reading = 0;
+    let aborted = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((_url, options) =>
+        Promise.resolve({
+          ok: true,
+          json: () =>
+            new Promise((_resolve, reject) => {
+              reading++;
+              options.signal.addEventListener('abort', () => {
+                aborted++;
+                reject(new Error('aborted body'));
+              });
+            })
+        })
+      )
+    );
+    const h = harness(ratingProject(11));
+    const op = launch(h.get, h.change, 'test-key', models, 'ratings', [models[0].id]);
+    await vi.waitFor(() => expect(reading).toBe(2));
+    op.cancel();
+    await op.done;
+    expect(aborted).toBe(2);
+    expect(h.get().drivers.every((d) => !d.ratings.length)).toBe(true);
+    expect(h.get().runs.every((r) => r.status === 'cancelled' && r.unknownCharge)).toBe(true);
+  });
+
+  it('preserves valid partial batches and retries only missing cells inside that batch for the chosen model', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    let partial = true;
+    const fetcher = vi.fn().mockImplementation((_url, options) => {
+      const ids = requestIds(options.body);
+      return response(scores(partial && ids.includes('driver_0') ? ids.slice(0, 2) : ids));
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness(ratingProject(11));
+    await launch(h.get, h.change, 'test-key', models, 'ratings', [models[0].id]).done;
+    const failed = h.get().runs.find((r) => r.status === 'failed')!;
+    expect(failed.error).toContain('Missing scores for 8');
+    expect(h.get().drivers[10].ratings).toHaveLength(1);
+    const ownPlan = planRequests(h.get(), models, 'ratings', [models[0].id], undefined, failed.id);
+    expect(ownPlan.requests.flatMap((r) => r.targetIds)).toEqual(failed.targetIds.slice(2));
+    const replacementPlan = planRequests(
+      h.get(),
+      models,
+      'ratings',
+      [models[1].id],
+      undefined,
+      failed.id
+    );
+    expect(replacementPlan.requests.flatMap((r) => r.targetIds)).toEqual(failed.targetIds);
+    // A replacement's existing cells must also be excluded from its new estimate and request.
+    h.change((p) =>
+      p.drivers[3].ratings.push({ ...p.drivers[0].ratings[0], modelId: models[1].id })
+    );
+    const revised = planRequests(h.get(), models, 'ratings', [models[1].id], undefined, failed.id);
+    expect(revised.requests[0].targetIds).not.toContain('driver_3');
+    partial = false;
+    await launch(
+      h.get,
+      h.change,
+      'test-key',
+      models,
+      'ratings',
+      [models[0].id],
+      undefined,
+      failed.id
+    ).done;
+    expect(requestIds(fetcher.mock.calls.at(-1)![1].body)).toEqual(failed.targetIds.slice(2));
+    expect(h.get().drivers.every((d) => d.ratings.some((r) => r.modelId === models[0].id))).toBe(
+      true
+    );
+    expect(h.get().runs.at(-1)?.retryOf).toBe(failed.id);
+    expect(
+      planRequests(h.get(), models, 'ratings', [models[0].id], undefined, failed.id).requests
+    ).toHaveLength(0);
+    expect(() =>
+      launch(h.get, h.change, 'test-key', models, 'ratings', [models[0].id], undefined, failed.id)
+    ).toThrow('No missing ratings');
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries legacy full-assessment records using their saved scope and current driver revisions', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((_url, options) => response(scores(requestIds(options.body))))
+    );
+    const h = harness(ratingProject(11));
+    await launch(h.get, h.change, 'test-key', models, 'ratings', [models[0].id]).done;
+    const old = structuredClone(h.get().runs[0]);
+    old.id = 'legacy';
+    old.promptTemplateVersion = 'quick-1';
+    old.targetIds = [];
+    old.context = contextFor(h.get(), 'ratings');
+    delete old.batchIndex;
+    delete old.batchCount;
+    h.change((p) => {
+      p.runs.push(old);
+      p.drivers[5].revision++;
+    });
+    expect(
+      planRequests(h.get(), models, 'ratings', [models[0].id], undefined, old.id).requests[0]
+        .targetIds
+    ).toEqual(['driver_5']);
+  });
+
+  it('rejects results for changed batch inputs without discarding other completed batches', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const pending: { ids: string[]; resolve: (r: Response) => void }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      (_url: string, options: { body: string }) =>
+        new Promise<Response>((resolve) => pending.push({ ids: requestIds(options.body), resolve }))
+    );
+    const h = harness(ratingProject(11));
+    const op = launch(h.get, h.change, 'test-key', models, 'ratings', [models[0].id]);
+    pending[1].resolve(response(scores(pending[1].ids)));
+    await vi.waitFor(() => expect(h.get().drivers[10].ratings).toHaveLength(1));
+    h.change((p) => {
+      p.drivers[0].summary = 'Changed input';
+      p.drivers[0].revision++;
+    });
+    pending[0].resolve(response(scores(pending[0].ids)));
+    await op.done;
+    expect(h.get().runs[0].error).toContain('Inputs changed');
+    expect(h.get().runs[0].rawOutput).toBeDefined();
+    expect(h.get().drivers.filter((d) => d.ratings.length)).toHaveLength(1);
+  });
+});
+
+describe('response diagnostics and structured output', () => {
+  it.each([
+    {
+      content: '{"ratings":[{"rationale":"',
+      reason: 'length',
+      error: 'Response stopped at the output limit'
+    },
+    { content: '', reason: 'length', error: 'Response stopped at the output limit' },
+    { content: null, reason: 'length', error: 'Response stopped at the output limit' },
+    { content: '{"ratings":[', reason: 'stop', error: 'malformed JSON' },
+    {
+      content:
+        '{"ratings":[{"driverId":"driver_0","impact":6,"uncertainty":3,"rationale":"Invalid"}]}',
+      reason: 'stop',
+      error: 'ratings.0.impact'
+    },
+    { content: null, reason: 'content_filter', error: 'provider filtered' },
+    { content: null, reason: 'error', error: 'generation error' }
+  ])(
+    'reports $reason / $error and retains diagnostic and charge data',
+    async ({ content, reason, error }) => {
+      vi.stubGlobal('navigator', { onLine: true });
+      const fetcher = vi.fn().mockResolvedValue(rawResponse(content, reason));
+      vi.stubGlobal('fetch', fetcher);
+      const h = harness(ratingProject(1));
+      await launch(h.get, h.change, 'test-key', models, 'ratings', [models[0].id]).done;
+      const run = h.get().runs[0];
+      expect(run.status).toBe('failed');
+      expect(run.error).toContain(error);
+      expect(run.finishReason).toBe(reason);
+      expect(run.nativeFinishReason).toBe('provider_stop');
+      expect(run.rawOutput).toBe(content ?? undefined);
+      expect(run.confirmed).toBe(0.003);
+      expect(run.unknownCharge).toBe(false);
+      expect(run.inputTokens).toBe(150);
+      expect(run.outputTokens).toBe(6000);
+      expect(h.get().drivers[0].ratings).toHaveLength(0);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it('does not apply a duplicate or unexpected driver even after a valid rating', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    for (const driverId of ['driver_0', 'unexpected']) {
+      const output = scores(['driver_0', driverId]);
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(output)));
+      const h = harness(ratingProject(2));
+      await launch(h.get, h.change, 'test-key', models, 'ratings', [models[0].id]).done;
+      expect(h.get().runs[0].error).toContain('Unexpected or duplicate');
+      expect(h.get().drivers.every((d) => !d.ratings.length)).toBe(true);
+    }
+  });
+
+  it.each([
+    { supported: ['response_format', 'structured_outputs'], format: 'json_schema' },
+    { supported: ['response_format'], format: 'json_object' },
+    { supported: [], format: undefined }
+  ])('uses $format for the advertised capabilities', async ({ supported, format }) => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const catalogue = [{ ...models[0], supported_parameters: supported }];
+    const fetcher = vi.fn().mockResolvedValue(response(scores(['driver_0'])));
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness(ratingProject(1));
+    await launch(h.get, h.change, 'test-key', catalogue, 'ratings', [models[0].id]).done;
+    const body = JSON.parse(fetcher.mock.calls[0][1].body);
+    expect(body.response_format?.type).toBe(format);
+    if (format === 'json_schema') {
+      expect(body.provider).toEqual({ require_parameters: true });
+      expect(body.response_format.json_schema.strict).toBe(true);
+      expect(body.response_format.json_schema.schema.additionalProperties).toBe(false);
+      expect(
+        body.response_format.json_schema.schema.properties.ratings.items.additionalProperties
+      ).toBe(false);
+    } else expect(body.provider).toBeUndefined();
+    expect(h.get().runs[0].status).toBe('succeeded');
+  });
+
+  it('renders raw and legacy response strings without adding quotes or escapes', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const raw = '{"ratings":[\n{"rationale":"';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(rawResponse(raw, 'length')));
+    const h = harness(ratingProject(1));
+    await launch(h.get, h.change, 'test-key', models, 'ratings', [models[0].id]).done;
+    const run = h.get().runs[0];
+    expect(responseText(run)).toBe(raw);
+    expect(responseText({ ...run, rawOutput: undefined, output: raw })).toBe(raw);
+    expect(responseText({ ...run, rawOutput: undefined, output: { ratings: [] } })).toBe(
+      JSON.stringify({ ratings: [] }, null, 2)
+    );
+  });
+});
 
 describe('independent OpenRouter orchestration', () => {
   it('sends the same context independently, uses exact IDs, and never enables research tools', async () => {
