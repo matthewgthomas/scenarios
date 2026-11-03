@@ -74,6 +74,7 @@
   import Setup from '$lib/components/Setup.svelte';
   import Exports from '$lib/components/Exports.svelte';
   import Modal from '$lib/components/Modal.svelte';
+  import ModelActivity from '$lib/components/ModelActivity.svelte';
 
   let project = $state<Project | null>(null);
   let projects = $state<Project[]>([]);
@@ -245,6 +246,19 @@
       document.getElementById('main')?.focus();
     });
   }
+  async function viewRunDetails(run: Run) {
+    navigate(run.stage);
+    await tick();
+    const row = document.getElementById(`run-${run.id}`);
+    if (!row) return;
+    const record = row.querySelector('details');
+    if (record) record.open = true;
+    row.scrollIntoView({
+      block: 'center',
+      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+    });
+    row.focus({ preventScroll: true });
+  }
   async function loadCatalogue() {
     catalogueLoading = true;
     catalogueStatus = 'Loading catalogue…';
@@ -309,10 +323,7 @@
       redoStack = [];
       busy = true;
       error = '';
-      announcement = 'Model operation started. Progress is shown below.';
       await operation.done;
-      announcement =
-        'Operation finished. Review contributions and any missing results before approval.';
     } catch (e) {
       paidError = e instanceof Error ? e.message : 'Could not start operation.';
     } finally {
@@ -496,7 +507,13 @@
           >{#if saveState === 'Changes not saved'}<button
               class="text-button"
               onclick={() => p && persist(structuredClone($state.snapshot(p)))}>Retry save</button
-            >{/if}<button
+            >{/if}{#key p.id}<ModelActivity
+              exerciseId={p.id}
+              runs={p.runs}
+              {busy}
+              onCancel={() => operation?.cancel()}
+              onViewDetails={viewRunDetails}
+            />{/key}<button
             class="icon-button"
             title="Download project backup"
             aria-label="Download project backup"
@@ -618,7 +635,7 @@
                 Successful contributions remain available if another model fails. Cancellation
                 cannot guarantee refunds for dispatched calls.
               </p>
-              <p class="small" role="status">
+              <p class="small">
                 Latest operation: {latestOperationRuns.filter(
                   (r) => !['queued', 'running'].includes(r.status)
                 ).length}
@@ -626,7 +643,11 @@
                 {latestOperationRuns.filter((r) => r.status === 'succeeded').length} succeeded ·
                 {latestOperationRuns.filter((r) => r.status === 'failed').length} failed
               </p>
-              {#each stageRuns.slice().reverse() as r (r.id)}<div class="run-row">
+              {#each stageRuns.slice().reverse() as r (r.id)}<div
+                  class="run-row"
+                  id={`run-${r.id}`}
+                  tabindex="-1"
+                >
                   <span
                     class:approved={r.status === 'succeeded'}
                     class:review={r.status === 'failed'}

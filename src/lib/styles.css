@@ -516,6 +516,7 @@ pre {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;
 }
 .topbar-context,
 .topbar-tools {
@@ -538,7 +539,297 @@ pre {
 }
 .topbar-tools {
   gap: 5px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+.model-activity-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: var(--cg-control-height);
+  padding: 6px 10px;
+  margin: 0 6px;
+  border: 1px solid var(--cg-control-border);
+  background: var(--cg-paper);
+  text-align: left;
+  transition:
+    background var(--cg-duration-feedback),
+    border-color var(--cg-duration-feedback);
+}
+.model-activity-trigger:hover,
+.model-activity-trigger[aria-expanded='true'] {
+  background: var(--cg-selection);
+  border-color: var(--cg-action);
+}
+.activity-trigger-copy {
+  display: grid;
+  gap: 1px;
+}
+.activity-trigger-copy strong {
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+.activity-trigger-copy small {
+  font-size: 0.6875rem;
+  color: var(--cg-text-muted);
+}
+.activity-status-icon {
+  display: inline-flex;
+  color: var(--cg-text-muted);
+}
+.activity-is-active .activity-status-icon {
+  color: var(--cg-action);
+}
+.activity-has-errors {
+  border-color: var(--cg-status-error-text);
+}
+.activity-unread {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--cg-action);
+  color: var(--cg-on-action);
+  font-size: 0.6875rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.activity-unread-error {
+  color: var(--cg-status-error-text);
+  background: var(--cg-status-error-bg);
+}
+.model-activity-panel {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  width: min(440px, calc(100vw - 24px));
+  max-height: min(640px, calc(100dvh - 24px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--cg-control-border);
+  border-radius: var(--cg-radius-panel);
+  background: var(--cg-paper);
+  color: var(--cg-text);
+  box-shadow: var(--cg-shadow-floating);
+}
+.model-activity-panel:popover-open {
+  animation: activity-panel-open var(--cg-duration-panel) var(--cg-ease);
+}
+.activity-panel-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--cg-border);
+  background: var(--cg-paper);
+}
+.activity-panel-heading h2 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+.activity-panel-heading p {
+  margin: 0;
+  color: var(--cg-text-muted);
+  font-size: 0.75rem;
+}
+.activity-panel-body {
+  padding: 20px;
+}
+.activity-section + .activity-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--cg-border);
+}
+.activity-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.875rem;
+}
+.activity-section h3 > span {
+  color: var(--cg-text-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+.activity-empty {
+  margin: 12px 0 0;
+  color: var(--cg-text-muted);
+  font-size: 0.75rem;
+}
+.activity-requests {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+.activity-requests > li {
+  padding: 12px 0;
+  overflow-wrap: anywhere;
+}
+.activity-requests > li + li {
+  border-top: 1px solid var(--cg-border);
+}
+.activity-request-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.activity-request-heading > strong {
+  min-width: 0;
+  font-size: 0.875rem;
+}
+.activity-run-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--cg-status-neutral-text);
+  background: var(--cg-status-neutral-bg);
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+.activity-run-status.status-running {
+  color: var(--cg-status-info-text);
+  background: var(--cg-status-info-bg);
+}
+.activity-run-status.status-succeeded {
+  color: var(--cg-status-approved-text);
+  background: var(--cg-status-approved-bg);
+}
+.activity-run-status.status-failed {
+  color: var(--cg-status-error-text);
+  background: var(--cg-status-error-bg);
+}
+.activity-request-context {
+  margin: 5px 0;
+  color: var(--cg-text-muted);
+  font-size: 0.75rem;
+}
+.activity-request-error {
+  margin: 8px 0;
+  color: var(--cg-status-error-text);
+  font-size: 0.75rem;
+}
+.activity-details-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 32px;
+  font-size: 0.75rem;
+}
+.activity-cancel {
+  margin-top: 8px;
+}
+.activity-cancel p,
+.activity-history-note {
+  margin: 8px 0 0;
+  color: var(--cg-text-muted);
+  font-size: 0.75rem;
+}
+.activity-history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.activity-history-heading .text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+}
+.activity-operation {
+  margin-top: 20px;
+}
+.activity-operation-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.activity-operation-heading h4 {
+  margin: 0;
+  font-size: 0.75rem;
+}
+.activity-operation-heading time {
+  color: var(--cg-text-muted);
+  font-size: 0.6875rem;
+}
+.activity-operation-summary {
+  margin: 4px 0 0;
+  color: var(--cg-text-muted);
+  font-size: 0.6875rem;
+}
+.activity-storage-error {
+  padding: 10px;
+  margin: 0 0 16px;
+  background: var(--cg-status-review-bg);
+  color: var(--cg-status-review-text);
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+.activity-spinning {
+  animation: activity-spin 1.4s linear infinite;
+}
+.activity-pulsing {
+  animation: activity-pulse 1.6s ease-in-out infinite;
+}
+.activity-feedback {
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  border: 2px solid var(--cg-action);
+  border-radius: inherit;
+  animation: activity-emphasis 850ms var(--cg-ease) both;
+}
+.activity-feedback.feedback-failed {
+  border-color: var(--cg-status-error-text);
+}
+.activity-feedback.feedback-cancelled {
+  border-color: var(--cg-text-muted);
+}
+@keyframes activity-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes activity-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+@keyframes activity-emphasis {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+@keyframes activity-panel-open {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .save-status {
   color: var(--cg-text-muted);

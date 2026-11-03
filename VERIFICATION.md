@@ -33,6 +33,14 @@ The assessment fix was also exercised in desktop Chromium against the developmen
 
 Keyboard semantics, labels, visible focus, native table controls, modal focus return, status announcements and reduced-motion rules are implemented. These checks do **not** replace a complete keyboard-only/screen-reader audit. The 640px reflow exercise is not a claim of testing every control with actual 200% browser zoom.
 
+## Model activity update — 3 November 2026
+
+- Added six focused unit tests for request/batch counts, history grouping, partial failure, read/dismissed preferences, transitions, cancellation, exercise isolation and preserved financial records. The suite now contains 92 passing tests across four files.
+- Exercised real orchestration in desktop Chromium with all OpenRouter traffic mocked: two running/one queued requests, queue advancement, partial success and rate limiting, unread results, completion while the popup is open, and cancellation before the third request dispatches. No paid calls were made.
+- Checked full-record links, expansion and focus on the target stage; Escape/focus return, Enter/Space, Tab and outside dismissal; persistent clearing, exercise isolation, reload interruption and preserved unknown-charge distinctions. Simulated a preferences-only storage failure and verified that local clearing still works with an explanation that it could not be remembered.
+- Inspected light/dark appearances, long model names and diagnostics, laptop widths (1024/1280/1440), 640px reflow and 200% text enlargement. Checked reduced-motion popup and spinner styles. The popup and trigger also stay within a 360px viewport; unrelated existing workspace content can overflow at that unsupported phone width.
+- QA scripts and screenshots are under ignored `output/playwright/model-activity-*`. Browser checks cover Chromium; the existing cross-browser/screen-reader release checks still apply.
+
 ## Export checks
 
 The browser-generated PDF was inspected using Poppler and pypdf. It was a two-page A4 document with embedded Nunito Sans, readable text and page numbering. The first page was rendered and visually reviewed: no clipping, missing glyphs or overlapping text were observed. Extracted text retained the manually added note and `Unresolved uncertainties: Income support`. The DOCX ZIP contained a well-formed `word/document.xml`; a full Word/LibreOffice rendering review remains to be completed. The JSON backup contained all three narratives and three chains; all advisory checklist arrays were empty.
