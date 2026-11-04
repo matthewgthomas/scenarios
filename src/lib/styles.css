@@ -1662,6 +1662,9 @@ table {
   margin: 6px 0 0;
   max-width: 100ch;
 }
+.scenario-tabs-hint {
+  margin-bottom: 8px;
+}
 .scenario-tabs {
   display: flex;
   gap: 8px;
@@ -1687,6 +1690,21 @@ table {
 }
 .scenario-tab.active {
   border-color: var(--cg-action);
+}
+.scenario-tab:hover {
+  border-color: var(--cg-action);
+}
+.scenario-tab .scenario-tab-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--cg-action);
+  font-weight: 700;
+}
+.scenario-tab:hover .scenario-tab-action {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .draft-comparison {
   display: grid;

@@ -5,6 +5,7 @@
     ArrowRight,
     Check,
     MessageSquareText,
+    PencilLine,
     RotateCcw,
     Undo2,
     Redo2
@@ -138,12 +139,16 @@
     >{chains.length} selected {chains.length === 1 ? 'scenario' : 'scenarios'}</span
   >
 </div>
+<p class="small muted scenario-tabs-hint">
+  Click each scenario button to open its editor and write or edit that scenario below.
+</p>
 <div class="scenario-tabs" aria-label="Narratives">
   {#each chains as c}{@const pendingCount = pendingAI.filter(
       (entry) => entry.chainId === c.id
     ).length}<button
       class:active={chain?.id === c.id}
       class="scenario-tab scenario-{c.colour}"
+      aria-pressed={chain?.id === c.id}
       onclick={() => {
         selectedId = c.id;
         snapshot = '';
@@ -158,7 +163,10 @@
       >{#if pendingCount}<span class="proposal-tab-badge"
           ><MessageSquareText size={13} aria-hidden="true" />
           {pendingCount} AI {pendingCount === 1 ? 'proposal' : 'proposals'} to review</span
-        >{/if}</button
+        >{/if}<span class="scenario-tab-action small"
+        ><PencilLine size={14} aria-hidden="true" />
+        {chain?.id === c.id ? 'Editing this scenario' : 'Click to write / edit'}</span
+      ></button
     >{/each}
 </div>
 {#if chain}
@@ -347,7 +355,7 @@
           placeholder="For example, make the causal pathway clearer while keeping my voice."
           oninput={(e) => (instructions[chain.id] = e.currentTarget.value)}></textarea></label
       >
-      <div class="toolbar-group">
+      <div class="toolbar-group spaced">
         <button
           class="primary"
           disabled={busy || !narrative?.working.trim() || chain.approvedRevision !== chain.revision}
