@@ -41,6 +41,14 @@ Keyboard semantics, labels, visible focus, native table controls, modal focus re
 - Inspected light/dark appearances, long model names and diagnostics, laptop widths (1024/1280/1440), 640px reflow and 200% text enlargement. Checked reduced-motion popup and spinner styles. The popup and trigger also stay within a 360px viewport; unrelated existing workspace content can overflow at that unsupported phone width.
 - QA scripts and screenshots are under ignored `output/playwright/model-activity-*`. Browser checks cover Chromium; the existing cross-browser/screen-reader release checks still apply.
 
+## Construct Chains fixes — 3 November 2026
+
+- `npm run check` passes with zero errors or warnings; all 108 tests across four files pass; the static production build succeeds.
+- Added chain regressions for 1/0, 2/1 and 12/6 main/wildcard targets, independent batch contexts, exact request estimates, catalogue completion limits, strict schemas with approved driver/hypothesis pairs, missing/duplicate/invalid references, batch count/kind validation, explicit nulls, scoped retries/replacements, legacy retries, budget admission and changed inputs. Version 1.0 project round trips retain `quick-3` runs and chain batch metadata.
+- Exercised both reported failure patterns in desktop Chromium with all OpenRouter traffic mocked. Two models each requested two main chains and one wildcard, using four requests. An incomplete wildcard and an output-limited wildcard both failed while four valid main chains remained available. Each explicit retry sent only its failed wildcard batch, leaving six candidates and six operation records. Raw responses, original failures, confirmed charges, unresolved cells and unscored/unapproved novel drivers survived saving and reload.
+- Checked the launch dialog's four-request count and 16,000-token maximum allowance, then the truncated wildcard retry's one-request count and increased 24,000-token allowance. Reviewed light/dark screenshots at 1280px and the dark dialog at 640px; text and controls fit within the dialog. Screenshots and QA scripts are under ignored `output/playwright/chain-fixes-*`.
+- These are mocked transport and browser checks; no paid inference calls or provider reliability evaluation were performed.
+
 ## Export checks
 
 The browser-generated PDF was inspected using Poppler and pypdf. It was a two-page A4 document with embedded Nunito Sans, readable text and page numbering. The first page was rendered and visually reviewed: no clipping, missing glyphs or overlapping text were observed. Extracted text retained the manually added note and `Unresolved uncertainties: Income support`. The DOCX ZIP contained a well-formed `word/document.xml`; a full Word/LibreOffice rendering review remains to be completed. The JSON backup contained all three narratives and three chains; all advisory checklist arrays were empty.

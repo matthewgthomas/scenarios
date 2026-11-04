@@ -97,10 +97,19 @@ describe('analyst decisions and provenance', () => {
       targetIds: [p.drivers[0].id],
       retryOf: historical.id
     });
-    p.runs = [historical, batch];
+    const chainBatch = run({
+      id: 'chain-batch',
+      task: 'chains',
+      promptTemplateVersion: 'quick-3',
+      batchIndex: 2,
+      batchCount: 2,
+      maxOutputTokens: 12000,
+      context: { chainBatch: { kind: 'wildcard', start: 1, count: 1 } }
+    });
+    p.runs = [historical, batch, chainBatch];
     const restored = parseProject(JSON.parse(projectJSON(p)));
     expect(restored.schemaVersion).toBe('1.0');
-    expect(restored.runs).toEqual([historical, batch]);
+    expect(restored.runs).toEqual([historical, batch, chainBatch]);
   });
   it('records only one immutable snapshot per chain revision', () => {
     const p = exampleProject();

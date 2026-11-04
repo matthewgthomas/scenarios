@@ -656,8 +656,9 @@
                   <div class="run-description">
                     <strong>{modelName(r.modelId)}</strong><small
                       >{r.modelId} · {r.task}{#if r.batchIndex}{' · '}batch {r.batchIndex} of {r.batchCount}
-                        · {r.targetIds.length}
-                        {r.targetIds.length === 1 ? 'driver' : 'drivers'}{/if}</small
+                        {#if r.task === 'ratings'}
+                          · {r.targetIds.length}
+                          {r.targetIds.length === 1 ? 'driver' : 'drivers'}{/if}{/if}</small
                     >{#if r.error}<p class="small error-text">{r.error}</p>{/if}
                     <details>
                       <summary class="small">Operation record</summary>
@@ -1009,9 +1010,17 @@
         >{paidPlan?.requests.length ?? 0}
         {paidPlan?.requests.length === 1 ? 'request' : 'requests'} across {paidModels.length}
         {paidModels.length === 1 ? 'model' : 'models'}. Based on current catalogue prices, input
-        allowance and up to 6,000 output tokens per request. Actual charges can vary.</small
+        allowance and up to {Math.max(
+          0,
+          ...(paidPlan?.requests.map((r) => r.maxOutputTokens) ?? [])
+        ).toLocaleString()} output tokens per request. Actual charges can vary.</small
       >
     </div>
+    {#if paidTask === 'chains'}<p class="small muted">
+        Main chains are requested in batches of up to three; each wildcard has its own request.
+        Every chain includes all selected uncertainties. Retry / replace repeats only the failed
+        batch.
+      </p>{/if}
     {#if !paidPlan?.requests.length}<p class="notice review">
         {retryId
           ? 'No missing ratings remain for the selected model in this scope. Choose a replacement model with missing ratings or close this dialog.'

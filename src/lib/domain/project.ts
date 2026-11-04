@@ -138,7 +138,7 @@ export const runSchema = z.object({
     'consolidate'
   ]),
   modelId: z.string(),
-  promptTemplateVersion: z.enum(['quick-1', 'quick-2']),
+  promptTemplateVersion: z.enum(['quick-1', 'quick-2', 'quick-3']),
   inputRevision: z.number(),
   status: z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled', 'skipped']),
   at: z.string(),

@@ -456,6 +456,8 @@ describe.each<Task>([
     vi.stubGlobal('navigator', { onLine: true });
     const catalogue = [{ ...models[0], supported_parameters: supported }];
     const p = exampleProject();
+    p.mainCount = 1;
+    p.wildcardCount = 0;
     const chain = p.chains[0];
     chain.approvedRevision = chain.revision;
     const outputs: Record<Task, Record<string, unknown>> = {
@@ -519,6 +521,322 @@ describe.each<Task>([
     } else expect(body.provider).toBeUndefined();
     expect(h.get().runs[0].status).toBe('succeeded');
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('chain construction batches', () => {
+  function project() {
+    const p = exampleProject();
+    p.chains = [];
+    p.mainCount = 2;
+    p.wildcardCount = 1;
+    return p;
+  }
+  const inputFor = (body: string) =>
+    JSON.parse(JSON.parse(body).messages[1].content.split('\nANALYST CONTEXT:\n')[1]);
+  function chainsFor(input: ReturnType<typeof inputFor>) {
+    return {
+      chains: Array.from({ length: input.chainBatch.count }, (_, i) => ({
+        title: `${input.chainBatch.kind} ${input.chainBatch.start + i}`,
+        kind: input.chainBatch.kind,
+        items: input.drivers.map((d: { id: string }) => ({
+          driverId: d.id,
+          hypothesisId:
+            input.hypotheses.find((h: { driverId: string }) => h.driverId === d.id)?.id ?? null
+        })),
+        reasoning: 'Compatible future states with explicit interactions.',
+        tensions: ['Response capacity may improve.'],
+        assumptions: ['Current constraints persist.'],
+        distinctiveness: 'A different combination of states.',
+        novelDrivers: []
+      }))
+    };
+  }
+
+  it.each([
+    [1, 0],
+    [2, 1],
+    [12, 6]
+  ])('plans bounded independent portfolios for %i main / %i wildcard chains', (main, wildcards) => {
+    const p = project();
+    p.mainCount = main;
+    p.wildcardCount = wildcards;
+    const plan = planRequests(
+      p,
+      models,
+      'chains',
+      models.map((m) => m.id)
+    );
+    const first = plan.requests.filter((r) => r.modelId === models[0].id);
+    expect(first).toHaveLength(Math.ceil(main / 3) + wildcards);
+    for (const model of models) {
+      const requests = plan.requests.filter((r) => r.modelId === model.id);
+      expect(requests.map((r) => r.context)).toEqual(first.map((r) => r.context));
+      for (const kind of ['main', 'wildcard']) {
+        const batches = requests
+          .map((r) => r.context.chainBatch as { kind: string; start: number; count: number })
+          .filter((b) => b.kind === kind);
+        expect(
+          batches.flatMap((b) => Array.from({ length: b.count }, (_, i) => b.start + i))
+        ).toEqual(Array.from({ length: kind === 'main' ? main : wildcards }, (_, i) => i + 1));
+        expect(batches.every((b) => b.count <= (kind === 'main' ? 3 : 1))).toBe(true);
+      }
+      expect(
+        requests.every((r) => r.maxOutputTokens >= 12000 && r.batchCount === requests.length)
+      ).toBe(true);
+      expect(requests.map((r) => r.batchIndex)).toEqual(requests.map((_, i) => i + 1));
+    }
+    expect(plan.estimatedTotal).toBe(plan.requests.reduce((sum, r) => sum + r.estimated!, 0));
+  });
+
+  it('sends complete coverage and only approved driver/hypothesis pairs in the strict schema', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const p = project();
+    p.hypotheses[0].approved = false;
+    p.hypotheses[1].archived = true;
+    const catalogue = [{ ...models[0], supported_parameters: ['structured_outputs'] }];
+    const fetcher = vi
+      .fn()
+      .mockImplementation((_url, options) => response(chainsFor(inputFor(options.body))));
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness(p);
+    const plan = planRequests(h.get(), catalogue, 'chains', [models[0].id]);
+    await launch(h.get, h.change, 'test-key', catalogue, 'chains', [models[0].id]).done;
+    expect(h.get().chains).toHaveLength(3);
+    expect(
+      h.get().runs.every((r) => r.status === 'succeeded' && r.promptTemplateVersion === 'quick-3')
+    ).toBe(true);
+    fetcher.mock.calls.forEach((call, i) => {
+      const body = JSON.parse(call[1].body);
+      const input = inputFor(call[1].body);
+      const chains = body.response_format.json_schema.schema.properties.chains;
+      expect(chains.minItems).toBe(input.chainBatch.count);
+      expect(chains.maxItems).toBe(input.chainBatch.count);
+      expect(chains.items.properties.kind.const).toBe(input.chainBatch.kind);
+      const items = chains.items.properties.items;
+      expect(items.minItems).toBe(input.drivers.length);
+      expect(items.maxItems).toBe(input.drivers.length);
+      expect(items.items.anyOf).toHaveLength(input.drivers.length);
+      for (const pair of items.items.anyOf) {
+        const driverId = pair.properties.driverId.const;
+        const values = pair.properties.hypothesisId.anyOf;
+        expect(values).toContainEqual({ type: 'null' });
+        expect(values.find((v: { type: string }) => v.type === 'string').enum).toEqual(
+          input.hypotheses
+            .filter((h: { driverId: string }) => h.driverId === driverId)
+            .map((h: { id: string }) => h.id)
+        );
+      }
+      expect(JSON.stringify(body)).not.toContain(p.hypotheses[0].id);
+      expect(JSON.stringify(body)).not.toContain(p.hypotheses[1].id);
+      expect(body.max_tokens).toBe(plan.requests[i].maxOutputTokens);
+      expect(h.get().runs[i].estimated).toBe(plan.requests[i].estimated);
+    });
+  });
+
+  it('keeps valid main chains when a wildcard omits uncertainties, then retries only the wildcard', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const fetcher = vi.fn().mockImplementation((_url, options) => {
+      const input = inputFor(options.body);
+      const output = chainsFor(input);
+      if (input.chainBatch.kind === 'wildcard')
+        output.chains[0].items = output.chains[0].items.slice(0, 2);
+      return response(output);
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness(project());
+    await launch(h.get, h.change, 'test-key', models, 'chains', [models[0].id]).done;
+    const failed = h.get().runs.find((r) => r.status === 'failed')!;
+    expect(h.get().chains).toHaveLength(2);
+    expect(failed.error).toContain('Chain “wildcard 1”');
+    expect(failed.error).toContain('missing uncertainties:');
+    expect(failed.error).toContain('Work & incomes');
+    expect(failed.rawOutput).toBeDefined();
+    expect(failed.confirmed).toBe(0.002);
+    const originalIds = h.get().chains.map((c) => c.id);
+    const retryPlan = planRequests(h.get(), models, 'chains', [models[1].id], undefined, failed.id);
+    expect(retryPlan.requests).toHaveLength(1);
+    expect(retryPlan.requests[0].context.chainBatch).toEqual({
+      kind: 'wildcard',
+      start: 1,
+      count: 1
+    });
+    fetcher.mockImplementation((_url, options) => response(chainsFor(inputFor(options.body))));
+    await launch(
+      h.get,
+      h.change,
+      'test-key',
+      models,
+      'chains',
+      [models[1].id],
+      undefined,
+      failed.id
+    ).done;
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(h.get().chains).toHaveLength(3);
+    expect(
+      h
+        .get()
+        .chains.slice(0, 2)
+        .map((c) => c.id)
+    ).toEqual(originalIds);
+    expect(h.get().runs.at(-1)?.retryOf).toBe(failed.id);
+    expect(h.get().chains.at(-1)?.origins[0].modelId).toBe(models[1].id);
+  });
+
+  it('retains a truncated batch and charges, and increases its allowance only on explicit retry', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const fetcher = vi.fn().mockImplementation((_url, options) => {
+      const input = inputFor(options.body);
+      return input.chainBatch.kind === 'wildcard'
+        ? rawResponse('{"chains":[{"title":"Ice-free corridor shock"', 'length')
+        : response(chainsFor(input));
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness(project());
+    await launch(h.get, h.change, 'test-key', models, 'chains', [models[0].id]).done;
+    const failed = h.get().runs.find((r) => r.status === 'failed')!;
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(h.get().chains).toHaveLength(2);
+    expect(failed.error).toContain('output limit');
+    expect(failed.rawOutput).toContain('Ice-free corridor shock');
+    expect(failed.confirmed).toBe(0.003);
+    const retryPlan = planRequests(h.get(), models, 'chains', [models[0].id], undefined, failed.id);
+    expect(retryPlan.requests).toHaveLength(1);
+    expect(retryPlan.requests[0].maxOutputTokens).toBe(2 * failed.maxOutputTokens!);
+    const limited = [{ ...models[0], top_provider: { max_completion_tokens: 18000 } }];
+    const capped = planRequests(h.get(), limited, 'chains', [models[0].id], undefined, failed.id);
+    expect(capped.requests[0].maxOutputTokens).toBe(18000);
+    fetcher.mockImplementation((_url, options) => response(chainsFor(inputFor(options.body))));
+    await launch(
+      h.get,
+      h.change,
+      'test-key',
+      models,
+      'chains',
+      [models[0].id],
+      undefined,
+      failed.id
+    ).done;
+    expect(h.get().runs.at(-1)?.maxOutputTokens).toBe(retryPlan.requests[0].maxOutputTokens);
+    expect(h.get().chains).toHaveLength(3);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    'duplicate',
+    'wrong driver',
+    'unapproved',
+    'unknown driver',
+    'wrong count',
+    'wrong kind'
+  ])(
+    'rejects %s references or batch shape without mutating or retrying the failed batch',
+    async (problem) => {
+      vi.stubGlobal('navigator', { onLine: true });
+      const p = project();
+      const unapproved = p.hypotheses.find((h) => h.driverId === p.drivers[0].id)!;
+      unapproved.approved = false;
+      const fetcher = vi.fn().mockImplementation((_url, options) => {
+        const input = inputFor(options.body);
+        const output = chainsFor(input);
+        if (input.chainBatch.kind === 'main') {
+          const chain = output.chains[0];
+          if (problem === 'duplicate') chain.items[1] = chain.items[0];
+          if (problem === 'wrong driver') chain.items[0].hypothesisId = chain.items[1].hypothesisId;
+          if (problem === 'unapproved') chain.items[0].hypothesisId = unapproved.id;
+          if (problem === 'unknown driver') chain.items[0].driverId = 'invented';
+          if (problem === 'wrong count') output.chains.pop();
+          if (problem === 'wrong kind') chain.kind = 'wildcard';
+        }
+        return response(output);
+      });
+      vi.stubGlobal('fetch', fetcher);
+      const h = harness(p);
+      await launch(h.get, h.change, 'test-key', models, 'chains', [models[0].id]).done;
+      expect(h.get().runs[0].status).toBe('failed');
+      expect(h.get().runs[0].rawOutput).toBeDefined();
+      expect(h.get().runs[1].status).toBe('succeeded');
+      expect(h.get().chains).toHaveLength(1);
+      expect(h.get().chains[0].kind).toBe('wildcard');
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    }
+  );
+
+  it('keeps explicit unresolved choices, including drivers with no approved hypotheses', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const p = project();
+    p.hypotheses.filter((h) => h.driverId === p.drivers[0].id).forEach((h) => (h.approved = false));
+    const fetcher = vi
+      .fn()
+      .mockImplementation((_url, options) => response(chainsFor(inputFor(options.body))));
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness(p);
+    await launch(h.get, h.change, 'test-key', models, 'chains', [models[0].id]).done;
+    expect(h.get().runs.every((r) => r.status === 'succeeded')).toBe(true);
+    expect(
+      h
+        .get()
+        .chains.every(
+          (c) => Object.hasOwn(c.items, p.drivers[0].id) && c.items[p.drivers[0].id] === null
+        )
+    ).toBe(true);
+  });
+
+  it('splits legacy portfolio retries into bounded batches', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(rawResponse('{"chains":[', 'length')));
+    const h = harness(project());
+    await launch(h.get, h.change, 'test-key', models, 'chains', [models[0].id]).done;
+    h.change((p) => {
+      const run = p.runs[0];
+      run.promptTemplateVersion = 'quick-1';
+      run.context = contextFor(p, 'chains');
+      delete run.maxOutputTokens;
+      delete run.batchIndex;
+      delete run.batchCount;
+    });
+    const failed = h.get().runs[0];
+    const plan = planRequests(h.get(), models, 'chains', [models[0].id], undefined, failed.id);
+    expect(plan.requests.map((r) => r.context.chainBatch)).toEqual([
+      { kind: 'main', start: 1, count: 2 },
+      { kind: 'wildcard', start: 1, count: 1 }
+    ]);
+  });
+
+  it('reserves the complete chain operation before dispatch', () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+    const p = project();
+    const plan = planRequests(p, models, 'chains', [models[0].id]);
+    p.budget = plan.requests[0].estimated!;
+    const h = harness(p);
+    expect(() => launch(h.get, h.change, 'test-key', models, 'chains', [models[0].id])).toThrow(
+      'exceeds'
+    );
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('rejects changed inputs while preserving completed batches', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const pending: { input: ReturnType<typeof inputFor>; resolve: (r: Response) => void }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      (_url: string, options: { body: string }) =>
+        new Promise<Response>((resolve) => pending.push({ input: inputFor(options.body), resolve }))
+    );
+    const h = harness(project());
+    const op = launch(h.get, h.change, 'test-key', models, 'chains', [models[0].id]);
+    pending[0].resolve(response(chainsFor(pending[0].input)));
+    await vi.waitFor(() => expect(h.get().chains).toHaveLength(2));
+    h.change((p) => {
+      p.hypotheses[0].description = 'An updated state';
+    });
+    pending[1].resolve(response(chainsFor(pending[1].input)));
+    await op.done;
+    expect(h.get().runs[1].error).toContain('Inputs changed');
+    expect(h.get().chains).toHaveLength(2);
   });
 });
 
