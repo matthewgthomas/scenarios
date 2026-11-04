@@ -58,6 +58,12 @@ Keyboard semantics, labels, visible focus, native table controls, modal focus re
 - Restored the original human snapshot only after confirmation, then recovered the prior working text through Undo. Inspected the editor at 1280px and 360px, the AI preview in light appearance and the review/snapshot workspace in dark appearance. Document width stayed within 360/640/1024/1280px viewports, and AI help opened with the keyboard. No application runtime exceptions were observed. These checks do not replace the remaining cross-browser/screen-reader audit.
 - QA scripts, screenshots and downloads are under ignored `output/playwright/human-writing-*`. All authenticated model traffic in these checks was intercepted; no paid provider calls were made.
 
+## AI proposal attention — 4 November 2026
+
+- Added a persistent bottom-of-viewport notice for pending AI drafts and edits, with scenario names, pending counts, matching scenario-tab badges and a keyboard-accessible jump to the proposal heading. Results do not steal focus while the analyst writes. Notices clear when proposals are applied or dismissed and survive reload through the existing proposal records.
+- Exercised two mocked requests, including completion while viewing another scenario, jump/heading focus, application and dismissal. Checked multiple pending scenarios after reload, Enter activation, reduced-motion scrolling, light/dark appearances and the compact 360px layout. Browser checks reported no application runtime exceptions. Screenshots and QA scripts are under ignored `output/playwright/proposal-attention-*`.
+- `npm run check` passes without errors or warnings; all 134 tests pass; the production build succeeds. No paid inference calls were made.
+
 ## Export checks
 
 The browser-generated PDF was inspected using Poppler and pypdf. It was a two-page A4 document with embedded Nunito Sans, readable text and page numbering. The first page was rendered and visually reviewed: no clipping, missing glyphs or overlapping text were observed. Extracted text retained the manually added note and `Unresolved uncertainties: Income support`. The DOCX ZIP contained a well-formed `word/document.xml`; a full Word/LibreOffice rendering review remains to be completed. The JSON backup contained all three narratives and three chains; all advisory checklist arrays were empty.

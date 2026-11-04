@@ -1,6 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { ArrowRight, Check, RotateCcw, Undo2, Redo2 } from '@lucide/svelte';
+  import { onMount, tick } from 'svelte';
+  import {
+    ArrowDown,
+    ArrowRight,
+    Check,
+    MessageSquareText,
+    RotateCcw,
+    Undo2,
+    Redo2
+  } from '@lucide/svelte';
   import {
     complete,
     now,
@@ -37,6 +45,10 @@
   let snapshot = $state('');
   let restoring = $state(false);
   let instructions = $state<Record<string, string>>({});
+  let proposalsHeading = $state<HTMLHeadingElement>();
+  let noticeHeight = $state(0);
+  const uid = $props.id();
+  const proposalsHeadingId = `${uid}-proposals-heading`;
   let RichEditor = $state<typeof import('./Editor.svelte').default>();
   onMount(() => {
     void import('./Editor.svelte').then((module) => (RichEditor = module.default));
@@ -49,6 +61,32 @@
     narrative?.drafts.filter(
       (d) => d.id !== narrative.chosenId && d.status !== 'accepted' && d.status !== 'dismissed'
     ) ?? []
+  );
+  const pendingAI = $derived(
+    chains.flatMap((c) => {
+      const n = p.narratives.find((n) => n.chainId === c.id);
+      return (
+        n?.drafts
+          .filter(
+            (d) =>
+              d.modelId !== 'authored/example' &&
+              d.id !== n.chosenId &&
+              d.status !== 'accepted' &&
+              d.status !== 'dismissed'
+          )
+          .map((d) => ({ chainId: c.id, title: c.title, draft: d })) ?? []
+      );
+    })
+  );
+  const attentionTarget = $derived(
+    pendingAI.find((entry) => entry.chainId === chain?.id) ?? pendingAI[0]
+  );
+  const attentionTitle = $derived(
+    pendingAI.length > 1
+      ? `${pendingAI.length} AI proposals need your review`
+      : attentionTarget?.draft.kind === 'edit'
+        ? 'AI edit ready for your review'
+        : 'AI draft ready for your review'
   );
   const allWritten = $derived(allNarrativesWritten(p));
   const allFinal = $derived(
@@ -71,6 +109,18 @@
     if (!chain || text === (narrative?.working ?? '')) return;
     change((p) => editNarrative(p, chain.id, text));
   }
+  async function reviewProposals() {
+    if (!attentionTarget) return;
+    selectedId = attentionTarget.chainId;
+    snapshot = '';
+    restoring = false;
+    await tick();
+    proposalsHeading?.focus({ preventScroll: true });
+    proposalsHeading?.scrollIntoView({
+      block: 'start',
+      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+    });
+  }
 </script>
 
 <div class="stage-heading">
@@ -89,7 +139,9 @@
   >
 </div>
 <div class="scenario-tabs" aria-label="Narratives">
-  {#each chains as c}<button
+  {#each chains as c}{@const pendingCount = pendingAI.filter(
+      (entry) => entry.chainId === c.id
+    ).length}<button
       class:active={chain?.id === c.id}
       class="scenario-tab scenario-{c.colour}"
       onclick={() => {
@@ -103,7 +155,10 @@
           ?.working.trim()
           ? '✓ Draft written'
           : '○ Not started'}</span
-      ></button
+      >{#if pendingCount}<span class="proposal-tab-badge"
+          ><MessageSquareText size={13} aria-hidden="true" />
+          {pendingCount} AI {pendingCount === 1 ? 'proposal' : 'proposals'} to review</span
+        >{/if}</button
     >{/each}
 </div>
 {#if chain}
@@ -307,8 +362,13 @@
       </div>
     </details>{/key}
   {#if proposals.length}<section class="narrative-proposals" aria-label="AI proposals">
-      <h2>Review proposed drafts</h2>
-      <p class="small muted">Your working text stays in the editor until you apply a proposal.</p>
+      <h2 id={proposalsHeadingId} bind:this={proposalsHeading} tabindex="-1">
+        Proposals awaiting your review
+      </h2>
+      <p class="small muted">
+        Compare each proposal below, then apply or dismiss it. Your working text stays unchanged
+        until you apply a proposal.
+      </p>
       {#each proposals as d}{@const current = proposalIsCurrent(p, chain.id, d.id)}
         <article class="draft-paper">
           <div class="section-line">
@@ -403,3 +463,28 @@
     >
   {/if}
 </footer>
+<div class="sr-only" role="status" aria-atomic="true">
+  {#if attentionTarget}{attentionTitle}. For {attentionTarget.title}. Review the proposals at the
+    bottom of the page.{/if}
+</div>
+{#if attentionTarget}
+  <div aria-hidden="true" style:height={`${noticeHeight + 24}px`}></div>
+  <aside
+    class="proposal-attention"
+    aria-label="AI proposals awaiting review"
+    bind:clientHeight={noticeHeight}
+  >
+    <MessageSquareText size={22} aria-hidden="true" />
+    <div class="proposal-attention-copy">
+      <strong>{attentionTitle}</strong>
+      <p>
+        For {attentionTarget.title}. Review the {pendingAI.length === 1 ? 'proposal' : 'proposals'} below
+        before deciding what to keep.
+      </p>
+    </div>
+    <button class="primary" aria-controls={proposalsHeadingId} onclick={reviewProposals}>
+      Review AI {pendingAI.length === 1 ? 'proposal' : 'proposals'}
+      <ArrowDown size={16} aria-hidden="true" />
+    </button>
+  </aside>
+{/if}

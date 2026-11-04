@@ -2673,3 +2673,78 @@ dialog::backdrop {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.proposal-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: var(--cg-status-review-bg);
+  color: var(--cg-status-review-text);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.proposal-attention {
+  position: fixed;
+  z-index: 20;
+  left: calc(var(--cg-sidebar-width) + var(--cg-work-padding));
+  right: var(--cg-work-padding);
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 2px solid var(--cg-action);
+  border-radius: 12px;
+  background: var(--cg-paper);
+  color: var(--cg-text);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 14%);
+}
+.proposal-attention > svg {
+  flex: none;
+  color: var(--cg-action);
+}
+.proposal-attention-copy {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.proposal-attention-copy strong {
+  display: block;
+  font-size: 1rem;
+}
+.proposal-attention-copy p {
+  margin: 4px 0 0;
+  color: var(--cg-text-muted);
+}
+.proposal-attention button {
+  flex: none;
+}
+.narrative-proposals h2 {
+  scroll-margin-top: 24px;
+}
+@media (max-width: 920px) {
+  .proposal-attention {
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 12px;
+  }
+  .proposal-attention button {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+@media (max-width: 680px) {
+  .proposal-attention {
+    left: 12px;
+    right: 12px;
+    padding: 14px;
+  }
+}
+@media print {
+  .proposal-attention {
+    display: none;
+  }
+}
