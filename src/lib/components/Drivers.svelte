@@ -9,6 +9,7 @@
     type Change
   } from '$lib/domain/project';
   import MergeSuggestions from './MergeSuggestions.svelte';
+  import Modal from './Modal.svelte';
   let {
     p,
     change,
@@ -22,11 +23,24 @@
   } = $props();
   let search = $state('');
   let selected = $state<string[]>([]);
+  let editorOpen = $state(false);
   let editing = $state('');
   let title = $state('');
   let summary = $state('');
   let tags = $state('');
+  let categories = $state<string[]>([]);
+  const pestleCategories = [
+    'Political',
+    'Economic',
+    'Social',
+    'Technological',
+    'Legal',
+    'Environmental'
+  ];
+  const categoryFor = (tag: string) =>
+    pestleCategories.find((category) => category.toLowerCase() === tag.trim().toLowerCase());
   const drivers = $derived(activeDrivers(p));
+  const originalProposals = $derived(p.drivers.find((d) => d.id === editing)?.origins ?? []);
   const filtered = $derived(
     drivers.filter((d) =>
       `${d.title} ${d.summary} ${d.tags.join(' ')}`.toLowerCase().includes(search.toLowerCase())
@@ -37,42 +51,70 @@
     editing = d.id;
     title = d.title;
     summary = d.summary;
-    tags = d.tags.join(', ');
+    categories = pestleCategories.filter((category) =>
+      d.tags.some((tag) => categoryFor(tag) === category)
+    );
+    tags = d.tags.filter((tag) => !categoryFor(tag)).join(', ');
+    editorOpen = true;
   }
   function add() {
-    const driverId = id('driver');
-    change((p) =>
-      p.drivers.push({
-        id: driverId,
-        title: 'New driver',
-        summary: '',
-        tags: [],
-        origin: 'user',
-        origins: [],
-        revision: 1,
-        approved: false,
-        selected: false,
-        archived: false,
-        ratings: []
-      })
-    );
-    edit(driverId);
+    editing = '';
+    title = '';
+    summary = '';
+    tags = '';
+    categories = [];
+    editorOpen = true;
+  }
+  function closeEditor() {
+    editorOpen = false;
+    editing = '';
+    title = '';
+    summary = '';
+    tags = '';
+    categories = [];
   }
   function save() {
-    change((p) => {
-      const d = p.drivers.find((d) => d.id === editing)!;
-      (d.history ??= []).push({ title: d.title, summary: d.summary, revision: d.revision });
-      d.title = title.trim() || d.title;
-      d.summary = summary;
-      d.tags = tags
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean);
-      d.revision++;
-      d.approved = false;
-      flagDownstream(p, 1, `${d.title} changed. Reassess scores and dependent work.`);
-    }, 'Driver saved. Dependent decisions may need review.');
-    editing = '';
+    if (!title.trim()) return;
+    const driverTags = [
+      ...new Set([
+        ...categories,
+        ...tags
+          .split(',')
+          .map((tag) => categoryFor(tag) ?? tag.trim())
+          .filter(Boolean)
+      ])
+    ];
+    change(
+      (p) => {
+        if (editing) {
+          const d = p.drivers.find((d) => d.id === editing)!;
+          (d.history ??= []).push({ title: d.title, summary: d.summary, revision: d.revision });
+          d.title = title.trim();
+          d.summary = summary;
+          d.tags = driverTags;
+          d.revision++;
+          d.approved = false;
+          flagDownstream(p, 1, `${d.title} changed. Reassess scores and dependent work.`);
+        } else {
+          p.drivers.push({
+            id: id('driver'),
+            title: title.trim(),
+            summary,
+            tags: driverTags,
+            origin: 'user',
+            origins: [],
+            revision: 1,
+            approved: false,
+            selected: false,
+            archived: false,
+            ratings: []
+          });
+          flagDownstream(p, 1, `${title.trim()} added. Reassess scores and dependent work.`);
+        }
+      },
+      editing ? 'Driver saved. Dependent decisions may need review.' : 'Driver added.'
+    );
+    closeEditor();
   }
   function merge() {
     change((p) => {
@@ -172,7 +214,7 @@
   </div>{/if}
 {#if drivers.length}<div class="table-scroll">
     <table class="data-table">
-      <caption class="sr-only">Drivers, original contributions and approval states</caption><thead
+      <caption class="sr-only">Drivers, perspectives and approval states</caption><thead
         ><tr
           ><th scope="col" class="checkbox-col"><span class="sr-only">Select</span></th><th
             scope="col">Driver</th
@@ -205,14 +247,7 @@
                   : d.origin === 'example'
                     ? 'Authored example'
                     : `${new Set(d.origins.map((o) => o.modelId)).size} model(s)`}</span
-              >
-              <details>
-                <summary class="small">Original proposals</summary>{#each d.origins as o}<p
-                    class="small"
-                  >
-                    <strong>{o.modelId}</strong><br />{o.text}
-                  </p>{/each}
-              </details></td
+              ></td
             ><td
               ><span class:approved={d.approved} class="badge"
                 >{d.approved ? '✓ Approved' : '○ For review'}</span
@@ -234,18 +269,48 @@
     </p>
     <button class="primary" onclick={() => request('drivers')}>Generate drivers</button>
   </div>{/if}
-{#if editing}<section class="inspector editor-form" aria-label="Driver editor">
-    <h2>Edit driver</h2>
-    <label>Name<input bind:value={title} /></label><label
-      >Description<textarea rows="3" bind:value={summary}></textarea></label
-    ><label>Tags, separated by commas<input bind:value={tags} /></label>
-    <div class="toolbar-group">
-      <button class="primary" disabled={!title.trim()} onclick={save}>Save driver</button><button
-        class="secondary"
-        onclick={() => (editing = '')}>Cancel</button
+{#if editorOpen}<Modal title={editing ? 'Edit driver' : 'Add driver'} close={closeEditor}>
+    <form
+      class="editor-form"
+      onsubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <label>Name<input required bind:value={title} /></label><label
+        >Description<textarea rows="3" bind:value={summary}></textarea></label
       >
-    </div>
-  </section>{/if}
+      <fieldset class="pestle-tags">
+        <legend>PESTLE categories</legend>
+        <p class="small muted">Select any that apply.</p>
+        <div class="category-options">
+          {#each pestleCategories as category}
+            <label
+              ><input type="checkbox" value={category} bind:group={categories} />{category}</label
+            >
+          {/each}
+        </div>
+      </fieldset>
+      <label
+        >Custom tags<input bind:value={tags} placeholder="For example, Migration, Food security" />
+        <small class="muted">Separate tags with commas.</small>
+      </label>
+      {#if originalProposals.length}
+        <details>
+          <summary class="small">Original proposals</summary>
+          {#each originalProposals as proposal}
+            <p class="small"><strong>{proposal.modelId}</strong><br />{proposal.text}</p>
+          {/each}
+        </details>
+      {/if}
+      <div class="dialog-actions">
+        <button type="button" class="secondary" onclick={closeEditor}>Cancel</button>
+        <button type="submit" class="primary" disabled={!title.trim()}
+          >{editing ? 'Save driver' : 'Add driver'}</button
+        >
+      </div>
+    </form>
+  </Modal>{/if}
 <footer class="stage-footer">
   <div>
     <strong>{drivers.length} drivers to explore</strong><small
@@ -264,3 +329,37 @@
         }, 'Driver list approved.')}><Check size={16} /> Approve driver list</button
     >{/if}
 </footer>
+
+<style>
+  .pestle-tags {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+  }
+  .pestle-tags legend {
+    padding: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  .pestle-tags p {
+    margin: 4px 0 12px;
+  }
+  .category-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .category-options label {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-weight: 400;
+  }
+  .category-options input {
+    margin: 0;
+    flex-shrink: 0;
+  }
+</style>
