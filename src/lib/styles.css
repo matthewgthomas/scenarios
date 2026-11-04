@@ -2637,3 +2637,39 @@ dialog::backdrop {
     max-width: 100%;
   }
 }
+
+.ai-help {
+  margin: 24px 0;
+  padding: 18px 24px;
+  border: 1px solid var(--cg-border);
+  border-radius: 13px;
+  background: var(--cg-paper);
+}
+.ai-help summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.ai-help[open] summary {
+  margin-bottom: 16px;
+}
+.ai-help textarea {
+  width: 100%;
+}
+.narrative-proposals {
+  margin: 30px 0;
+}
+.narrative-proposals .draft-paper {
+  margin-top: 20px;
+}
+.narrative-proposals .draft-comparison {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.narrative-proposals .draft-prose {
+  overflow-wrap: anywhere;
+  padding: 12px 0 24px;
+}
+@media (max-width: 760px) {
+  .narrative-proposals .draft-comparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

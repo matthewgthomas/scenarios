@@ -62,15 +62,15 @@ The following decisions were explicitly made during requirements discovery. Reco
 | Rechecks | Coherence re-check after edits **only on explicit request** |
 | Scenario count | Analyst-selected; 3 main scenarios default; wildcards separately configurable (0 default) |
 | Wildcards | Diverse yet plausible; new drivers can be proposed, lightly assessed, and explicitly approved |
-| Writing | One primary drafting model; alternate initial drafts from other models on request |
+| Writing | Human-written first draft; optional whole-scenario AI editing or generated starting drafts on request |
 | Narrative format | Flowing analytical prose, flexible structure, roughly 400–600 words provisionally |
-| Revisions | Human-only revisions after choosing a draft; rich-text and Markdown editing |
+| Revisions | Rich-text and Markdown editing; optional AI proposals require explicit application |
 | QA | Advisory checklist only; no required sign-off and no extra AI critique |
 | Evidence annotations | Hidden by default, toggleable, including in exports when available |
 | Research Mode | Independent discovery → shared evidence base → independent model analysis; prioritised human review; targeted follow-up research with approval |
 | Workflow | Revisit stages; track downstream dependencies; preserve edits; selective regeneration offered |
 | Persistence | IndexedDB autosave + portable import/export project file; no accounts |
-| History | Original AI, current working draft and final snapshot; ordinary undo/redo |
+| History | Original human or AI draft, current working draft and final snapshot; ordinary undo/redo |
 | Exports | Narratives via copy, Markdown, DOCX, PDF; full analytical report; machine-readable JSON |
 | Costs | Prices/estimates, usage reports, optional exercise budget and warnings |
 | Failures | Keep partial results; retry, replace or skip model without silently substituting |
@@ -119,7 +119,7 @@ An analyst asks: “How might the UK's cost-of-living crisis evolve over the nex
 - Uploading research papers, horizon scans, briefings or other documents; explicit initial assumption capture.
 - Conversational agent/chat within each stage.
 - AI-generated critiques of final scenario sets; automated quality scoring.
-- AI-assisted revision of *selected* narrative passages or whole approved narratives.
+- AI-assisted revision of *selected* narrative passages. Whole-scenario editing is available on explicit request.
 - Full version history, named revision branches, comments and tracked changes.
 - Fully responsive/mobile interface; participant-facing workshop facilitation features.
 - Dedicated strategy wind-tunnelling, humanitarian consequences, early-warning or briefing modules.
@@ -141,7 +141,7 @@ The seven core analytical stages, plus onboarding and completion, form the prima
 | 3. Select uncertainties | Choose critical drivers (suggested 4–6) | Show candidates/complexity feedback; **no relationship analysis required here** | Approved selection |
 | 4. Develop hypotheses | Review distinct futures for each selected driver | Independent generation; consolidation; recommend number per driver | Approved future-state hypotheses |
 | 5. Construct chains | Compare/edit/choose chains; request coherence check on demand after edits | Independent candidate construction; evaluate interactions/contradictions | Approved scenario chains |
-| 6. Write scenarios | Choose main + wildcard counts, primary writer, compare optional alternate drafts | Draft flowing analytical narratives from approved chains | Draft scenarios |
+| 6. Write scenarios | Write narratives from approved chains; optionally request AI help | Autosave human drafts; return optional AI edits or starting drafts as proposals | Draft scenarios |
 | 7. Review & complete | Manually edit narratives; optional QA checklist; approve final set | Autosave, snapshots, evidence annotations | Completed exercise |
 | 8. Export/next steps | Download narratives/full record/JSON; consider next uses | Generate requested export; suggest follow-on analytical activities | Portable output |
 
@@ -156,7 +156,7 @@ The seven core analytical stages, plus onboarding and completion, form the prima
 5. Review impact × uncertainty matrix; inspect outliers, human-adjust selected points; bulk-approve remaining provisional medians.
 6. Choose critical uncertainties and approve AI-generated alternatives for each.
 7. Compare proposed chains in matrix; inspect coherence explanations; edit and optionally re-check; select desired chains and wildcard variants.
-8. Draft narratives, choose between alternatives if requested, and edit directly.
+8. Write narratives directly; optionally ask AI to edit the whole scenario or generate a starting draft, then review and explicitly apply or dismiss its proposal.
 9. Consult optional QA checklist; approve final narratives; export.
 
 ### 5.2 Non-happy paths
@@ -214,13 +214,13 @@ Requirements have stable IDs (FR-xx) to support design tickets and test traceabi
 
 ### 6.4 Writing, evidence and QA
 
-**FR-18 — Narrative drafts.** Draft each approved chain using one selected primary model; support on-demand alternative model drafts and side-by-side comparison. **Accept:** initial drafts tie back to approved chain version; user must choose before final editing.
+**FR-18 — Narrative drafts.** Open an empty editor for each approved chain so the analyst writes first. A collapsed AI-help panel offers a selected model for whole-scenario editing or optional generated starting drafts. **Accept:** human drafts and proposals retain their chain revision; generation is optional and never gates editing or completion.
 
 **FR-19 — Narrative content.** Default flowing prose (~400–600 words guidance), covering future state, causal pathway and humanitarian implications. Optional headings, flexible arrangement. **Accept:** draft preserves explicit unresolved uncertainties and does not invent an outcome for them as fact.
 
-**FR-20 — Manual editor.** Rich-text editor with Markdown mode, undo/redo and autosave. **No AI editing after a draft is chosen in MVP.** **Accept:** modes round-trip supported formatting; editing does not silently rewrite chain data or trigger AI calls.
+**FR-20 — Narrative editor.** Rich-text editor with Markdown mode, undo/redo and autosave. Optional whole-scenario AI editing accepts analyst instructions, defaulting to clarity and flow while preserving voice and meaning. **Accept:** typing never triggers model calls; AI responses are proposals requiring explicit application. Stale proposals remain inspectable but cannot replace newer text or a changed chain. Supported formatting round-trips and chain data remains unchanged.
 
-**FR-21 — Milestone snapshots.** Store immutable initial AI draft, mutable working draft, and final approved snapshot; compare/restore safely. **Accept:** restore offers a non-destructive operation and retains the previous working draft until user confirms.
+**FR-21 — Milestone snapshots.** Store an immutable original human or accepted AI draft, mutable working draft, and final approved snapshot. Capture existing human text before the first AI request or first move to review. **Accept:** apply and restore require explicit action, preserve prior text through undo and never overwrite the original. Every selected scenario requires non-empty text for review and completion.
 
 **FR-22 — Evidence annotations.** Narratives appear clean by default; toggle annotations to source findings, hypotheses and assumptions; exports allow inclusion/exclusion. **Accept:** Quick Mode never presents invented source citations; Research annotations distinguish historical fact, supported assumption and speculative future statement.
 
@@ -274,7 +274,7 @@ Requirements have stable IDs (FR-xx) to support design tickets and test traceabi
 | Critical uncertainty picker | Approved matrix, selected drivers, count and complexity feedback | Select/deselect, proceed |
 | Hypothesis workspace | Uncertainty panels with distinct AI-proposed future states and provenance | Add/edit/merge/split/remove/approve |
 | Chain workbench | Scenario comparison matrix and detail drawer, AI coherence analysis | Edit cell, compare, request recheck, select chains |
-| Narrative workbench | Primary/alternate drafts, rich-text/Markdown editor, annotations toggle, advisory QA | Choose draft, edit, finalise |
+| Narrative workbench | Human-first rich-text/Markdown editor, optional AI-help proposals, chain reference, advisory QA | Write, optionally request/apply edits, finalise |
 | Completion & export | Scenario summary, copy/download choices, next-step suggestions | Export, archive, resume editing |
 | Global shell | Workflow sidebar, stage status, project name, save state, estimated/actual cost, model settings | Navigate, open controls, export |
 
@@ -345,7 +345,7 @@ Wildcards count **separately** from standard scenarios. They can include new AI-
 
 ### 8.8 Narrative drafting and QA
 
-Generate narrative drafts using one designated model; alternate initial drafts on request. Each draft must refer to an immutable chain revision. Narratives are largely flowing prose, with future condition, pathway and humanitarian consequences; 400–600 words is a drafting target not a hard cap. Once a draft is chosen, manual revisions only in MVP. Advisory checklist does not block export.
+The analyst writes first in an empty editor using the approved chain as a reference. A collapsed AI-help panel offers whole-scenario editing with optional instructions and generated starting drafts. Every request is explicit and estimated; every response is a proposal to compare and apply or dismiss. Human drafts and model proposals retain their chain revisions. Narratives are largely flowing prose, with future condition, pathway and humanitarian consequences; 400–600 words is guidance, not a hard cap. Advisory checklist items do not block completion or export.
 
 ## 9. Research Mode design
 
@@ -389,7 +389,7 @@ Narrative claim-level references distinguish: (1) present/historical evidence-ba
 | `CriticalUncertainty` | Link to approved driver, selection status, order |
 | `Hypothesis` | ID, uncertainty ID, alternative future state, origins, approval and revision |
 | `Chain` / `ChainItem` | ID, scenario type, selected hypothesis per uncertainty or unresolved, coherence notes, selected status |
-| `Scenario` / `NarrativeVersion` | Chain revision, title, prose Markdown, primary model, alternatives, working text, original/final snapshots |
+| `Scenario` / `NarrativeVersion` | Chain revision, title, prose Markdown, working text, original/final snapshots, optional model proposals with input text and instructions |
 | `Annotation` | Text anchor, type, linked source/finding/hypothesis/assumption, status |
 | `ModelRun` | Stage, selected model, prompt version, status, error/retry, output, token usage, cost |
 | `Dependency` | Typed edge from upstream entity/revision to affected downstream entity/revision |
@@ -550,7 +550,7 @@ Avoid claiming statistical proof from five participants; use the first pilot to 
 6. **Wildcard:** One additional wildcard introduces an analyst-approved novel driver without artificial matrix scores.
 7. **Budget:** An operation that would breach estimated remaining budget is blocked or asks for budget change; running operations preserve known cost data.
 8. **Resume/import:** Export a project, clear local browser storage, import file and retrieve approved decisions and working narrative with no API key embedded.
-9. **Manual editing:** Once draft is chosen, editing text produces no hidden AI calls; compare original/working/final snapshots.
+9. **Human-first writing:** Complete narratives without a model key. Typing produces no AI calls; optional model proposals require explicit application, stale proposals cannot overwrite newer text, and original/working/final snapshots remain available.
 10. **Access/privacy:** Keyboard-only user can perform critical-uncertainty and score selection; app warns non-sensitive use, never logs key.
 
 ## 15. Delivery plan, risks and open implementation decisions
@@ -592,7 +592,7 @@ Avoid claiming statistical proof from five participants; use the first pilot to 
 
 ## 16. Future roadmap
 
-**Near-term (post-MVP):** Contextual chat for exploring and interrogating stages; AI-assisted targeted narrative revisions; optional creative storytelling formats; richer analyst-defined initial assumptions and file uploads (research papers, horizon scans, briefings); fuller revision history.
+**Near-term (post-MVP):** Contextual chat for exploring and interrogating stages; AI-assisted selected-passage narrative revisions; optional creative storytelling formats; richer analyst-defined initial assumptions and file uploads (research papers, horizon scans, briefings); fuller revision history.
 
 **Expanded methodology:** Structured/multidimensional humanitarian impact scoring (scale, severity, duration, distributional effects), configurable assessment criteria, optional causal systems maps and relationship checking, independent AI critique of scenario sets, possible traditional 2×2 mode.
 

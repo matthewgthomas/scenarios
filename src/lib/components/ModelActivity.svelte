@@ -48,6 +48,7 @@
     chains: 'Generate chains',
     coherence: 'Check coherence',
     narrative: 'Draft narrative',
+    narrative_edit: 'Edit narrative',
     consolidate: 'Suggest merges'
   };
   const statuses: Record<Run['status'], string> = {
@@ -280,7 +281,9 @@
     class:activity-pulsing={!activity.running && activity.queued > 0}
     aria-hidden="true"><StatusIcon size={19} /></span
   >
-  <span class="activity-trigger-copy"><strong>AI model activity</strong><small>{status}</small></span>
+  <span class="activity-trigger-copy"
+    ><strong>AI model activity</strong><small>{status}</small></span
+  >
   {#if ready && activity.unread}<span
       class="activity-unread"
       class:activity-unread-error={activity.unreadFailures > 0}

@@ -4,12 +4,17 @@
   import StarterKit from '@tiptap/starter-kit';
   import { Markdown } from '@tiptap/markdown';
   import { Bold, Italic, Heading2, List, Quote } from '@lucide/svelte';
-  let { value, onedit }: { value: string; onedit: (text: string) => void } = $props();
+  let {
+    value,
+    onedit,
+    editable = true
+  }: { value: string; onedit: (text: string) => void; editable?: boolean } = $props();
   let element: HTMLDivElement;
   let editor = $state<Editor>();
   onMount(() => {
     editor = new Editor({
       element,
+      editable,
       extensions: [StarterKit.configure({ link: false, underline: false }), Markdown],
       content: value,
       contentType: 'markdown',
@@ -25,6 +30,7 @@
     return () => editor?.destroy();
   });
   $effect(() => {
+    if (editor && editor.isEditable !== editable) editor.setEditable(editable);
     if (editor && value !== editor.getMarkdown())
       editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
   });

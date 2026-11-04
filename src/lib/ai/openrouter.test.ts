@@ -444,7 +444,8 @@ describe.each<Task>([
   'hypotheses',
   'chains',
   'coherence',
-  'narrative'
+  'narrative',
+  'narrative_edit'
 ])('%s response formats', (task) => {
   it.each([
     { supported: ['response_format', 'structured_outputs'], format: 'json_schema' },
@@ -494,13 +495,17 @@ describe.each<Task>([
           { chainId: chain.id, reasoning: 'Compatible states.', tensions: [], assumptions: [] }
         ]
       },
-      narrative: { chainId: chain.id, text: 'A possible future.' }
+      narrative: { chainId: chain.id, text: 'A possible future.' },
+      narrative_edit: { chainId: chain.id, text: 'A clearer possible future.' }
     };
     const output = outputs[task];
     const fetcher = vi.fn().mockResolvedValue(response(output));
     vi.stubGlobal('fetch', fetcher);
     const h = harness(p);
-    const targets = task === 'coherence' || task === 'narrative' ? [chain.id] : undefined;
+    const targets =
+      task === 'coherence' || task === 'narrative' || task === 'narrative_edit'
+        ? [chain.id]
+        : undefined;
     await launch(h.get, h.change, 'test-key', catalogue, task, [models[0].id], targets).done;
     const body = JSON.parse(fetcher.mock.calls[0][1].body);
     expect(body.response_format?.type).toBe(format);
@@ -513,7 +518,7 @@ describe.each<Task>([
       expect(schema.additionalProperties).toBe(false);
       expect(Object.keys(schema.properties).sort()).toEqual(Object.keys(output).sort());
       expect(schema.required.sort()).toEqual(Object.keys(output).sort());
-      if (task !== 'narrative') {
+      if (task !== 'narrative' && task !== 'narrative_edit') {
         const list = schema.properties[Object.keys(output)[0]];
         expect(list.type).toBe('array');
         expect(list.items.additionalProperties).toBe(false);
@@ -1293,5 +1298,216 @@ describe('structured analytical responses', () => {
       })
     ).toThrow('Invalid consolidation');
     expect(p.mergeSuggestions).toHaveLength(0);
+  });
+});
+
+describe('optional narrative assistance', () => {
+  function writingProject() {
+    const p = exampleProject();
+    p.stage = 6;
+    p.chains = p.chains.slice(0, 1);
+    p.chains[0].approvedRevision = p.chains[0].revision;
+    p.narratives = [
+      {
+        ...p.narratives[0],
+        working: '**My own scenario.**',
+        chosenId: null,
+        original: undefined,
+        drafts: [],
+        final: null
+      }
+    ];
+    return p;
+  }
+  it('includes the editing request in the allowance both as context and as an instruction', () => {
+    const p = writingProject();
+    const scope = [p.chains[0].id];
+    const base = contextFor(p, 'narrative_edit', scope);
+    const verbose = contextFor(p, 'narrative_edit', scope, undefined, {
+      instructions: 'x'.repeat(4000)
+    });
+    expect(
+      estimate(models[0], verbose, 'narrative_edit')! - estimate(models[0], base, 'narrative_edit')!
+    ).toBeCloseTo(0.004);
+  });
+  it('estimates and sends the human text, chain and editing request without applying the response', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const p = writingProject();
+    const c = p.chains[0];
+    const options = { instructions: 'Make the pathway clearer.' };
+    const h = harness(p);
+    const plan = planRequests(
+      p,
+      models,
+      'narrative_edit',
+      [models[0].id],
+      [c.id],
+      undefined,
+      options
+    );
+    expect(plan.requests[0].context.narrative).toEqual({
+      text: '**My own scenario.**',
+      instructions: options.instructions
+    });
+    expect(plan.estimatedTotal).toBeGreaterThan(0);
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(response({ chainId: c.id, text: '**A clearer scenario.**' }));
+    vi.stubGlobal('fetch', fetcher);
+    await launch(
+      h.get,
+      h.change,
+      'test-key',
+      models,
+      'narrative_edit',
+      [models[0].id],
+      [c.id],
+      undefined,
+      options
+    ).done;
+    const body = JSON.parse(fetcher.mock.calls[0][1].body);
+    expect(body.messages[1].content).toContain('EDITING REQUEST:\nMake the pathway clearer.');
+    expect(body.messages[1].content).toContain('**My own scenario.**');
+    const n = h.get().narratives[0];
+    expect(n.working).toBe('**My own scenario.**');
+    expect(n.original?.text).toBe(n.working);
+    expect(n.drafts[0]).toMatchObject({
+      kind: 'edit',
+      status: 'pending',
+      baseText: n.working,
+      instructions: options.instructions,
+      chainRevision: c.revision,
+      runId: h.get().runs[0].id
+    });
+    expect(h.get().runs[0].estimated).toBe(plan.estimatedTotal);
+  });
+  it('uses a clear default editing request and retains proposals when the analyst types or changes the chain', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const p = writingProject();
+    const c = p.chains[0];
+    const h = harness(p);
+    let finish!: (r: Response) => void;
+    const fetcher = vi.fn().mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        })
+    );
+    vi.stubGlobal('fetch', fetcher);
+    const operation = launch(
+      h.get,
+      h.change,
+      'test-key',
+      models,
+      'narrative_edit',
+      [models[0].id],
+      [c.id]
+    );
+    expect(JSON.parse(fetcher.mock.calls[0][1].body).messages[1].content).toContain(
+      'Improve clarity and flow while preserving my voice and meaning.'
+    );
+    h.change((p) => {
+      p.narratives[0].working = 'Newer writing';
+      p.chains[0].revision++;
+    });
+    finish(response({ chainId: c.id, text: 'An edit of the older writing.' }));
+    await operation.done;
+    expect(h.get().runs[0].status).toBe('succeeded');
+    expect(h.get().narratives[0].working).toBe('Newer writing');
+    expect(h.get().narratives[0].drafts[0]).toMatchObject({
+      text: 'An edit of the older writing.',
+      baseText: '**My own scenario.**',
+      chainRevision: 1
+    });
+  });
+  it.each(['empty', 'unapproved', 'missing', 'multiple'] as const)(
+    'blocks %s narrative edit requests before spending',
+    (state) => {
+      vi.stubGlobal('navigator', { onLine: true });
+      const p = writingProject();
+      const c = p.chains[0];
+      if (state === 'empty') p.narratives[0].working = '  ';
+      if (state === 'unapproved') c.approvedRevision = null;
+      const fetcher = vi.fn();
+      vi.stubGlobal('fetch', fetcher);
+      const h = harness(p);
+      expect(() =>
+        launch(
+          h.get,
+          h.change,
+          'test-key',
+          models,
+          'narrative_edit',
+          [models[0].id],
+          state === 'missing' ? ['missing'] : state === 'multiple' ? [c.id, c.id] : [c.id]
+        )
+      ).toThrow();
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(h.get().runs).toHaveLength(0);
+    }
+  );
+  it('retains failed edit instructions and retries explicitly using current text', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const p = writingProject();
+    const c = p.chains[0];
+    const h = harness(p);
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(rawResponse('malformed'))
+      .mockResolvedValueOnce(response({ chainId: c.id, text: 'A fresh edit.' }));
+    vi.stubGlobal('fetch', fetcher);
+    await launch(
+      h.get,
+      h.change,
+      'test-key',
+      models,
+      'narrative_edit',
+      [models[0].id],
+      [c.id],
+      undefined,
+      { instructions: 'Keep my tone.' }
+    ).done;
+    expect(h.get().runs[0].status).toBe('failed');
+    expect(h.get().narratives[0].working).toBe('**My own scenario.**');
+    expect(h.get().narratives[0].drafts).toEqual([]);
+    h.change((p) => {
+      p.narratives[0].working = 'Updated scenario';
+    });
+    const retry = h.get().runs[0];
+    await launch(
+      h.get,
+      h.change,
+      'test-key',
+      models,
+      'narrative_edit',
+      [models[0].id],
+      [c.id],
+      retry.id
+    ).done;
+    const context = h.get().runs[1].context as {
+      narrative: { text: string; instructions: string };
+    };
+    expect(context.narrative).toEqual({ text: 'Updated scenario', instructions: 'Keep my tone.' });
+    expect(h.get().narratives[0].original?.text).toBe('**My own scenario.**');
+    expect(h.get().narratives[0].working).toBe('Updated scenario');
+    expect(h.get().runs[1].status).toBe('succeeded');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it('generates an optional initial proposal without replacing human text', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const p = writingProject();
+    const c = p.chains[0];
+    const h = harness(p);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(response({ chainId: c.id, text: 'A generated starting draft.' }))
+    );
+    await launch(h.get, h.change, 'test-key', models, 'narrative', [models[0].id], [c.id]).done;
+    expect(h.get().narratives[0].working).toBe('**My own scenario.**');
+    expect(h.get().narratives[0].drafts[0]).toMatchObject({
+      kind: 'initial',
+      baseText: '**My own scenario.**',
+      status: 'pending'
+    });
   });
 });

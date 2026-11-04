@@ -1,6 +1,6 @@
 # Quick Mode implementation verification
 
-Review date: 2 November 2026. This records checks actually performed; it is not a certification or a completed analyst pilot. Research requirements in the original acceptance checklist are intentionally outside this implementation's scope.
+Latest review: 4 November 2026. Earlier sections record their original checks. This records checks actually performed; it is not a certification or a completed analyst pilot. Research requirements in the original acceptance checklist are intentionally outside this implementation's scope.
 
 ## Automated checks
 
@@ -48,6 +48,15 @@ Keyboard semantics, labels, visible focus, native table controls, modal focus re
 - Exercised both reported failure patterns in desktop Chromium with all OpenRouter traffic mocked. Two models each requested two main chains and one wildcard, using four requests. An incomplete wildcard and an output-limited wildcard both failed while four valid main chains remained available. Each explicit retry sent only its failed wildcard batch, leaving six candidates and six operation records. Raw responses, original failures, confirmed charges, unresolved cells and unscored/unapproved novel drivers survived saving and reload.
 - Checked the launch dialog's four-request count and 16,000-token maximum allowance, then the truncated wildcard retry's one-request count and increased 24,000-token allowance. Reviewed light/dark screenshots at 1280px and the dark dialog at 640px; text and controls fit within the dialog. Screenshots and QA scripts are under ignored `output/playwright/chain-fixes-*`.
 - These are mocked transport and browser checks; no paid inference calls or provider reliability evaluation were performed.
+
+## Human-first scenario writing — 4 November 2026
+
+- `npm run check` passes with zero errors or warnings; all 134 tests across five files pass; the root-path static production build succeeds.
+- Added regressions for human drafts without a chosen model draft, empty/whitespace and multi-scenario progress, approved-chain requirements, continued editing after upstream changes, immutable human originals, legacy version 1.0 originals, proposal application/dismissal/staleness, undo/redo, exports and backup round trips. Mocked editing requests cover instructions and estimates, explicit application, changed inputs during inference, failure/retry with current prose, provider response formats and optional initial generation.
+- Completed a human-only browser path with three scenarios, reload/autosave, rich-text/Markdown formatting, undo/redo, review with every advisory box unchecked, final completion, and Markdown/DOCX/PDF downloads. No OpenRouter requests were made and no API key was entered for this path. Clearing a narrative during review kept the editor available and disabled completion.
+- Exercised five mocked model calls across writing and review: an accepted edit, a dismissed generated draft, a stale edit after continued typing, a malformed response and its explicit retry. Responses did not replace working prose automatically; applying an edit retained undo/redo. The retry retained instructions and used the latest text. Original human prose, working text, accepted/dismissed/pending proposals, run records and costs survived JSON round trips and browser reload.
+- Restored the original human snapshot only after confirmation, then recovered the prior working text through Undo. Inspected the editor at 1280px and 360px, the AI preview in light appearance and the review/snapshot workspace in dark appearance. Document width stayed within 360/640/1024/1280px viewports, and AI help opened with the keyboard. No application runtime exceptions were observed. These checks do not replace the remaining cross-browser/screen-reader audit.
+- QA scripts, screenshots and downloads are under ignored `output/playwright/human-writing-*`. All authenticated model traffic in these checks was intercepted; no paid provider calls were made.
 
 ## Export checks
 

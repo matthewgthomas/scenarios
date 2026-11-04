@@ -179,8 +179,10 @@ export function exampleProject(): Project {
           chainRevision: 1
         }
       ],
-      chosenId: null,
-      working: '',
+      chosenId: `example_draft_${j}`,
+      working: text,
+      chainRevision: 1,
+      original: { text, at: now(), chainRevision: 1, source: 'example' as const },
       final: null,
       finalAt: null,
       review: false,

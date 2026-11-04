@@ -138,7 +138,9 @@ describe('analyst decisions and provenance', () => {
   it('does not allow unconfigured projects to skip prerequisites', () => {
     expect(prerequisite(newProject(), 5)).toContain('question');
     expect(prerequisite(exampleProject(), 5)).toBeNull();
-    expect(prerequisite(exampleProject(), 6)).toContain('Approve');
+    const unwritten = exampleProject();
+    unwritten.narratives = [];
+    expect(prerequisite(unwritten, 6)).toContain('Approve');
   });
 });
 

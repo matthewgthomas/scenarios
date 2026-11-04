@@ -38,7 +38,7 @@ export function markdown(p: Project, annotations = false, full = false): string 
   for (const c of p.chains.filter((c) => c.selected)) {
     const n = p.narratives.find((n) => n.chainId === c.id);
     text += `## ${c.title}${c.kind === 'wildcard' ? ' (Wildcard)' : ''}\n\n`;
-    text += `${n?.working || '_No narrative draft selected yet._'}\n\n`;
+    text += `${n?.working.trim() ? n.working : '_No narrative written yet._'}\n\n`;
     if (n?.review || c.review) text += '_Review suggested after an upstream edit._\n\n';
     const unresolved = uncertainties(p).filter((d) => !c.items[d.id]);
     if (unresolved.length)

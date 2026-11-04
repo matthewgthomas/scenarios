@@ -45,9 +45,9 @@ Use with [DESIGN.md](../DESIGN.md) and [spec.md](../spec.md). These checks descr
 - [ ] Sources expose provenance, verification status and supporting claims. An inaccessible source is not shown as verified. (FR-25)
 - [ ] Later research requests state the question, expected usefulness and estimate; no request starts before approval. Changed evidence flags affected decisions without overwriting them. (FR-27)
 - [ ] Quick Mode contains no invented citations. Annotation types distinguish historical evidence, assumptions/hypotheses and imagined futures. (FR-22)
-- [ ] Drafting uses the chosen primary model and approved chain revision. Alternate initial drafts are requested explicitly. (FR-18)
-- [ ] After choosing a draft, rich-text and Markdown edits are manual, preserve supported formatting and make no AI calls. (FR-20)
-- [ ] Original AI draft, working text and final snapshot are distinguishable; restoration preserves the existing working draft until confirmed. (FR-21)
+- [ ] Writing opens an empty editor with chain guidance. Human-only drafting through review, completion and export works without a model key. Optional generated starting drafts remain inside collapsed AI help. (FR-18)
+- [ ] Rich-text and Markdown edits preserve supported formatting and make no AI calls. Optional whole-scenario editing accepts instructions and returns a proposal to explicitly apply or dismiss. Changed text or chain revisions prevent applying stale proposals. (FR-20)
+- [ ] Original human or accepted AI draft, working text and final snapshot are distinguishable. Applying a proposal and restoring snapshots preserve previous working text through Undo. Every selected scenario needs non-empty text to review and complete. (FR-21)
 - [ ] Evidence annotations are off by default. Editing affected text marks broken/detached anchors for review rather than leaving misleading citations. (FR-22)
 - [ ] The advisory checklist can be entirely unchecked without blocking completion/export or triggering an extra AI critique. (FR-23)
 

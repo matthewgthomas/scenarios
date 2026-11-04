@@ -25,7 +25,7 @@ To work on your own question, create an exercise and open **Models & budget**. P
 4. Select critical uncertainties. Four to six is recommended, with no enforced selection count.
 5. Generate variable numbers of future-state hypotheses, inspect contributions, consolidate and approve them.
 6. Generate contrasting candidate chains or add chains manually. Select main scenarios and wildcards separately. Inspect reasoning, change cells and explicitly request any paid coherence recheck. Unresolved choices remain explicit. Novel wildcard drivers require acceptance and remain unscored.
-7. Draft each approved chain with a chosen primary writer. Request alternate initial drafts explicitly, compare them and choose one. All subsequent narrative editing is manual, with rich-text/Markdown modes, undo/redo and original/working/final snapshots.
+7. Write each scenario yourself from its approved chain in the rich-text/Markdown editor. Optional AI help can edit your whole scenario using your instructions, or generate a starting draft. Compare proposals and explicitly apply or dismiss them; original/working/final snapshots and undo/redo preserve your writing.
 8. Complete with an optional advisory checklist. Copy or export Markdown, Word, PDF, full analytical reports, analytical JSON and resumable project JSON.
 
 Approvals and generation are separate actions. Editing never runs models. Upstream changes flag downstream work without deleting it. General exercise undo/redo covers local decisions; it resets at model-operation boundaries and never reverses recorded spending. Narrative editing has its own text history.

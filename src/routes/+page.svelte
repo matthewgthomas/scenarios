@@ -43,6 +43,7 @@
     uncertainSpend,
     prerequisite,
     modelName,
+    prepareNarrativeReview,
     type Project,
     type Change,
     type Run
@@ -63,7 +64,8 @@
     responseText,
     type Model,
     type Operation,
-    type Task
+    type Task,
+    type NarrativeOptions
   } from '$lib/ai/openrouter';
   import { download, projectJSON, filename } from '$lib/export/files';
   import Chains from '$lib/components/Chains.svelte';
@@ -97,6 +99,7 @@
   let paidTargets = $state<string[] | undefined>();
   let paidModels = $state<string[]>([]);
   let retryId = $state<string | undefined>();
+  let paidNarrativeOptions = $state<NarrativeOptions | undefined>();
   let paidError = $state('');
   let busy = $state(false);
   let operation: Operation | null = null;
@@ -120,10 +123,11 @@
   const latestOperationRuns = $derived(
     stageRuns.filter((r) => r.operationId === stageRuns.at(-1)?.operationId)
   );
-  const blocked = $derived(p ? prerequisite(p, p.stage) : null);
+  // Review remains editable if someone clears a draft after entering it.
+  const blocked = $derived(p ? prerequisite(p, p.stage === 7 ? 6 : p.stage) : null);
   const paidPlan = $derived(
     p && dialog === 'paid'
-      ? planRequests(p, catalogue, paidTask, paidModels, paidTargets, retryId)
+      ? planRequests(p, catalogue, paidTask, paidModels, paidTargets, retryId, paidNarrativeOptions)
       : null
   );
   const paidEstimate = $derived(paidPlan?.estimatedTotal ?? null);
@@ -239,7 +243,21 @@
     error = '';
   }
   function navigate(stage: number) {
-    updateProject((p) => (p.stage = stage), undefined, false);
+    if (p && stage === 7) {
+      const reason = prerequisite(p, stage);
+      if (reason) {
+        error = reason;
+        return;
+      }
+    }
+    updateProject(
+      (p) => {
+        if (stage === 7) prepareNarrativeReview(p);
+        p.stage = stage;
+      },
+      undefined,
+      false
+    );
     error = '';
     void tick().then(() => {
       window.scrollTo(0, 0);
@@ -289,14 +307,23 @@
       } else p.overrides[modelScope] = updated;
     });
   }
-  function request(task: Task, targets?: string[], writer?: string, retry?: Run) {
+  function request(
+    task: Task,
+    targets?: string[],
+    writer?: string,
+    retry?: Run,
+    narrativeOptions?: NarrativeOptions
+  ) {
     if (!p || busy) return;
     paidTask = task;
     paidTargets = targets;
     retryId = retry?.id;
+    paidNarrativeOptions =
+      narrativeOptions ??
+      (retry?.context as { narrative?: NarrativeOptions } | undefined)?.narrative;
     paidModels = retry
       ? [retry.modelId]
-      : task === 'narrative' || task === 'consolidate'
+      : task === 'narrative' || task === 'narrative_edit' || task === 'consolidate'
         ? [writer || p.writer]
         : [...(p.overrides[String(p.stage)] ?? p.models)];
     paidError = '';
@@ -315,7 +342,8 @@
         paidTask,
         [...paidModels],
         paidTargets,
-        retryId
+        retryId,
+        paidNarrativeOptions
       );
       started = true;
       dialog = '';
@@ -619,7 +647,9 @@
                   {p}
                   {change}
                   review={p.stage === 7}
-                  request={(id, writer) => request('narrative', [id], writer)}
+                  {busy}
+                  request={(task, id, instructions) =>
+                    request(task, [id], undefined, undefined, { instructions })}
                   next={() => navigate(p.stage + 1)}
                 />
               {:else}<Exports {p} />{/if}
@@ -960,13 +990,20 @@
       ? 'Retry or replace this contribution'
       : paidTask === 'coherence'
         ? 'Recheck coherence'
-        : paidTask === 'narrative'
-          ? 'Draft a narrative'
-          : paidTask === 'consolidate'
-            ? 'Suggest overlapping contributions'
-            : `Generate ${paidTask === 'ratings' ? 'independent scores' : paidTask}`}
+        : paidTask === 'narrative_edit'
+          ? 'Ask AI to edit your scenario'
+          : paidTask === 'narrative'
+            ? 'Generate a draft with AI'
+            : paidTask === 'consolidate'
+              ? 'Suggest overlapping contributions'
+              : `Generate ${paidTask === 'ratings' ? 'independent scores' : paidTask}`}
     close={() => (dialog = '')}
     ><p>Review the models and estimate before sending this analysis to OpenRouter.</p>
+    {#if paidTask === 'narrative_edit'}<p class="small">
+        <strong>Editing request:</strong>
+        {paidNarrativeOptions?.instructions?.trim() ||
+          'Improve clarity and flow while preserving my voice and meaning.'}
+      </p>{/if}
     {#if paidTargets?.length}<p class="small">
         <strong>Scope:</strong>
         {paidTargets
@@ -1036,8 +1073,8 @@
       >{/if}{#if paidError}<p class="notice error" role="alert">{paidError}</p>
       <button class="text-button" onclick={settings}>Adjust models & budget</button>{/if}
     <p class="small muted">
-      {paidTask === 'narrative'
-        ? 'This creates an initial draft. After selection, revisions are manual.'
+      {paidTask === 'narrative' || paidTask === 'narrative_edit'
+        ? 'This creates a proposal for you to review. Your working text changes only when you apply it.'
         : paidTask === 'consolidate'
           ? 'This model reviews the independent contributions for overlap. Every proposed merge requires your acceptance.'
           : 'Models work independently from the same analyst context. No searches or web tools are used.'}
@@ -1091,7 +1128,9 @@
       <li>Compare humanitarian impact and uncertainty scores.</li>
       <li>Choose critical uncertainties and develop future states.</li>
       <li>Combine hypotheses into coherent, contrasting chains.</li>
-      <li>Choose narrative drafts, edit manually and export your work.</li>
+      <li>
+        Write your scenarios, optionally ask AI for editing help, then review and export your work.
+      </li>
     </ol>
     <p>
       This app will tell you whenever an action costs money. AI models do not run when you edit,

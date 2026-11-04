@@ -107,7 +107,11 @@ const draft = z.object({
   runId: z.string(),
   text: z.string(),
   at: z.string(),
-  chainRevision: z.number()
+  chainRevision: z.number(),
+  kind: z.enum(['initial', 'edit']).optional(),
+  baseText: z.string().optional(),
+  instructions: z.string().optional(),
+  status: z.enum(['pending', 'accepted', 'dismissed']).optional()
 });
 const narrative = z.object({
   id: z.string(),
@@ -115,6 +119,17 @@ const narrative = z.object({
   drafts: z.array(draft),
   chosenId: z.string().nullable(),
   working: z.string(),
+  chainRevision: z.number().optional(),
+  original: z
+    .object({
+      text: z.string(),
+      at: z.string(),
+      chainRevision: z.number(),
+      source: z.enum(['user', 'ai', 'example']),
+      modelId: z.string().optional(),
+      runId: z.string().optional()
+    })
+    .optional(),
   final: z.string().nullable(),
   finalAt: z.string().nullable(),
   review: z.boolean(),
@@ -135,6 +150,7 @@ export const runSchema = z.object({
     'chains',
     'coherence',
     'narrative',
+    'narrative_edit',
     'consolidate'
   ]),
   modelId: z.string(),
@@ -368,6 +384,18 @@ export function canSpend(p: Project, estimate: number) {
 }
 export function prerequisite(p: Project, stage: number): string | null {
   if (stage === 0 || stage === 8) return null;
+  if (stage === 7 && !allNarrativesWritten(p))
+    return 'Write a narrative for every selected scenario in Write scenarios.';
+  // Reopening existing prose must remain possible after upstream decisions change.
+  if (
+    (stage === 6 || stage === 7) &&
+    p.narratives.some(
+      (n) =>
+        p.chains.some((c) => c.selected && c.id === n.chainId) &&
+        (n.chainRevision !== undefined || n.original || n.chosenId || n.working.trim())
+    )
+  )
+    return null;
   if (!p.question.trim() || !p.horizon.trim())
     return 'Add an analytical question and time horizon in Setup.';
   if (stage >= 2 && !activeDrivers(p).some((d) => d.approved))
@@ -380,8 +408,6 @@ export function prerequisite(p: Project, stage: number): string | null {
     return 'Approve at least one hypothesis for each uncertainty.';
   if (stage >= 6 && !p.chains.some((c) => c.selected && c.approvedRevision === c.revision))
     return 'Approve selected chains in Construct chains.';
-  if (stage >= 7 && !p.narratives.some((n) => n.chosenId))
-    return 'Choose an initial narrative draft in Write scenarios.';
   return null;
 }
 export function parseProject(value: unknown): Project {
@@ -404,9 +430,22 @@ export function parseProject(value: unknown): Project {
       )
         throw new Error('A chain has an invalid hypothesis reference.');
     }
-  for (const n of p.narratives)
+  for (const n of p.narratives) {
     if (!p.chains.some((c) => c.id === n.chainId))
       throw new Error('A narrative refers to a missing chain.');
+    const chosen = n.drafts.find((d) => d.id === n.chosenId);
+    if (!n.original && chosen) {
+      n.original = {
+        text: chosen.text,
+        at: chosen.at,
+        chainRevision: chosen.chainRevision,
+        source: chosen.modelId === 'authored/example' ? 'example' : 'ai',
+        modelId: chosen.modelId,
+        runId: chosen.runId
+      };
+    }
+    n.chainRevision ??= n.original?.chainRevision;
+  }
   return p;
 }
 export function narrativeFor(p: Project, chainId: string): Narrative {
@@ -429,6 +468,101 @@ export function narrativeFor(p: Project, chainId: string): Narrative {
     p.narratives.push(n);
   }
   return n;
+}
+export function allNarrativesWritten(p: Project): boolean {
+  const chains = p.chains.filter((c) => c.selected);
+  return (
+    chains.length > 0 &&
+    chains.every((c) => p.narratives.some((n) => n.chainId === c.id && n.working.trim().length > 0))
+  );
+}
+export function canWriteNarrative(p: Project, chainId: string): boolean {
+  const chain = p.chains.find((c) => c.id === chainId);
+  const n = p.narratives.find((n) => n.chainId === chainId);
+  return (
+    !!chain &&
+    (chain.approvedRevision === chain.revision ||
+      n?.chainRevision !== undefined ||
+      !!n?.original ||
+      !!n?.chosenId ||
+      !!n?.working.trim())
+  );
+}
+function narrativeChanged(p: Project, n: Narrative) {
+  n.annotationsDetached = true;
+  p.completed = p.completed.filter(
+    (stage) => stage !== 7 && stage !== 8 && (stage !== 6 || allNarrativesWritten(p))
+  );
+}
+export function editNarrative(p: Project, chainId: string, text: string) {
+  if (!canWriteNarrative(p, chainId)) return;
+  const n = narrativeFor(p, chainId);
+  if (text === n.working) return;
+  n.chainRevision ??= p.chains.find((c) => c.id === chainId)!.revision;
+  n.history.push(n.working);
+  if (n.history.length > 100) n.history.shift();
+  n.redo = [];
+  n.working = text;
+  narrativeChanged(p, n);
+}
+export function undoNarrative(p: Project, chainId: string, redo = false) {
+  const n = p.narratives.find((n) => n.chainId === chainId);
+  if (!n) return;
+  const source = redo ? n.redo : n.history;
+  if (!source.length) return;
+  (redo ? n.history : n.redo).push(n.working);
+  n.working = source.pop()!;
+  narrativeChanged(p, n);
+}
+export function snapshotNarrative(p: Project, chainId: string) {
+  const n = p.narratives.find((n) => n.chainId === chainId);
+  if (!n || n.original || !n.working.trim()) return;
+  n.original = {
+    text: n.working,
+    at: now(),
+    chainRevision: n.chainRevision ?? p.chains.find((c) => c.id === chainId)!.revision,
+    source: 'user'
+  };
+}
+export function prepareNarrativeReview(p: Project) {
+  if (!allNarrativesWritten(p)) return;
+  p.chains.filter((c) => c.selected).forEach((c) => snapshotNarrative(p, c.id));
+  complete(p, 6);
+}
+export function proposalIsCurrent(p: Project, chainId: string, draftId: string): boolean {
+  const n = p.narratives.find((n) => n.chainId === chainId);
+  const d = n?.drafts.find((d) => d.id === draftId);
+  const c = p.chains.find((c) => c.id === chainId);
+  return (
+    !!d &&
+    !!c &&
+    d.status !== 'dismissed' &&
+    d.status !== 'accepted' &&
+    d.chainRevision === c.revision &&
+    c.approvedRevision === c.revision &&
+    (d.baseText === undefined ? !n!.working.trim() : d.baseText === n!.working)
+  );
+}
+export function applyNarrativeProposal(p: Project, chainId: string, draftId: string) {
+  if (!proposalIsCurrent(p, chainId, draftId)) return;
+  const n = narrativeFor(p, chainId);
+  const d = n.drafts.find((d) => d.id === draftId)!;
+  snapshotNarrative(p, chainId);
+  if (!n.original) {
+    n.original = {
+      text: d.text,
+      at: d.at,
+      chainRevision: d.chainRevision,
+      source: d.modelId === 'authored/example' ? 'example' : 'ai',
+      modelId: d.modelId,
+      runId: d.runId
+    };
+  }
+  editNarrative(p, chainId, d.text);
+  n.chainRevision = d.chainRevision;
+  n.review = false;
+  d.status = 'accepted';
+  if (d.kind !== 'edit') n.chosenId = d.id;
 }
 export function snapshotChain(p: Project, c: Chain) {
   if ((c.snapshots ??= []).some((s) => s.revision === c.revision)) return;
