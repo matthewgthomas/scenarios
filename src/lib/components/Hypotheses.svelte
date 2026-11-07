@@ -28,6 +28,7 @@
   let title = $state('');
   let description = $state('');
   const drivers = $derived(uncertainties(p));
+  const contributingPerspectives = $derived(p.hypotheses.find((h) => h.id === editing)?.origins ?? []);
   const allApproved = $derived(
     drivers.every((d) => statesFor(p, d.id).length && statesFor(p, d.id).every((h) => h.approved))
   );
@@ -163,15 +164,6 @@
             </div>
             <p>{h.description}</p>
             <div class="section-line">
-              <details>
-                <summary class="small"
-                  >{h.origins.length
-                    ? `${new Set(h.origins.map((o) => o.modelId)).size} contributing perspective(s)`
-                    : 'Analyst-added'}</summary
-                >{#each h.origins as o}<p class="small">
-                    <strong>{o.modelId}</strong><br />{o.text}
-                  </p>{/each}
-              </details>
               <button class="text-button" onclick={() => edit(h.id)}>Edit</button>
             </div>
           </article>{/each}{#if !statesFor(p, d.id).length}<p class="muted">
@@ -196,6 +188,15 @@
       <label>Short title<input bind:value={title} /></label><label
         >Describe this future state<textarea rows="4" bind:value={description}></textarea></label
       >
+      <details>
+        <summary class="small"
+          >{contributingPerspectives.length
+            ? `${new Set(contributingPerspectives.map((o) => o.modelId)).size} contributing perspective(s)`
+            : 'Analyst-added'}</summary
+        >{#each contributingPerspectives as o}<p class="small">
+            <strong>{o.modelId}</strong><br />{o.text}
+          </p>{/each}
+      </details>
       <p class="small muted">
         Changing a state flags affected chains and narratives for review. Earlier model reasoning is
         preserved. No models run.
