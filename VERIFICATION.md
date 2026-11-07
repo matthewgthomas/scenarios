@@ -64,6 +64,12 @@ Keyboard semantics, labels, visible focus, native table controls, modal focus re
 - Exercised two mocked requests, including completion while viewing another scenario, jump/heading focus, application and dismissal. Checked multiple pending scenarios after reload, Enter activation, reduced-motion scrolling, light/dark appearances and the compact 360px layout. Browser checks reported no application runtime exceptions. Screenshots and QA scripts are under ignored `output/playwright/proposal-attention-*`.
 - `npm run check` passes without errors or warnings; all 134 tests pass; the production build succeeds. No paid inference calls were made.
 
+## Fewer models per run — 7 November 2026
+
+- Added contributor checkboxes to the launch dialog. Only included models contribute to the request plan, estimate and dispatch; selecting none disables Run with an explanation. Per-run choices preserve the configured whole-exercise and per-stage ensembles.
+- In desktop Chromium with OpenRouter traffic mocked, reduced an 11-driver assessment from three models/six requests to one model/two requests. Verified the lower estimate, complete driver coverage, exact dispatched model, stored ratings, unchanged ensemble settings and restored defaults on the next dialog. Also checked keyboard toggling, excluded duplicate models, the empty-selection message and the dialog in light appearance at 1280px and dark appearance at 640px. No application runtime errors or paid inference calls occurred. QA scripts and screenshots are under ignored `output/playwright/fewer-models-*`.
+- `npm run check` passes with zero errors or warnings; all 134 tests pass; the production build succeeds.
+
 ## Export checks
 
 The browser-generated PDF was inspected using Poppler and pypdf. It was a two-page A4 document with embedded Nunito Sans, readable text and page numbering. The first page was rendered and visually reviewed: no clipping, missing glyphs or overlapping text were observed. Extracted text retained the manually added note and `Unresolved uncertainties: Income support`. The DOCX ZIP contained a well-formed `word/document.xml`; a full Word/LibreOffice rendering review remains to be completed. The JSON backup contained all three narratives and three chains; all advisory checklist arrays were empty.

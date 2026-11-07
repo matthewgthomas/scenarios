@@ -97,7 +97,7 @@
   let modelScope = $state('default');
   let paidTask = $state<Task>('drivers');
   let paidTargets = $state<string[] | undefined>();
-  let paidModels = $state<string[]>([]);
+  let paidContributors = $state<{ modelId: string; included: boolean }[]>([]);
   let retryId = $state<string | undefined>();
   let paidNarrativeOptions = $state<NarrativeOptions | undefined>();
   let paidError = $state('');
@@ -125,6 +125,7 @@
   );
   // Review remains editable if someone clears a draft after entering it.
   const blocked = $derived(p ? prerequisite(p, p.stage === 7 ? 6 : p.stage) : null);
+  const paidModels = $derived(paidContributors.filter((c) => c.included).map((c) => c.modelId));
   const paidPlan = $derived(
     p && dialog === 'paid'
       ? planRequests(p, catalogue, paidTask, paidModels, paidTargets, retryId, paidNarrativeOptions)
@@ -321,11 +322,12 @@
     paidNarrativeOptions =
       narrativeOptions ??
       (retry?.context as { narrative?: NarrativeOptions } | undefined)?.narrative;
-    paidModels = retry
+    const models = retry
       ? [retry.modelId]
       : task === 'narrative' || task === 'narrative_edit' || task === 'consolidate'
         ? [writer || p.writer]
         : [...(p.overrides[String(p.stage)] ?? p.models)];
+    paidContributors = models.map((modelId) => ({ modelId, included: true }));
     paidError = '';
     dialog = 'paid';
     if (!catalogue.length && !catalogueLoading) void loadCatalogue();
@@ -919,8 +921,8 @@
       <section>
         <h3>Independent model ensemble</h3>
         <p class="small muted">
-          Start with three models from different developers. Exact identifiers and current catalogue
-          prices are shown below.
+          Use one or more models. Three models from different developers are a useful starting
+          point. Exact identifiers and current catalogue prices are shown below.
         </p>
         <label
           >Model scope<select bind:value={modelScope}
@@ -1015,30 +1017,41 @@
           )
           .join(', ')}
       </p>{/if}
+    {#if paidContributors.length > 1}<p class="small muted">
+        Choose which contributors to include in this run. Select at least one model.
+      </p>{/if}
     <div class="paid-models">
-      {#each paidModels as model, i}
+      {#each paidContributors as contributor, i}
+        {@const model = contributor.modelId}
         {@const modelRequests = paidPlan?.requests.filter((r) => r.modelId === model) ?? []}
         {@const driverCount = modelRequests.reduce((sum, r) => sum + r.targetIds.length, 0)}
-        <label
-          >Contributor {i + 1}<select
-            value={model}
-            onchange={(e) => {
-              const value = e.currentTarget.value;
-              paidModels = paidModels.map((m, j) => (j === i ? value : m));
-            }}
+        <div class="paid-contributor">
+          <label class="check-label" for={`paid-contributor-${i}`}
+            >{#if paidContributors.length > 1}<input
+                id={`paid-contributor-${i}`}
+                type="checkbox"
+                bind:checked={contributor.included}
+              />{/if}Contributor {i + 1}</label
+          >
+          <select
+            id={paidContributors.length === 1 ? `paid-contributor-${i}` : undefined}
+            aria-label={`Model for contributor ${i + 1}`}
+            bind:value={contributor.modelId}
+            disabled={!contributor.included}
             ><option value={model}>{catalogue.find((c) => c.id === model)?.name ?? model}</option
             >{#each catalogue
               .filter((c) => c.id !== model && (p.models.includes(c.id) || (modelSearch && c.name
                         .toLowerCase()
                         .includes(modelSearch.toLowerCase()))))
               .slice(0, 40) as m}<option value={m.id}>{m.name}</option>{/each}</select
-          ><small>{model}</small>{#if paidTask === 'ratings'}<small>
+          ><small>{model}</small>{#if !contributor.included}<small>Not included in this run.</small
+            >{:else if paidTask === 'ratings'}<small>
               {modelRequests.length}
               {modelRequests.length === 1 ? 'batch' : 'batches'} ·
               {driverCount}
               {driverCount === 1 ? 'driver' : 'drivers'}
-            </small>{/if}</label
-        >{/each}
+            </small>{/if}
+        </div>{/each}
     </div>
     <div class="estimate-box">
       <span>Estimated maximum allowance</span><strong
@@ -1058,7 +1071,9 @@
         Every chain includes all selected uncertainties. Retry / replace repeats only the failed
         batch.
       </p>{/if}
-    {#if !paidPlan?.requests.length}<p class="notice review">
+    {#if !paidModels.length}<p class="notice review" role="status">
+        Select at least one model to run.
+      </p>{:else if !paidPlan?.requests.length}<p class="notice review">
         {retryId
           ? 'No missing ratings remain for the selected model in this scope. Choose a replacement model with missing ratings or close this dialog.'
           : 'No approved drivers are available to assess.'}
@@ -1084,6 +1099,7 @@
       <button class="secondary" onclick={() => (dialog = '')}>Cancel</button><button
         class="primary"
         disabled={!key.trim() ||
+          !paidModels.length ||
           paidEstimate === null ||
           !paidPlan?.requests.length ||
           new Set(paidModels).size !== paidModels.length ||

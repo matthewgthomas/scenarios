@@ -2073,6 +2073,11 @@ dialog::backdrop {
 .paid-models small {
   color: var(--cg-text-muted);
 }
+.paid-contributor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .estimate-box {
   display: flex;
   flex-direction: column;

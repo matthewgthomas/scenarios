@@ -51,6 +51,8 @@ The top-bar **Model activity** control shows running and queued request counts a
 
 Recommended model IDs are a small release-time configuration in `src/lib/domain/project.ts`, verified against the live catalogue before paid execution. Update this configuration as availability and capabilities change. Per-stage overrides are supported. Semantic consolidation is a separate, explicit synthesis operation over collected contributions.
 
+In the launch dialog, uncheck any contributors you want to skip for that run. Select at least one model; the request count, estimate and Run button update to reflect the selection. Whole-exercise and per-stage model settings remain available for subsequent runs.
+
 ## Build and deploy
 
 ```sh

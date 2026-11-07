@@ -135,8 +135,9 @@
 {#if !p.example && drivers.some( (d) => expectedModels.some((m) => !d.ratings.some((r) => r.modelId === m && r.driverRevision === d.revision)) )}<p
     class="notice review"
   >
-    Some drivers are missing AI-generated impact/uncertainty scores from one or more of your chosen models.
-    Inspect the individual drivers of change below. You can add your own scores if you prefer.
+    Some drivers are missing AI-generated impact/uncertainty scores from one or more models in your
+    configured ensemble. You can continue with available scores, run additional models, or add your
+    own scores.
   </p>{/if}
 <div class="toolbar">
   <div class="segmented">
@@ -220,8 +221,8 @@
         </svg>
       </div>
       <p class="small muted">
-        Drivers with the same impact/uncertainty scores will appear at the same points on the matrix.
-        Click/tap a point repeatedly to inspect each driver, or use the list to the right. 
+        Drivers with the same impact/uncertainty scores will appear at the same points on the
+        matrix. Click/tap a point repeatedly to inspect each driver, or use the list to the right.
         These scores are ordinal judgements, not probabilities.
       </p>
       {#if selected}<div class="model-positions">
