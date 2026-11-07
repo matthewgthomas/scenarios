@@ -310,6 +310,27 @@ export function complete(p: Project, stage: number) {
   if (!p.completed.includes(stage)) p.completed.push(stage);
   p.stale = p.stale.filter((s) => s !== stage);
 }
+export function approveDriverScores(
+  p: Project,
+  driverId: string,
+  impact: number,
+  uncertainty: number
+) {
+  const d = p.drivers.find((d) => d.id === driverId)!;
+  d.decision = {
+    impact,
+    uncertainty,
+    type: 'explicitly_edited',
+    at: now(),
+    revision: d.revision
+  };
+  flagDownstream(
+    p,
+    2,
+    `${d.title} assessment edited. Review selected uncertainties and saved work.`
+  );
+  if (activeDrivers(p).every((d) => d.decision?.revision === d.revision)) complete(p, 2);
+}
 export function flagDownstream(
   p: Project,
   from: number,

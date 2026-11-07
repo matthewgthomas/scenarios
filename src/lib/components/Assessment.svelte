@@ -6,6 +6,7 @@
     coordinates,
     disagreement,
     complete,
+    approveDriverScores,
     flagDownstream,
     snapshotChain,
     now,
@@ -403,19 +404,7 @@
           disabled={!(impact >= 1 && impact <= 5 && uncertainty >= 1 && uncertainty <= 5)}
           onclick={() => {
             change((p) => {
-              const d = p.drivers.find((d) => d.id === selected.id)!;
-              d.decision = {
-                impact,
-                uncertainty,
-                type: 'explicitly_edited',
-                at: now(),
-                revision: d.revision
-              };
-              flagDownstream(
-                p,
-                2,
-                `${d.title} assessment edited. Review selected uncertainties and saved work.`
-              );
+              approveDriverScores(p, selected.id, impact, uncertainty);
             }, 'Analyst assessment approved.');
             editorOpen = false;
           }}><Check size={16} /> Approve these scores</button
@@ -450,7 +439,10 @@
       }}>Approve selection <ArrowRight size={16} /></button
     >{:else if drivers.every((d) => d.decision?.revision === d.revision)}<button
       class="primary"
-      onclick={next}>Select uncertainties <ArrowRight size={16} /></button
+      onclick={() => {
+        change((p) => complete(p, 2));
+        next();
+      }}>Select uncertainties <ArrowRight size={16} /></button
     >{:else}<button class="primary" onclick={approveRemaining}
       ><Check size={16} /> Accept remaining medians</button
     >{/if}

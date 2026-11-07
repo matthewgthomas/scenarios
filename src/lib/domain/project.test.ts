@@ -3,6 +3,7 @@ import { exampleProject } from './example';
 import {
   median,
   coordinates,
+  approveDriverScores,
   editHypothesis,
   setChainItem,
   snapshotChain,
@@ -38,6 +39,45 @@ const run = (overrides: Partial<Run> = {}): Run => ({
 });
 
 describe('analyst decisions and provenance', () => {
+  it('completes assessment when every driver has manually approved scores without AI ratings', () => {
+    const p = exampleProject();
+    p.completed = [0, 1];
+    p.stale = [2];
+    p.drivers.forEach((d) => {
+      d.ratings = [];
+      d.decision = undefined;
+    });
+    p.drivers.forEach((d, i) => {
+      approveDriverScores(p, d.id, 4, 3.5);
+      expect(p.completed.includes(2)).toBe(i === p.drivers.length - 1);
+      expect(d.decision).toMatchObject({
+        impact: 4,
+        uncertainty: 3.5,
+        type: 'explicitly_edited',
+        revision: d.revision
+      });
+      expect(d.ratings).toEqual([]);
+    });
+    expect(p.stale).not.toContain(2);
+    expect(prerequisite(p, 3)).toBeNull();
+    const restored = parseProject(JSON.parse(projectJSON(p)));
+    expect(restored.completed).toContain(2);
+    expect(restored.runs).toEqual([]);
+  });
+  it('requires current approvals and preserves downstream review flags when completing assessment', () => {
+    const p = exampleProject();
+    p.completed = p.completed.filter((stage) => stage !== 2);
+    const [first, last] = p.drivers;
+    last.revision++;
+    approveDriverScores(p, first.id, 4, 3);
+    expect(p.completed).not.toContain(2);
+    expect(prerequisite(p, 3)).toContain('approve scores');
+    approveDriverScores(p, last.id, 5, 4);
+    expect(p.completed).toContain(2);
+    expect(p.stale).toEqual([3, 4]);
+    expect(p.chains.every((c) => c.review)).toBe(true);
+    expect(p.narratives.every((n) => n.review)).toBe(true);
+  });
   it('calculates per-axis medians without rounding or inventing missing scores', () => {
     expect(median([5, 4, 2])).toBe(4);
     expect(median([3, 4])).toBe(3.5);
