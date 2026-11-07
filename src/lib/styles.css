@@ -508,6 +508,9 @@ pre {
   flex-direction: column;
 }
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   min-height: 72px;
   padding: 14px var(--cg-work-padding);
   border-bottom: 1px solid var(--cg-border);
