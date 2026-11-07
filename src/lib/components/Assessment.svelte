@@ -181,7 +181,8 @@
       ><List size={16} /> Table</button
     >
   </div>
-  {#if !selection}<button class="primary" onclick={request}>Generate impact/uncertainty scores</button
+  {#if !selection}<button class="primary" onclick={request}
+      >Generate impact/uncertainty scores</button
     >{:else}<span class="badge"
       >{selectedCount} selected · at least {combinations.toLocaleString()} combinations</span
     >{/if}
@@ -218,12 +219,14 @@
             text-anchor="middle"
             class="axis-label">Humanitarian impact</text
           >
-          {#each groups as group}{@const c = coordinates(group[0])}<g
+          {#each groups as group}{@const c = coordinates(group[0])}
+            {@const highlighted = group.some((d) => (selection ? d.selected : d.id === selectedId))}
+            {@const checkedCount = group.filter((d) => d.selected).length}<g
               class="point-control"
               role="button"
               tabindex="0"
-              aria-pressed={group.some((d) => d.id === selectedId)}
-              aria-label={`${group.map((d) => d.title).join(', ')}. Impact ${c.impact}, uncertainty ${c.uncertainty}. Open assessment dialog.`}
+              aria-pressed={highlighted}
+              aria-label={`${group.map((d) => d.title).join(', ')}. Impact ${c.impact}, uncertainty ${c.uncertainty}.${selection ? ` ${checkedCount} of ${group.length} selected as critical uncertainties.` : ''} Open assessment dialog.`}
               onclick={() => inspectGroup(group)}
               onkeydown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -239,8 +242,8 @@
               /><circle
                 cx={62 + (c.uncertainty! - 1) * 110.5}
                 cy={297 - (c.impact! - 1) * 68}
-                r={group.some((d) => d.id === selectedId) ? 12 : 9}
-                class:selected-point={group.some((d) => d.id === selectedId)}
+                r={highlighted ? 12 : 9}
+                class:selected-point={highlighted}
                 class="matrix-point"
               /><text
                 x={62 + (c.uncertainty! - 1) * 110.5}
@@ -255,9 +258,10 @@
         </svg>
       </div>
       <p class="small muted">
-        Drivers with the same impact/uncertainty scores will appear at the same points on the
-        matrix. Open a point to inspect its drivers, or use the list to the right. These scores are
-        ordinal judgements, not probabilities.
+        {#if selection}Highlighted points contain checked critical uncertainties.{/if}
+        Drivers with the same impact/uncertainty scores will appear at the same points on the matrix.
+        Open a point to inspect its drivers, or use the list to the right. These scores are ordinal judgements,
+        not probabilities.
       </p>
       {#if selected && selection}<div class="model-positions">
           <strong>{selected.title}: individual positions</strong
