@@ -11,6 +11,7 @@
     type Change
   } from '$lib/domain/project';
   import MergeSuggestions from './MergeSuggestions.svelte';
+  import Modal from './Modal.svelte';
   let {
     p,
     change,
@@ -179,29 +180,32 @@
       </div>
     </section>{/each}
 </div>
-{#if editing}<section class="inspector editor-form" aria-label="Hypothesis editor">
-    <h2>Edit future state</h2>
-    <label>Short title<input bind:value={title} /></label><label
-      >Describe this future state<textarea rows="4" bind:value={description}></textarea></label
+{#if editing}<Modal title="Edit future state" close={() => (editing = '')}>
+    <form
+      class="editor-form"
+      onsubmit={(e) => {
+        e.preventDefault();
+        if (!title.trim()) return;
+        change(
+          (p) => editHypothesis(p, editing, title, description),
+          'Hypothesis saved. Affected work marked for review.'
+        );
+        editing = '';
+      }}
     >
-    <p class="small muted">
-      Changing a state flags affected chains and narratives for review. Earlier model reasoning is
-      preserved. No models run.
-    </p>
-    <div class="toolbar-group">
-      <button
-        class="primary"
-        disabled={!title.trim()}
-        onclick={() => {
-          change(
-            (p) => editHypothesis(p, editing, title, description),
-            'Hypothesis saved. Affected work marked for review.'
-          );
-          editing = '';
-        }}>Save hypothesis</button
-      ><button class="secondary" onclick={() => (editing = '')}>Cancel</button>
-    </div>
-  </section>{/if}
+      <label>Short title<input bind:value={title} /></label><label
+        >Describe this future state<textarea rows="4" bind:value={description}></textarea></label
+      >
+      <p class="small muted">
+        Changing a state flags affected chains and narratives for review. Earlier model reasoning is
+        preserved. No models run.
+      </p>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" onclick={() => (editing = '')}>Cancel</button>
+        <button type="submit" class="primary" disabled={!title.trim()}>Save hypothesis</button>
+      </div>
+    </form>
+  </Modal>{/if}
 <footer class="stage-footer">
   <div>
     <strong>Alternatives, not predictions</strong><small

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ArrowRight, Check, ChartScatter, List, CircleHelp } from '@lucide/svelte';
+  import Modal from './Modal.svelte';
   import {
     activeDrivers,
     coordinates,
@@ -26,6 +27,7 @@
     next: () => void;
   } = $props();
   let selectedId = $state('');
+  let editorOpen = $state(false);
   let view = $state('plot');
   let sort = $state('disagreement');
   let error = $state('');
@@ -65,8 +67,12 @@
       }, {})
     )
   );
+  const overlapping = $derived(
+    groups.find((group) => group.some((d) => d.id === selectedId)) ?? []
+  );
   function inspect(driverId: string) {
     selectedId = driverId;
+    editorOpen = true;
     const c = coordinates(drivers.find((d) => d.id === driverId)!);
     impact = c.impact ?? 3;
     uncertainty = c.uncertainty ?? 3;
@@ -189,7 +195,7 @@
               role="button"
               tabindex="0"
               aria-pressed={group.some((d) => d.id === selectedId)}
-              aria-label={`${group.map((d) => d.title).join(', ')}. Impact ${c.impact}, uncertainty ${c.uncertainty}.${group.length > 1 ? ' Click/tap repeatedly to inspect each overlapping driver.' : ' Click/tap to inspect.'}`}
+              aria-label={`${group.map((d) => d.title).join(', ')}. Impact ${c.impact}, uncertainty ${c.uncertainty}. Open assessment dialog.`}
               onclick={() => inspectGroup(group)}
               onkeydown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -222,8 +228,8 @@
       </div>
       <p class="small muted">
         Drivers with the same impact/uncertainty scores will appear at the same points on the
-        matrix. Click/tap a point repeatedly to inspect each driver, or use the list to the right.
-        These scores are ordinal judgements, not probabilities.
+        matrix. Open a point to inspect its drivers, or use the list to the right. These scores are
+        ordinal judgements, not probabilities.
       </p>
       {#if selected}<div class="model-positions">
           <strong>{selected.title}: individual positions</strong
@@ -315,72 +321,93 @@
       >
     </table>
   </div>{/if}
-{#if selected}<section class="inspector" aria-label={`Scores for ${selected.title}`}>
-    <div>
-      <h2>{selected.title}</h2>
-      <p>{selected.summary}</p>
-      {#each selected.ratings as r}<details>
-          <summary
-            >{modelName(r.modelId)} · impact {r.impact}, uncertainty {r.uncertainty}{r.driverRevision !==
-            selected.revision
-              ? ' · earlier revision'
-              : ''}</summary
-          >
-          <p>{r.rationale}</p>
-          <p class="small muted">{r.modelId}</p>
-        </details>{/each}{#if !selected.ratings.length}<p class="notice review">
-          No model scores returned. You can enter your own scores manually.
-        </p>{/if}
-      <p class="small muted">
-        {selected.decision?.revision === selected.revision
-          ? `Recorded as ${selected.decision.type.replaceAll('_', ' ')}.`
-          : 'Provisional scores have not been analyst-approved.'}
-      </p>
-    </div>
-    <div>
-      <h3>Your assessment</h3>
-      <div class="form-row">
-        <label
-          >Humanitarian impact<input
-            type="number"
-            min="1"
-            max="5"
-            step="0.5"
-            bind:value={impact}
-          /></label
-        ><label
-          >Uncertainty<input
-            type="number"
-            min="1"
-            max="5"
-            step="0.5"
-            bind:value={uncertainty}
-          /></label
-        >
-      </div>
-      <button
-        class="secondary"
-        disabled={!(impact >= 1 && impact <= 5 && uncertainty >= 1 && uncertainty <= 5)}
-        onclick={() =>
-          change((p) => {
-            const d = p.drivers.find((d) => d.id === selected.id)!;
-            d.decision = {
-              impact,
-              uncertainty,
-              type: 'explicitly_edited',
-              at: now(),
-              revision: d.revision
-            };
-            flagDownstream(
-              p,
-              2,
-              `${d.title} assessment edited. Review selected uncertainties and saved work.`
-            );
-          }, 'Analyst assessment approved.')}><Check size={16} /> Approve these scores</button
+{#if editorOpen && selected}<Modal
+    title={`Assessment: ${selected.title}`}
+    close={() => (editorOpen = false)}
+    wide
+  >
+    {#if overlapping.length > 1}<div
+        class="toolbar-group spaced"
+        aria-label="Drivers at this matrix point"
       >
-      <p class="small muted">Changes are recorded as an explicit analyst decision.</p>
+        {#each overlapping as d}<button
+            class="secondary"
+            aria-pressed={selectedId === d.id}
+            onclick={() => inspect(d.id)}>{d.title}</button
+          >{/each}
+      </div>{/if}
+    <section class="inspector modal-inspector" aria-label={`Scores for ${selected.title}`}>
+      <div>
+        <h2>{selected.title}</h2>
+        <p>{selected.summary}</p>
+        {#each selected.ratings as r}<details>
+            <summary
+              >{modelName(r.modelId)} · impact {r.impact}, uncertainty {r.uncertainty}{r.driverRevision !==
+              selected.revision
+                ? ' · earlier revision'
+                : ''}</summary
+            >
+            <p>{r.rationale}</p>
+            <p class="small muted">{r.modelId}</p>
+          </details>{/each}{#if !selected.ratings.length}<p class="notice review">
+            No model scores returned. You can enter your own scores manually.
+          </p>{/if}
+        <p class="small muted">
+          {selected.decision?.revision === selected.revision
+            ? `Recorded as ${selected.decision.type.replaceAll('_', ' ')}.`
+            : 'Provisional scores have not been analyst-approved.'}
+        </p>
+      </div>
+      <div>
+        <h3>Your assessment</h3>
+        <div class="form-row">
+          <label
+            >Humanitarian impact<input
+              type="number"
+              min="1"
+              max="5"
+              step="0.5"
+              bind:value={impact}
+            /></label
+          ><label
+            >Uncertainty<input
+              type="number"
+              min="1"
+              max="5"
+              step="0.5"
+              bind:value={uncertainty}
+            /></label
+          >
+        </div>
+        <button
+          class="secondary"
+          disabled={!(impact >= 1 && impact <= 5 && uncertainty >= 1 && uncertainty <= 5)}
+          onclick={() => {
+            change((p) => {
+              const d = p.drivers.find((d) => d.id === selected.id)!;
+              d.decision = {
+                impact,
+                uncertainty,
+                type: 'explicitly_edited',
+                at: now(),
+                revision: d.revision
+              };
+              flagDownstream(
+                p,
+                2,
+                `${d.title} assessment edited. Review selected uncertainties and saved work.`
+              );
+            }, 'Analyst assessment approved.');
+            editorOpen = false;
+          }}><Check size={16} /> Approve these scores</button
+        >
+        <p class="small muted">Changes are recorded as an explicit analyst decision.</p>
+      </div>
+    </section>
+    <div class="dialog-actions">
+      <button class="secondary" onclick={() => (editorOpen = false)}>Close</button>
     </div>
-  </section>{/if}
+  </Modal>{/if}
 <details class="anchors">
   <summary><CircleHelp size={16} /> Understand the 1–5 scales</summary>
   <div class="table-scroll">

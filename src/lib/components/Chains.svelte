@@ -22,6 +22,7 @@
     type Project,
     type Change
   } from '$lib/domain/project';
+  import Modal from './Modal.svelte';
   let {
     p,
     change,
@@ -34,6 +35,7 @@
     next: () => void;
   } = $props();
   let selectedChain = $state('');
+  let editorOpen = $state(false);
   let selectedDriver = $state('');
   let perspective = $state('');
   let showAll = $state(true);
@@ -231,22 +233,15 @@
                     change((p) => (p.chains.find((v) => v.id === c.id)!.selected = checked));
                     selectionMessage = '';
                   }}
-                /><textarea
+                /><button
                   class="scenario-name"
-                  aria-label={`Scenario name: ${c.title}`}
-                  rows={Math.max(1, Math.ceil(c.title.length / 20))}
-                  value={c.title}
-                  onchange={(e) => {
-                    const value = e.currentTarget.value.trim();
-                    if (value)
-                      change((p) => {
-                        const chain = p.chains.find((v) => v.id === c.id)!;
-                        snapshotChain(p, chain);
-                        chain.title = value;
-                        chain.revision++;
-                        flagDownstream(p, 5, `${value} was renamed.`, [c.id]);
-                      });
-                  }}></textarea>
+                  aria-label={`Edit scenario: ${c.title}`}
+                  aria-haspopup="dialog"
+                  onclick={() => {
+                    selectedChain = c.id;
+                    editorOpen = true;
+                  }}>{c.title}</button
+                >
               </div>
               <div class="scenario-heading-state">
                 {#if c.kind === 'wildcard'}<span class="badge">Wildcard</span>{/if}<span
@@ -285,7 +280,9 @@
                     selectedChain = c.id;
                     selectedDriver = d.id;
                     perspective = '';
+                    editorOpen = true;
                   }}
+                  aria-haspopup="dialog"
                   aria-pressed={chain?.id === c.id && driver?.id === d.id}
                   ><span
                     >{h?.title ?? 'Unresolved'}{#if h?.archived}<small class="review-text"
@@ -302,121 +299,147 @@
     <div class="toolbar-group">
       <span>Select a hypothesis to inspect or change it.</span><button
         class="text-button small"
-        onclick={() => document.getElementById('chain-hypothesis')?.focus()}
-        >Edit selected hypothesis</button
+        onclick={() => (editorOpen = true)}
+        aria-haspopup="dialog">Edit selected hypothesis</button
       >
     </div>
     <label class="check-label"
       ><input type="checkbox" bind:checked={showAll} /> Show all candidates</label
     >
   </div>
-  {#if chain && driver}
-    <section class="inspector" aria-label="Chain reasoning and hypothesis editor">
-      <div>
-        <div class="context-line">
-          <GitBranch size={18} /><span>{chain.title} / {driver.title}</span>
-        </div>
-        <h2>What connects these choices?</h2>
-        {#if note}<p>{note.reasoning}</p>
-          <div class="segmented model-tabs" aria-label="Model perspectives">
-            {#each models as model, i}<button
-                class:active={note.modelId === model}
-                onclick={() => (perspective = model)}
-                ><span class="model-mark">{['●', '■', '▲', '◆'][i % 4]}</span>{modelName(
-                  model
-                )}</button
-              >{/each}
+  {#if editorOpen && chain && driver}
+    <Modal title={`Edit chain: ${chain.title}`} close={() => (editorOpen = false)} wide>
+      <section class="inspector modal-inspector" aria-label="Chain reasoning and hypothesis editor">
+        <div>
+          <div class="context-line">
+            <GitBranch size={18} /><span>{chain.title} / {driver.title}</span>
           </div>
-          <p class="small muted">
-            {note.modelId} · checked revision {note.revision} · {new Date(
-              note.at
-            ).toLocaleDateString()}{#if note.revision !== chain.revision}
-              <span class="review-text">— Review suggested after your edit</span>{/if}
+          <h2>What connects these choices?</h2>
+          {#if note}<p>{note.reasoning}</p>
+            <div class="segmented model-tabs" aria-label="Model perspectives">
+              {#each models as model, i}<button
+                  class:active={note.modelId === model}
+                  onclick={() => (perspective = model)}
+                  ><span class="model-mark">{['●', '■', '▲', '◆'][i % 4]}</span>{modelName(
+                    model
+                  )}</button
+                >{/each}
+            </div>
+            <p class="small muted">
+              {note.modelId} · checked revision {note.revision} · {new Date(
+                note.at
+              ).toLocaleDateString()}{#if note.revision !== chain.revision}
+                <span class="review-text">— Review suggested after your edit</span>{/if}
+            </p>
+            <details>
+              <summary>Inspect tensions and assumptions</summary>
+              <h3>Tensions</h3>
+              <ul>
+                {#each note.tensions as text}<li>{text}</li>{/each}
+              </ul>
+              <h3>Assumptions</h3>
+              <ul>
+                {#each note.assumptions as text}<li>{text}</li>{/each}
+              </ul>
+            </details>
+          {:else}<p class="muted">
+              No model coherence check yet. You can inspect and edit the chain, then request a check
+              when useful.
+            </p>{/if}
+        </div>
+        <div class="inspector-editor">
+          <label class="spaced"
+            >Scenario name<input
+              value={chain.title}
+              onchange={(e) => {
+                const value = e.currentTarget.value.trim();
+                if (value && value !== chain.title)
+                  change((p) => {
+                    const saved = p.chains.find((c) => c.id === chain.id)!;
+                    snapshotChain(p, saved);
+                    saved.title = value;
+                    saved.revision++;
+                    flagDownstream(p, 5, `${value} was renamed.`, [saved.id]);
+                  });
+                else e.currentTarget.value = chain.title;
+              }}
+            /></label
+          >
+          <label
+            >{driver.title} hypothesis<select
+              id="chain-hypothesis"
+              value={chain.items[driver.id] ?? ''}
+              onchange={(e) => {
+                const value = e.currentTarget.value;
+                change(
+                  (p) => setChainItem(p, chain.id, driver.id, value || null),
+                  'Hypothesis changed. Earlier coherence notes are preserved.'
+                );
+              }}
+              ><option value="">Unresolved</option>{#each statesFor(p, driver.id) as h}<option
+                  value={h.id}>{h.title}{h.approved ? '' : ' (not approved)'}</option
+                >{/each}</select
+            ></label
+          >
+          <p>
+            {p.hypotheses.find((h) => h.id === chain.items[driver.id])?.description ??
+              'This uncertainty is intentionally unresolved. It will remain explicit in drafting and exports.'}
           </p>
-          <details>
-            <summary>Inspect tensions and assumptions</summary>
-            <h3>Tensions</h3>
-            <ul>
-              {#each note.tensions as text}<li>{text}</li>{/each}
-            </ul>
-            <h3>Assumptions</h3>
-            <ul>
-              {#each note.assumptions as text}<li>{text}</li>{/each}
-            </ul>
-          </details>
-        {:else}<p class="muted">
-            No model coherence check yet. You can inspect and edit the chain, then request a check
-            when useful.
-          </p>{/if}
-      </div>
-      <div class="inspector-editor">
-        <label
-          >{driver.title} hypothesis<select
-            id="chain-hypothesis"
-            value={chain.items[driver.id] ?? ''}
-            onchange={(e) => {
-              const value = e.currentTarget.value;
-              change(
-                (p) => setChainItem(p, chain.id, driver.id, value || null),
-                'Hypothesis changed. Earlier coherence notes are preserved.'
-              );
-            }}
-            ><option value="">Unresolved</option>{#each statesFor(p, driver.id) as h}<option
-                value={h.id}>{h.title}{h.approved ? '' : ' (not approved)'}</option
-              >{/each}</select
-          ></label
-        >
-        <p>
-          {p.hypotheses.find((h) => h.id === chain.items[driver.id])?.description ??
-            'This uncertainty is intentionally unresolved. It will remain explicit in drafting and exports.'}
-        </p>
-        <p class="small muted">Your judgement decides. Editing preserves earlier work.</p>
-        <button class="secondary" onclick={() => request('coherence', [chain.id])}
-          ><GitBranch size={16} /> Recheck coherence</button
-        >
-        <p class="small muted">Choose models and review the estimate before running.</p>
-        {#if chain.wildcardDriverIds.length}<div class="notice review">
-            <strong>Novel wildcard drivers · unscored</strong
-            >{#each chain.wildcardDriverIds as driverId}{@const d = p.drivers.find(
-                (d) => d.id === driverId
-              )}{#if d}<label class="spaced"
-                  >Novel driver name<input
-                    value={d.title}
-                    onchange={(e) => editWildcard(driverId, 'title', e.currentTarget.value)}
-                  /></label
-                >
-                <label class="spaced"
-                  >Future disruption<textarea
-                    rows="2"
-                    value={d.summary}
-                    onchange={(e) => editWildcard(driverId, 'summary', e.currentTarget.value)}
-                  ></textarea></label
-                >
-                <label class="spaced"
-                  >Plausibility, humanitarian significance and interactions<textarea
-                    rows="3"
-                    value={d.assessment ?? ''}
-                    onchange={(e) => editWildcard(driverId, 'assessment', e.currentTarget.value)}
-                  ></textarea></label
-                >
-                <p class="small">Unscored. No matrix positions have been assigned.</p>
-                <div class="toolbar-group">
-                  <button class="secondary" onclick={() => approveWildcard(driverId)}
-                    >{d.approved ? '✓ Accepted · undo' : 'Accept driver'}</button
-                  ><button
-                    class="text-button"
-                    onclick={() =>
-                      change((p) => {
-                        const c = p.chains.find((c) => c.id === chain.id)!;
-                        c.wildcardDriverIds = c.wildcardDriverIds.filter((i) => i !== driverId);
-                        c.revision++;
-                        c.review = true;
-                      })}><Trash2 size={14} /> Remove</button
+          <p class="small muted">Your judgement decides. Editing preserves earlier work.</p>
+          <button
+            class="secondary"
+            onclick={() => {
+              editorOpen = false;
+              request('coherence', [chain.id]);
+            }}><GitBranch size={16} /> Recheck coherence</button
+          >
+          <p class="small muted">Choose models and review the estimate before running.</p>
+          {#if chain.wildcardDriverIds.length}<div class="notice review">
+              <strong>Novel wildcard drivers · unscored</strong
+              >{#each chain.wildcardDriverIds as driverId}{@const d = p.drivers.find(
+                  (d) => d.id === driverId
+                )}{#if d}<label class="spaced"
+                    >Novel driver name<input
+                      value={d.title}
+                      onchange={(e) => editWildcard(driverId, 'title', e.currentTarget.value)}
+                    /></label
                   >
-                </div>{/if}{/each}
-          </div>{/if}
+                  <label class="spaced"
+                    >Future disruption<textarea
+                      rows="2"
+                      value={d.summary}
+                      onchange={(e) => editWildcard(driverId, 'summary', e.currentTarget.value)}
+                    ></textarea></label
+                  >
+                  <label class="spaced"
+                    >Plausibility, humanitarian significance and interactions<textarea
+                      rows="3"
+                      value={d.assessment ?? ''}
+                      onchange={(e) => editWildcard(driverId, 'assessment', e.currentTarget.value)}
+                    ></textarea></label
+                  >
+                  <p class="small">Unscored. No matrix positions have been assigned.</p>
+                  <div class="toolbar-group">
+                    <button class="secondary" onclick={() => approveWildcard(driverId)}
+                      >{d.approved ? '✓ Accepted · undo' : 'Accept driver'}</button
+                    ><button
+                      class="text-button"
+                      onclick={() =>
+                        change((p) => {
+                          const c = p.chains.find((c) => c.id === chain.id)!;
+                          c.wildcardDriverIds = c.wildcardDriverIds.filter((i) => i !== driverId);
+                          c.revision++;
+                          c.review = true;
+                        })}><Trash2 size={14} /> Remove</button
+                    >
+                  </div>{/if}{/each}
+            </div>{/if}
+        </div>
+      </section>
+      <div class="dialog-actions">
+        <button class="primary" onclick={() => (editorOpen = false)}>Done</button>
       </div>
-    </section>
+    </Modal>
   {/if}
 {:else}<div class="empty-state">
     <GitBranch size={34} />

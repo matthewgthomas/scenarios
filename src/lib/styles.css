@@ -1037,6 +1037,7 @@ table {
   letter-spacing: -0.02em;
   width: 100%;
   border-radius: 3px;
+  text-align: left;
 }
 .scenario-name:hover {
   border-bottom-color: var(--cg-control-border);
@@ -1135,6 +1136,12 @@ table {
 }
 .inspector p {
   line-height: 1.7;
+}
+.dialog-content .modal-inspector {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 .inspector-editor > p {
   margin: 12px 0;

@@ -70,6 +70,12 @@ Keyboard semantics, labels, visible focus, native table controls, modal focus re
 - In desktop Chromium with OpenRouter traffic mocked, reduced an 11-driver assessment from three models/six requests to one model/two requests. Verified the lower estimate, complete driver coverage, exact dispatched model, stored ratings, unchanged ensemble settings and restored defaults on the next dialog. Also checked keyboard toggling, excluded duplicate models, the empty-selection message and the dialog in light appearance at 1280px and dark appearance at 640px. No application runtime errors or paid inference calls occurred. QA scripts and screenshots are under ignored `output/playwright/fewer-models-*`.
 - `npm run check` passes with zero errors or warnings; all 134 tests pass; the production build succeeds.
 
+## Modal editors — 7 November 2026
+
+- Moved assessment, future-state, chain and narrative editors into the shared native dialog. Chain names now open the chain dialog; writing, review, AI instructions and proposal comparisons stay inside the narrative dialog. Driver add/edit already used this dialog.
+- Browser checks verified driver and assessment dialogs at 1280px and 360px, keyboard focus containment and Escape/focus restoration. Direct UI checks verified future-state cancellation and saving, chain renaming and reopening, narrative autosave and reopening, review in a modal, and transitions from chain/narrative editing to a single AI confirmation dialog. No paid inference calls were made.
+- Type checking passes without errors or warnings; all 134 existing tests pass. The production build succeeds. Screenshots and the browser QA script are under ignored `output/playwright/edit-modals-*`; the scripted run was interrupted by browser connectivity, and the remaining interaction checks were completed directly through the browser UI.
+
 ## Export checks
 
 The browser-generated PDF was inspected using Poppler and pypdf. It was a two-page A4 document with embedded Nunito Sans, readable text and page numbering. The first page was rendered and visually reviewed: no clipping, missing glyphs or overlapping text were observed. Extracted text retained the manually added note and `Unresolved uncertainties: Income support`. The DOCX ZIP contained a well-formed `word/document.xml`; a full Word/LibreOffice rendering review remains to be completed. The JSON backup contained all three narratives and three chains; all advisory checklist arrays were empty.

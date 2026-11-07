@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import {
-    ArrowDown,
     ArrowRight,
     Check,
     MessageSquareText,
@@ -25,6 +24,7 @@
     type Project,
     type Change
   } from '$lib/domain/project';
+  import Modal from './Modal.svelte';
   let {
     p,
     change,
@@ -41,6 +41,7 @@
     next: () => void;
   } = $props();
   let selectedId = $state('');
+  let editorOpen = $state(false);
   let mode = $state('rich');
   let annotations = $state(false);
   let snapshot = $state('');
@@ -113,6 +114,7 @@
   async function reviewProposals() {
     if (!attentionTarget) return;
     selectedId = attentionTarget.chainId;
+    editorOpen = true;
     snapshot = '';
     restoring = false;
     await tick();
@@ -140,17 +142,18 @@
   >
 </div>
 <p class="small muted scenario-tabs-hint">
-  Click each scenario button to open its editor and write or edit that scenario below.
+  Click a scenario to write, edit or review it in a popup. Your writing is saved as you type.
 </p>
 <div class="scenario-tabs" aria-label="Narratives">
   {#each chains as c}{@const pendingCount = pendingAI.filter(
       (entry) => entry.chainId === c.id
     ).length}<button
-      class:active={chain?.id === c.id}
+      class:active={editorOpen && chain?.id === c.id}
       class="scenario-tab scenario-{c.colour}"
-      aria-pressed={chain?.id === c.id}
+      aria-haspopup="dialog"
       onclick={() => {
         selectedId = c.id;
+        editorOpen = true;
         snapshot = '';
         restoring = false;
       }}
@@ -165,273 +168,294 @@
           {pendingCount} AI {pendingCount === 1 ? 'proposal' : 'proposals'} to review</span
         >{/if}<span class="scenario-tab-action small"
         ><PencilLine size={14} aria-hidden="true" />
-        {chain?.id === c.id ? 'Editing this scenario' : 'Click to write / edit'}</span
+        Click to write / edit</span
       ></button
     >{/each}
 </div>
-{#if chain}
-  {#if chain.review || narrative?.review}<p class="notice review">
-      Review suggested: the chain or an upstream hypothesis changed. Your narrative and original
-      snapshots are preserved.
-    </p>{/if}
-  {#if chain.approvedRevision !== chain.revision}<p class="notice review">
-      Approve this chain’s current revision in Construct chains before starting a new draft or
-      requesting AI help. You can keep editing an existing narrative.
-    </p>{/if}
-  {#if uncertainties(p).some((d) => !chain.items[d.id])}<p class="notice review">
-      Intentionally unresolved: {uncertainties(p)
-        .filter((d) => !chain.items[d.id])
-        .map((d) => d.title)
-        .join(', ')}. Preserve these open questions in the narrative.
-    </p>{/if}
-  <div class="writing-layout">
-    <section class="narrative-paper">
-      <div class="narrative-title">
-        <h2>{chain.title}</h2>
-        <span class="small muted"
-          >{narrative?.working.trim() ? narrative.working.trim().split(/\s+/).length : 0} words</span
-        >
-      </div>
-      <div class="writing-controls">
-        <div class="segmented">
-          <button class:active={mode === 'rich'} onclick={() => (mode = 'rich')}>Rich text</button>
-          <button class:active={mode === 'markdown'} onclick={() => (mode = 'markdown')}
-            >Markdown</button
+{#if editorOpen && chain}
+  <Modal
+    title={`${review ? 'Review' : 'Write / edit'} scenario: ${chain.title}`}
+    close={() => (editorOpen = false)}
+    wide
+  >
+    {#if chain.review || narrative?.review}<p class="notice review">
+        Review suggested: the chain or an upstream hypothesis changed. Your narrative and original
+        snapshots are preserved.
+      </p>{/if}
+    {#if chain.approvedRevision !== chain.revision}<p class="notice review">
+        Approve this chain’s current revision in Construct chains before starting a new draft or
+        requesting AI help. You can keep editing an existing narrative.
+      </p>{/if}
+    {#if uncertainties(p).some((d) => !chain.items[d.id])}<p class="notice review">
+        Intentionally unresolved: {uncertainties(p)
+          .filter((d) => !chain.items[d.id])
+          .map((d) => d.title)
+          .join(', ')}. Preserve these open questions in the narrative.
+      </p>{/if}
+    <div class="writing-layout">
+      <section class="narrative-paper">
+        <div class="narrative-title">
+          <h2>{chain.title}</h2>
+          <span class="small muted"
+            >{narrative?.working.trim() ? narrative.working.trim().split(/\s+/).length : 0} words</span
           >
         </div>
-        <div class="toolbar-group">
-          <button
-            class="icon-button"
-            aria-label="Undo text edit"
-            disabled={!narrative?.history.length}
-            onclick={() => change((p) => undoNarrative(p, chain.id))}><Undo2 size={17} /></button
-          >
-          <button
-            class="icon-button"
-            aria-label="Redo text edit"
-            disabled={!narrative?.redo.length}
-            onclick={() => change((p) => undoNarrative(p, chain.id, true))}
-            ><Redo2 size={17} /></button
-          >
-        </div>
-      </div>
-      {#key chain.id}{#if mode === 'rich' && RichEditor}<RichEditor
-            value={narrative?.working ?? ''}
-            onedit={edit}
-            {editable}
-          />{:else}<textarea
-            class="markdown-editor"
-            aria-label="Scenario narrative in Markdown"
-            value={narrative?.working ?? ''}
-            disabled={!editable}
-            placeholder="Describe this future, how it unfolds and what it means for people."
-            oninput={(e) => edit(e.currentTarget.value)}
-            rows="22"></textarea>{/if}{/key}
-      <div class="narrative-meta">
-        <span
-          >{narrative?.original
-            ? `Original: ${narrative.original.source === 'user' ? 'Your writing' : narrative.original.source === 'example' ? 'Authored example' : modelName(narrative.original.modelId ?? '')} · chain revision ${narrative.original.chainRevision}`
-            : 'Your working draft · saved as you write'}</span
-        >
-        <span
-          >{narrative?.final !== null &&
-          narrative?.final !== undefined &&
-          narrative.final === narrative.working
-            ? '✓ Final snapshot saved'
-            : 'Working draft'}</span
-        >
-      </div>
-    </section>
-    <aside class="writing-aside">
-      <h2>Your hypothesis chain</h2>
-      <p class="small muted">
-        Describe the future, its causal pathway and humanitarian implications. Around 400–600 words
-        is a guide, not a limit.
-      </p>
-      <div class="annotation-list">
-        {#each uncertainties(p) as d}<p class="small">
-            <strong>{d.title}</strong><br />{p.hypotheses.find((h) => h.id === chain.items[d.id])
-              ?.title ?? 'Unresolved'}
-          </p>{/each}
-        {#each chain.wildcardDriverIds as driverId}{@const driver = p.drivers.find(
-            (d) => d.id === driverId
-          )}
-          {#if driver}<p class="small">
-              <strong>{driver.title}</strong><br />{driver.summary}
-            </p>{/if}
-        {/each}
-      </div>
-      {#if review && narrative}
-        <hr />
-        <h2>Your review</h2>
-        <p class="small muted">
-          This checklist is advisory. You can complete with every box unchecked.
-        </p>
-        {#each checks as check}<label class="check-label qa-check"
-            ><input
-              type="checkbox"
-              checked={narrative.checklist.includes(check)}
-              onchange={(e) => {
-                const checked = e.currentTarget.checked;
-                change((p) => {
-                  const n = p.narratives.find((n) => n.chainId === chain.id)!;
-                  n.checklist = checked
-                    ? [...n.checklist, check]
-                    : n.checklist.filter((c) => c !== check);
-                });
-              }}
-            />{check}</label
-          >{/each}
-      {/if}
-      <hr />
-      <label class="check-label"
-        ><input type="checkbox" bind:checked={annotations} /> Show annotation details</label
-      >
-      {#if annotations}<p class="small muted">
-          Hypotheses and assumptions, not historical citations.
-        </p>
-        {#if narrative?.annotationsDetached}<p class="notice review small">
-            Text changed. Chain annotations are contextual and are not attached to particular
-            sentences.
-          </p>{/if}
-      {/if}
-      {#if narrative?.original || (narrative?.final !== null && narrative?.final !== undefined)}
-        <hr />
-        <label
-          >Compare snapshot<select bind:value={snapshot}>
-            <option value="">Current working draft</option>
-            {#if narrative?.original}<option value="original">Original draft</option>{/if}
-            {#if narrative?.final !== null && narrative?.final !== undefined}<option value="final"
-                >Final approved snapshot</option
-              >{/if}
-          </select></label
-        >
-        {#if snapshot}<div class="snapshot-text">
-            {snapshot === 'original' ? narrative?.original?.text : narrative?.final}
-          </div>
-          {#if !restoring}<button class="secondary" onclick={() => (restoring = true)}
-              ><RotateCcw size={15} /> Restore this snapshot</button
+        <div class="writing-controls">
+          <div class="segmented">
+            <button class:active={mode === 'rich'} onclick={() => (mode = 'rich')}>Rich text</button
             >
-          {:else}<p class="small">
-              The current text will remain available through Undo. Restore this snapshot?
-            </p>
-            <div class="toolbar-group">
-              <button
-                class="primary"
-                onclick={() => {
-                  edit(
-                    (snapshot === 'original' ? narrative?.original?.text : narrative?.final) ?? ''
-                  );
-                  restoring = false;
-                  snapshot = '';
-                }}>Restore</button
-              ><button class="text-button" onclick={() => (restoring = false)}>Cancel</button>
-            </div>
-          {/if}
-        {/if}
-      {/if}
-    </aside>
-  </div>
-  {#key chain.id}<details class="ai-help">
-      <summary>AI help</summary>
-      <p class="small muted">
-        Your writing comes first. Ask for an edit or, if you prefer, request a generated starting
-        draft. You review every proposal before applying it.
-      </p>
-      <label class="inline-label"
-        >Model<select
-          value={p.writer}
-          onchange={(e) => {
-            const value = e.currentTarget.value;
-            change((p) => (p.writer = value));
-          }}
-          >{#each p.models as model}<option value={model}>{modelName(model)}</option>{/each}</select
-        ></label
-      >
-      <label class="spaced"
-        >Editing instructions (optional)<textarea
-          rows="2"
-          value={instructions[chain.id] ?? ''}
-          placeholder="For example, make the causal pathway clearer while keeping my voice."
-          oninput={(e) => (instructions[chain.id] = e.currentTarget.value)}></textarea></label
-      >
-      <div class="toolbar-group spaced">
-        <button
-          class="primary"
-          disabled={busy || !narrative?.working.trim() || chain.approvedRevision !== chain.revision}
-          onclick={() => request('narrative_edit', chain.id, instructions[chain.id])}
-          >Ask AI to edit this draft</button
-        >
-        <button
-          class="secondary"
-          disabled={busy || chain.approvedRevision !== chain.revision}
-          onclick={() => request('narrative', chain.id)}>Generate a draft with AI</button
-        >
-      </div>
-    </details>{/key}
-  {#if proposals.length}<section class="narrative-proposals" aria-label="AI proposals">
-      <h2 id={proposalsHeadingId} bind:this={proposalsHeading} tabindex="-1">
-        Proposals awaiting your review
-      </h2>
-      <p class="small muted">
-        Compare each proposal below, then apply or dismiss it. Your working text stays unchanged
-        until you apply a proposal.
-      </p>
-      {#each proposals as d}{@const current = proposalIsCurrent(p, chain.id, d.id)}
-        <article class="draft-paper">
-          <div class="section-line">
-            <h3>
-              {d.modelId === 'authored/example'
-                ? 'Authored example draft'
-                : d.kind === 'edit'
-                  ? 'Proposed edit'
-                  : 'Generated draft'}
-            </h3>
-            <span class="small muted"
-              >{modelName(d.modelId)} · chain revision {d.chainRevision}</span
+            <button class:active={mode === 'markdown'} onclick={() => (mode = 'markdown')}
+              >Markdown</button
             >
           </div>
-          {#if d.instructions}<p class="small">
-              <strong>Editing request:</strong>
-              {d.instructions}
-            </p>{/if}
-          <div class="draft-comparison">
-            <div>
-              <h4>Current working text</h4>
-              <div class="draft-prose">{narrative?.working || 'No text yet.'}</div>
-            </div>
-            <div>
-              <h4>Proposed text</h4>
-              <div class="draft-prose">{d.text}</div>
-            </div>
-          </div>
-          {#if !current}<p class="notice review small">
-              Your text or chain has changed since this proposal. Request a fresh proposal to apply
-              AI changes to your current draft.
-            </p>{/if}
           <div class="toolbar-group">
             <button
-              class="secondary"
-              disabled={!current}
-              onclick={() =>
-                change(
-                  (p) => applyNarrativeProposal(p, chain.id, d.id),
-                  'Proposal applied. Your previous text is available through Undo.'
-                )}><Check size={16} /> Apply proposal</button
+              class="icon-button"
+              aria-label="Undo text edit"
+              disabled={!narrative?.history.length}
+              onclick={() => change((p) => undoNarrative(p, chain.id))}><Undo2 size={17} /></button
             >
             <button
-              class="text-button"
-              onclick={() =>
-                change((p) => {
-                  p.narratives
-                    .find((n) => n.chainId === chain.id)!
-                    .drafts.find((draft) => draft.id === d.id)!.status = 'dismissed';
-                }, 'Proposal dismissed. Your working text is unchanged.')}>Dismiss</button
+              class="icon-button"
+              aria-label="Redo text edit"
+              disabled={!narrative?.redo.length}
+              onclick={() => change((p) => undoNarrative(p, chain.id, true))}
+              ><Redo2 size={17} /></button
             >
           </div>
-        </article>
-      {/each}
-    </section>{/if}
+        </div>
+        {#key chain.id}{#if mode === 'rich' && RichEditor}<RichEditor
+              value={narrative?.working ?? ''}
+              onedit={edit}
+              {editable}
+            />{:else}<textarea
+              class="markdown-editor"
+              aria-label="Scenario narrative in Markdown"
+              value={narrative?.working ?? ''}
+              disabled={!editable}
+              placeholder="Describe this future, how it unfolds and what it means for people."
+              oninput={(e) => edit(e.currentTarget.value)}
+              rows="22"></textarea>{/if}{/key}
+        <div class="narrative-meta">
+          <span
+            >{narrative?.original
+              ? `Original: ${narrative.original.source === 'user' ? 'Your writing' : narrative.original.source === 'example' ? 'Authored example' : modelName(narrative.original.modelId ?? '')} · chain revision ${narrative.original.chainRevision}`
+              : 'Your working draft · saved as you write'}</span
+          >
+          <span
+            >{narrative?.final !== null &&
+            narrative?.final !== undefined &&
+            narrative.final === narrative.working
+              ? '✓ Final snapshot saved'
+              : 'Working draft'}</span
+          >
+        </div>
+      </section>
+      <aside class="writing-aside">
+        <h2>Your hypothesis chain</h2>
+        <p class="small muted">
+          Describe the future, its causal pathway and humanitarian implications. Around 400–600
+          words is a guide, not a limit.
+        </p>
+        <div class="annotation-list">
+          {#each uncertainties(p) as d}<p class="small">
+              <strong>{d.title}</strong><br />{p.hypotheses.find((h) => h.id === chain.items[d.id])
+                ?.title ?? 'Unresolved'}
+            </p>{/each}
+          {#each chain.wildcardDriverIds as driverId}{@const driver = p.drivers.find(
+              (d) => d.id === driverId
+            )}
+            {#if driver}<p class="small">
+                <strong>{driver.title}</strong><br />{driver.summary}
+              </p>{/if}
+          {/each}
+        </div>
+        {#if review && narrative}
+          <hr />
+          <h2>Your review</h2>
+          <p class="small muted">
+            This checklist is advisory. You can complete with every box unchecked.
+          </p>
+          {#each checks as check}<label class="check-label qa-check"
+              ><input
+                type="checkbox"
+                checked={narrative.checklist.includes(check)}
+                onchange={(e) => {
+                  const checked = e.currentTarget.checked;
+                  change((p) => {
+                    const n = p.narratives.find((n) => n.chainId === chain.id)!;
+                    n.checklist = checked
+                      ? [...n.checklist, check]
+                      : n.checklist.filter((c) => c !== check);
+                  });
+                }}
+              />{check}</label
+            >{/each}
+        {/if}
+        <hr />
+        <label class="check-label"
+          ><input type="checkbox" bind:checked={annotations} /> Show annotation details</label
+        >
+        {#if annotations}<p class="small muted">
+            Hypotheses and assumptions, not historical citations.
+          </p>
+          {#if narrative?.annotationsDetached}<p class="notice review small">
+              Text changed. Chain annotations are contextual and are not attached to particular
+              sentences.
+            </p>{/if}
+        {/if}
+        {#if narrative?.original || (narrative?.final !== null && narrative?.final !== undefined)}
+          <hr />
+          <label
+            >Compare snapshot<select bind:value={snapshot}>
+              <option value="">Current working draft</option>
+              {#if narrative?.original}<option value="original">Original draft</option>{/if}
+              {#if narrative?.final !== null && narrative?.final !== undefined}<option value="final"
+                  >Final approved snapshot</option
+                >{/if}
+            </select></label
+          >
+          {#if snapshot}<div class="snapshot-text">
+              {snapshot === 'original' ? narrative?.original?.text : narrative?.final}
+            </div>
+            {#if !restoring}<button class="secondary" onclick={() => (restoring = true)}
+                ><RotateCcw size={15} /> Restore this snapshot</button
+              >
+            {:else}<p class="small">
+                The current text will remain available through Undo. Restore this snapshot?
+              </p>
+              <div class="toolbar-group">
+                <button
+                  class="primary"
+                  onclick={() => {
+                    edit(
+                      (snapshot === 'original' ? narrative?.original?.text : narrative?.final) ?? ''
+                    );
+                    restoring = false;
+                    snapshot = '';
+                  }}>Restore</button
+                ><button class="text-button" onclick={() => (restoring = false)}>Cancel</button>
+              </div>
+            {/if}
+          {/if}
+        {/if}
+      </aside>
+    </div>
+    {#key chain.id}<details class="ai-help">
+        <summary>AI help</summary>
+        <p class="small muted">
+          Your writing comes first. Ask for an edit or, if you prefer, request a generated starting
+          draft. You review every proposal before applying it.
+        </p>
+        <label class="inline-label"
+          >Model<select
+            value={p.writer}
+            onchange={(e) => {
+              const value = e.currentTarget.value;
+              change((p) => (p.writer = value));
+            }}
+            >{#each p.models as model}<option value={model}>{modelName(model)}</option
+              >{/each}</select
+          ></label
+        >
+        <label class="spaced"
+          >Editing instructions (optional)<textarea
+            rows="2"
+            value={instructions[chain.id] ?? ''}
+            placeholder="For example, make the causal pathway clearer while keeping my voice."
+            oninput={(e) => (instructions[chain.id] = e.currentTarget.value)}></textarea></label
+        >
+        <div class="toolbar-group spaced">
+          <button
+            class="primary"
+            disabled={busy ||
+              !narrative?.working.trim() ||
+              chain.approvedRevision !== chain.revision}
+            onclick={() => {
+              editorOpen = false;
+              request('narrative_edit', chain.id, instructions[chain.id]);
+            }}>Ask AI to edit this draft</button
+          >
+          <button
+            class="secondary"
+            disabled={busy || chain.approvedRevision !== chain.revision}
+            onclick={() => {
+              editorOpen = false;
+              request('narrative', chain.id);
+            }}>Generate a draft with AI</button
+          >
+        </div>
+      </details>{/key}
+    {#if proposals.length}<section class="narrative-proposals" aria-label="AI proposals">
+        <h2 id={proposalsHeadingId} bind:this={proposalsHeading} tabindex="-1">
+          Proposals awaiting your review
+        </h2>
+        <p class="small muted">
+          Compare each proposal below, then apply or dismiss it. Your working text stays unchanged
+          until you apply a proposal.
+        </p>
+        {#each proposals as d}{@const current = proposalIsCurrent(p, chain.id, d.id)}
+          <article class="draft-paper">
+            <div class="section-line">
+              <h3>
+                {d.modelId === 'authored/example'
+                  ? 'Authored example draft'
+                  : d.kind === 'edit'
+                    ? 'Proposed edit'
+                    : 'Generated draft'}
+              </h3>
+              <span class="small muted"
+                >{modelName(d.modelId)} · chain revision {d.chainRevision}</span
+              >
+            </div>
+            {#if d.instructions}<p class="small">
+                <strong>Editing request:</strong>
+                {d.instructions}
+              </p>{/if}
+            <div class="draft-comparison">
+              <div>
+                <h4>Current working text</h4>
+                <div class="draft-prose">{narrative?.working || 'No text yet.'}</div>
+              </div>
+              <div>
+                <h4>Proposed text</h4>
+                <div class="draft-prose">{d.text}</div>
+              </div>
+            </div>
+            {#if !current}<p class="notice review small">
+                Your text or chain has changed since this proposal. Request a fresh proposal to
+                apply AI changes to your current draft.
+              </p>{/if}
+            <div class="toolbar-group">
+              <button
+                class="secondary"
+                disabled={!current}
+                onclick={() =>
+                  change(
+                    (p) => applyNarrativeProposal(p, chain.id, d.id),
+                    'Proposal applied. Your previous text is available through Undo.'
+                  )}><Check size={16} /> Apply proposal</button
+              >
+              <button
+                class="text-button"
+                onclick={() =>
+                  change((p) => {
+                    p.narratives
+                      .find((n) => n.chainId === chain.id)!
+                      .drafts.find((draft) => draft.id === d.id)!.status = 'dismissed';
+                  }, 'Proposal dismissed. Your working text is unchanged.')}>Dismiss</button
+              >
+            </div>
+          </article>
+        {/each}
+      </section>{/if}
+    <div class="dialog-actions">
+      <span class="small muted">Your writing is saved as you type.</span><button
+        class="primary"
+        onclick={() => (editorOpen = false)}>Done</button
+      >
+    </div>
+  </Modal>
 {/if}
 <footer class="stage-footer">
   <div>
@@ -472,10 +496,10 @@
   {/if}
 </footer>
 <div class="sr-only" role="status" aria-atomic="true">
-  {#if attentionTarget}{attentionTitle}. For {attentionTarget.title}. Review the proposals at the
-    bottom of the page.{/if}
+  {#if attentionTarget}{attentionTitle}. For {attentionTarget.title}. Review the proposals in the
+    scenario editor.{/if}
 </div>
-{#if attentionTarget}
+{#if attentionTarget && !editorOpen}
   <div aria-hidden="true" style:height={`${noticeHeight + 24}px`}></div>
   <aside
     class="proposal-attention"
@@ -486,13 +510,15 @@
     <div class="proposal-attention-copy">
       <strong>{attentionTitle}</strong>
       <p>
-        For {attentionTarget.title}. Review the {pendingAI.length === 1 ? 'proposal' : 'proposals'} below
+        For {attentionTarget.title}. Open the editor to review the {pendingAI.length === 1
+          ? 'proposal'
+          : 'proposals'}
         before deciding what to keep.
       </p>
     </div>
-    <button class="primary" aria-controls={proposalsHeadingId} onclick={reviewProposals}>
+    <button class="primary" aria-haspopup="dialog" onclick={reviewProposals}>
       Review AI {pendingAI.length === 1 ? 'proposal' : 'proposals'}
-      <ArrowDown size={16} aria-hidden="true" />
+      <ArrowRight size={16} aria-hidden="true" />
     </button>
   </aside>
 {/if}
