@@ -144,7 +144,7 @@
             >{d.tags.join(' / ')} · {statesFor(p, d.id).length} future states</span
           >
         </div>
-        <button class="text-button" onclick={() => add(d.id)}><Plus size={16} /> Add state</button>
+        <button class="text-button" onclick={() => add(d.id)}><Plus size={16} /> Add your own hypothesis</button>
       </div>
       <div class="hypothesis-options">
         {#each statesFor(p, d.id) as h (h.id)}<article class="hypothesis-option">
@@ -212,7 +212,12 @@
       >Keep enough difference to tell meaningfully different stories.</small
     >
   </div>
-  {#if allApproved}<button class="primary" onclick={next}
+  {#if allApproved}<button
+      class="primary"
+      onclick={() => {
+        change((p) => complete(p, 4));
+        next();
+      }}
       >Construct chains <ArrowRight size={16} /></button
     >{:else}<button
       class="primary"
