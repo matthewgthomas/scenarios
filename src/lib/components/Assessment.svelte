@@ -1,6 +1,9 @@
 <script lang="ts">
   import { ArrowRight, Check, ChartScatter, List, CircleHelp } from '@lucide/svelte';
   import Modal from './Modal.svelte';
+  import ScoreStrip from './ScoreStrip.svelte';
+  import ModelScoreComparison from './ModelScoreComparison.svelte';
+  import { comparisonModelIds, scoreComparison } from '$lib/domain/score-comparison';
   import {
     activeDrivers,
     coordinates,
@@ -48,6 +51,11 @@
   );
   const selected = $derived(drivers.find((d) => d.id === selectedId));
   const expectedModels = $derived(p.overrides['2'] ?? p.models);
+  const comparisonModels = $derived(p.example ? comparisonModelIds([], drivers) : expectedModels);
+  const modelIds = $derived(comparisonModelIds(comparisonModels, drivers));
+  const comparisons = $derived(
+    new Map(drivers.map((d) => [d.id, scoreComparison(d, comparisonModels)]))
+  );
   const selectedCount = $derived(drivers.filter((d) => d.selected).length);
   const combinations = $derived(
     drivers
@@ -173,7 +181,7 @@
       ><List size={16} /> Table</button
     >
   </div>
-  {#if !selection}<button class="secondary" onclick={request}>Generate independent scores</button
+  {#if !selection}<button class="primary" onclick={request}>Generate impact/uncertainty scores</button
     >{:else}<span class="badge"
       >{selectedCount} selected · at least {combinations.toLocaleString()} combinations</span
     >{/if}
@@ -251,7 +259,7 @@
         matrix. Open a point to inspect its drivers, or use the list to the right. These scores are
         ordinal judgements, not probabilities.
       </p>
-      {#if selected}<div class="model-positions">
+      {#if selected && selection}<div class="model-positions">
           <strong>{selected.title}: individual positions</strong
           >{#each selected.ratings as r, i}<div>
               <span class="model-mark">{['●', '■', '▲'][i % 3]}</span>
@@ -283,8 +291,13 @@
           ? 'No minimum or maximum is enforced.'
           : 'Larger score ranges appear first. This is a review aid, not a scientific threshold.'}
       </p>
+      {#if !selection}<p class="small muted score-strip-help">
+          Each strip shows the available AI score range on a 1–5 scale. The outlined diamond marks
+          the AI median; ranges show differences in judgements.
+        </p>{/if}
       <div class="driver-queue">
         {#each sorted as d (d.id)}{@const c = coordinates(d)}
+          {@const comparison = comparisons.get(d.id)!}
           <div class:queue-selected={selectedId === d.id} class="queue-row">
             {#if selection}<input
                 type="checkbox"
@@ -296,10 +309,17 @@
                 >{c.impact ?? '—'} impact / {c.uncertainty ?? '—'} uncertainty · {d.ratings.filter(
                   (r) => r.driverRevision === d.revision
                 ).length} perspectives</span
-              ><span class="small"
+              >{#if !selection}<span class="queue-score-strips">
+                  <ScoreStrip label="Humanitarian impact" scores={comparison.impact} />
+                  <ScoreStrip label="Uncertainty" scores={comparison.uncertainty} />
+                </span><span class="small muted score-comparison-status"
+                  >{comparison.status}{comparison.missingModels.length
+                    ? ` · ${comparison.missingModels.length} configured ${comparison.missingModels.length === 1 ? 'model' : 'models'} missing`
+                    : ''}</span
+                >{/if}<span class="small"
                 >{d.decision?.revision === d.revision
                   ? '✓ Analyst-approved'
-                  : disagreement(d) >= 2
+                  : disagreement(d) >= (selection ? 2 : 1)
                     ? '◒ Differing scores'
                     : '○ Provisional median'}</span
               ></button
@@ -314,12 +334,13 @@
         ><tr
           >{#if selection}<th scope="col">Select</th>{/if}<th scope="col">Driver</th><th scope="col"
             >Humanitarian impact</th
-          ><th scope="col">Uncertainty</th><th scope="col">Review state</th><th scope="col"
-            >Action</th
-          ></tr
+          ><th scope="col">Uncertainty</th>{#if !selection}<th scope="col">AI score comparison</th
+            >{/if}<th scope="col">Review state</th><th scope="col">Action</th></tr
         ></thead
       ><tbody
-        >{#each sorted as d}{@const c = coordinates(d)}<tr
+        >{#each sorted as d}{@const c = coordinates(d)}{@const comparison = comparisons.get(
+            d.id
+          )!}<tr
             >{#if selection}<td
                 ><input
                   type="checkbox"
@@ -328,7 +349,17 @@
                   onchange={() => toggle(d.id)}
                 /></td
               >{/if}<th scope="row">{d.title}</th><td class="numeric">{c.impact ?? 'Missing'}</td
-            ><td class="numeric">{c.uncertainty ?? 'Missing'}</td><td
+            ><td class="numeric">{c.uncertainty ?? 'Missing'}</td>{#if !selection}<td
+                class="assessment-comparison-cell"
+              >
+                <ScoreStrip label="Humanitarian impact" scores={comparison.impact} />
+                <ScoreStrip label="Uncertainty" scores={comparison.uncertainty} />
+                <p class="small muted">
+                  {comparison.status}{comparison.missingModels.length
+                    ? ` · ${comparison.missingModels.length} configured ${comparison.missingModels.length === 1 ? 'model' : 'models'} missing`
+                    : ''}
+                </p>
+              </td>{/if}<td
               >{d.decision?.revision === d.revision
                 ? d.decision.type === 'explicitly_edited'
                   ? 'Analyst-edited'
@@ -347,31 +378,41 @@
     wide
   >
     {#if overlapping.length > 1}<div
-        class="toolbar-group spaced"
+        class="toolbar-group spaced overlapping-drivers"
         aria-label="Drivers at this matrix point"
       >
+        <p>
+          Multiple drivers have the same impact and uncertainty scores. Choose one to see more
+          details.
+        </p>
         {#each overlapping as d}<button
             class="secondary"
             aria-pressed={selectedId === d.id}
             onclick={() => inspect(d.id)}>{d.title}</button
           >{/each}
       </div>{/if}
-    <section class="inspector modal-inspector" aria-label={`Scores for ${selected.title}`}>
+    <section
+      class:assessment-score-inspector={!selection}
+      class="inspector modal-inspector"
+      aria-label={`Scores for ${selected.title}`}
+    >
       <div>
         <h2>{selected.title}</h2>
         <p>{selected.summary}</p>
-        {#each selected.ratings as r}<details>
-            <summary
-              >{modelName(r.modelId)} · impact {r.impact}, uncertainty {r.uncertainty}{r.driverRevision !==
-              selected.revision
-                ? ' · earlier revision'
-                : ''}</summary
-            >
-            <p>{r.rationale}</p>
-            <p class="small muted">{r.modelId}</p>
-          </details>{/each}{#if !selected.ratings.length}<p class="notice review">
-            No model scores returned. You can enter your own scores manually.
-          </p>{/if}
+        {#if !selection}
+          <ModelScoreComparison driver={selected} expectedModels={comparisonModels} {modelIds} />
+        {:else}{#each selected.ratings as r}<details>
+              <summary
+                >{modelName(r.modelId)} · impact {r.impact}, uncertainty {r.uncertainty}{r.driverRevision !==
+                selected.revision
+                  ? ' · earlier revision'
+                  : ''}</summary
+              >
+              <p>{r.rationale}</p>
+              <p class="small muted">{r.modelId}</p>
+            </details>{/each}{#if !selected.ratings.length}<p class="notice review">
+              No model scores returned. You can enter your own scores manually.
+            </p>{/if}{/if}
         <p class="small muted">
           {selected.decision?.revision === selected.revision
             ? `Recorded as ${selected.decision.type.replaceAll('_', ' ')}.`
@@ -400,7 +441,7 @@
           >
         </div>
         <button
-          class="secondary"
+          class="primary"
           disabled={!(impact >= 1 && impact <= 5 && uncertainty >= 1 && uncertainty <= 5)}
           onclick={() => {
             change((p) => {
@@ -447,3 +488,14 @@
       ><Check size={16} /> Accept remaining medians</button
     >{/if}
 </footer>
+
+<style>
+  .overlapping-drivers {
+    margin-bottom: 24px;
+  }
+  .overlapping-drivers > p {
+    flex-basis: 100%;
+    margin: 0;
+    font-weight: 600;
+  }
+</style>

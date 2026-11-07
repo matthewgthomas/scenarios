@@ -85,6 +85,7 @@
   let announcement = $state('');
   let error = $state('');
   let theme = $state('light');
+  let topbarHeight = $state(72);
   let dialog = $state<'settings' | 'paid' | 'delete' | 'help' | ''>('');
   let deleteId = $state('');
   let key = $state('');
@@ -522,8 +523,8 @@
       {/if}
     </div>
   </aside>
-  <div class="workspace">
-    <header class="topbar">
+  <div class="workspace" style:--workspace-topbar-height={`${topbarHeight}px`}>
+    <header class="topbar" bind:offsetHeight={topbarHeight}>
       <div class="topbar-context">
         {#if p}<button class="title-button" onclick={() => navigate(0)}>{p.title}</button><span
             class="mode-badge">Quick mode</span
