@@ -1,5 +1,14 @@
 <script lang="ts">
-  import { ArrowRight, Check, ChartScatter, List, CircleHelp } from '@lucide/svelte';
+  import {
+    ArrowRight,
+    ArrowUp,
+    ArrowDown,
+    ArrowUpDown,
+    Check,
+    ChartScatter,
+    List,
+    CircleHelp
+  } from '@lucide/svelte';
   import Modal from './Modal.svelte';
   import ScoreStrip from './ScoreStrip.svelte';
   import ModelScoreComparison from './ModelScoreComparison.svelte';
@@ -14,6 +23,7 @@
     snapshotChain,
     now,
     modelName,
+    type Driver,
     type Project,
     type Change
   } from '$lib/domain/project';
@@ -34,6 +44,9 @@
   let editorOpen = $state(false);
   let view = $state('plot');
   let sort = $state('disagreement');
+  type TableSortKey = 'selected' | 'title' | 'impact' | 'uncertainty' | 'disagreement' | 'review';
+  let tableSort = $state<TableSortKey>('disagreement');
+  let tableDirection = $state<'ascending' | 'descending'>('descending');
   let error = $state('');
   let impact = $state(3);
   let uncertainty = $state(3);
@@ -56,6 +69,60 @@
   const comparisons = $derived(
     new Map(drivers.map((d) => [d.id, scoreComparison(d, comparisonModels)]))
   );
+  const tableColumns = $derived<{ key: TableSortKey; label: string }[]>([
+    ...(selection ? [{ key: 'selected' as const, label: 'Select' }] : []),
+    { key: 'title', label: 'Driver' },
+    { key: 'impact', label: 'Humanitarian impact' },
+    { key: 'uncertainty', label: 'Uncertainty' },
+    ...(!selection ? [{ key: 'disagreement' as const, label: 'AI score comparison' }] : []),
+    { key: 'review', label: 'Review state' }
+  ]);
+  function reviewState(d: Driver) {
+    return d.decision?.revision === d.revision
+      ? d.decision.type === 'explicitly_edited'
+        ? 'Analyst-edited'
+        : 'Accepted median'
+      : 'Not approved';
+  }
+  function tableValue(d: Driver): string | number | null {
+    switch (tableSort) {
+      case 'selected':
+        return Number(d.selected);
+      case 'title':
+        return d.title;
+      case 'impact':
+        return coordinates(d).impact;
+      case 'uncertainty':
+        return coordinates(d).uncertainty;
+      case 'disagreement':
+        return comparisons.get(d.id)!.ratings.length ? disagreement(d) : null;
+      case 'review':
+        return reviewState(d);
+    }
+  }
+  const tableDrivers = $derived(
+    [...drivers].sort((a, b) => {
+      const left = tableValue(a);
+      const right = tableValue(b);
+      if (left === null || right === null) return left === right ? 0 : left === null ? 1 : -1;
+      const order =
+        typeof left === 'string' && typeof right === 'string'
+          ? left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' })
+          : Number(left) - Number(right);
+      return (tableDirection === 'ascending' ? order : -order) || a.title.localeCompare(b.title);
+    })
+  );
+  function sortTable(key: TableSortKey) {
+    tableDirection =
+      tableSort === key
+        ? tableDirection === 'ascending'
+          ? 'descending'
+          : 'ascending'
+        : key === 'title' || key === 'review'
+          ? 'ascending'
+          : 'descending';
+    tableSort = key;
+  }
   const selectedCount = $derived(drivers.filter((d) => d.selected).length);
   const combinations = $derived(
     drivers
@@ -336,15 +403,25 @@
     <table class="data-table">
       <caption class="sr-only">Driver assessment. Inspect to edit numeric scores.</caption><thead
         ><tr
-          >{#if selection}<th scope="col">Select</th>{/if}<th scope="col">Driver</th><th scope="col"
-            >Humanitarian impact</th
-          ><th scope="col">Uncertainty</th>{#if !selection}<th scope="col">AI score comparison</th
-            >{/if}<th scope="col">Review state</th><th scope="col">Action</th></tr
+          >{#each tableColumns as column}<th
+              scope="col"
+              aria-sort={tableSort === column.key ? tableDirection : undefined}
+              ><button
+                class="column-sort"
+                onclick={() => sortTable(column.key)}
+                title={column.key === 'disagreement'
+                  ? 'Sort by AI score disagreement'
+                  : `Sort by ${column.label.toLowerCase()}`}
+                >{column.label}
+                {#if tableSort !== column.key}<ArrowUpDown size={14} aria-hidden="true" />
+                {:else if tableDirection === 'ascending'}<ArrowUp size={14} aria-hidden="true" />
+                {:else}<ArrowDown size={14} aria-hidden="true" />{/if}
+              </button></th
+            >{/each}<th scope="col">Action</th></tr
         ></thead
       ><tbody
-        >{#each sorted as d}{@const c = coordinates(d)}{@const comparison = comparisons.get(
-            d.id
-          )!}<tr
+        >{#each tableDrivers as d (d.id)}{@const c = coordinates(d)}{@const comparison =
+            comparisons.get(d.id)!}<tr
             >{#if selection}<td
                 ><input
                   type="checkbox"
@@ -363,13 +440,7 @@
                     ? ` · ${comparison.missingModels.length} configured ${comparison.missingModels.length === 1 ? 'model' : 'models'} missing`
                     : ''}
                 </p>
-              </td>{/if}<td
-              >{d.decision?.revision === d.revision
-                ? d.decision.type === 'explicitly_edited'
-                  ? 'Analyst-edited'
-                  : 'Accepted median'
-                : 'Not approved'}</td
-            ><td
+              </td>{/if}<td>{reviewState(d)}</td><td
               ><button class="text-button" onclick={() => inspect(d.id)}>Inspect / edit</button></td
             ></tr
           >{/each}</tbody
@@ -503,6 +574,23 @@
 </footer>
 
 <style>
+  .column-sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+  }
+  .column-sort:hover {
+    text-decoration: underline;
+  }
+  .column-sort :global(svg) {
+    flex-shrink: 0;
+  }
   .uncertainty-selection {
     margin-top: 16px;
   }
