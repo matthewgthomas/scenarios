@@ -137,6 +137,25 @@
         : 'Explore the differences in how AI models assess the potential humanitarian impact and uncertainty of each driver. Median scores are a starting point for your judgement.'}
     </p>
   </div>
+  <details class="scale-help">
+    <summary aria-label="Understand the 1–5 scales" title="Understand the 1–5 scales">
+      <CircleHelp size={20} />
+    </summary>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead
+          ><tr
+            ><th>Score</th><th>Humanitarian impact</th><th>Uncertainty about future trajectory</th
+            ></tr
+          ></thead
+        ><tbody
+          >{#each [['Negligible consequences', 'Highly predictable'], ['Limited consequences', 'Relatively predictable'], ['Substantial consequences for some populations', 'Several credible trajectories'], ['Serious or widespread consequences', 'Considerable uncertainty'], ['Severe, potentially systemic consequences', 'Highly uncertain, radically different plausible outcomes']] as row, i}<tr
+              ><th scope="row">{i + 1}</th><td>{row[0]}</td><td>{row[1]}</td></tr
+            >{/each}</tbody
+        >
+      </table>
+    </div>
+  </details>
 </div>
 {#if !p.example && drivers.some( (d) => expectedModels.some((m) => !d.ratings.some((r) => r.modelId === m && r.driverRevision === d.revision)) )}<p
     class="notice review"
@@ -408,23 +427,7 @@
       <button class="secondary" onclick={() => (editorOpen = false)}>Close</button>
     </div>
   </Modal>{/if}
-<details class="anchors">
-  <summary><CircleHelp size={16} /> Understand the 1–5 scales</summary>
-  <div class="table-scroll">
-    <table class="data-table">
-      <thead
-        ><tr
-          ><th>Score</th><th>Humanitarian impact</th><th>Uncertainty about future trajectory</th
-          ></tr
-        ></thead
-      ><tbody
-        >{#each [['Negligible consequences', 'Highly predictable'], ['Limited consequences', 'Relatively predictable'], ['Substantial consequences for some populations', 'Several credible trajectories'], ['Serious or widespread consequences', 'Considerable uncertainty'], ['Severe, potentially systemic consequences', 'Highly uncertain, radically different plausible outcomes']] as row, i}<tr
-            ><th scope="row">{i + 1}</th><td>{row[0]}</td><td>{row[1]}</td></tr
-          >{/each}</tbody
-      >
-    </table>
-  </div>
-</details>
+
 {#if error}<p role="alert" class="notice error">{error}</p>{/if}
 <footer class="stage-footer">
   <div>

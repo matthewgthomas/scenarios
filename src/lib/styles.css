@@ -874,16 +874,19 @@ main {
   align-self: flex-start;
   padding: 7px 0 0 7px;
 }
-.chain-help {
+.chain-help,
+.scale-help {
   position: relative;
   align-self: flex-start;
   flex-shrink: 0;
 }
-.chain-help > summary {
+.chain-help > summary,
+.scale-help > summary {
   list-style: none;
   padding: 7px;
 }
-.chain-help > p {
+.chain-help > p,
+.scale-help > .table-scroll {
   position: absolute;
   right: 0;
   top: 36px;
@@ -1544,13 +1547,14 @@ table {
 .form-row > label {
   flex: 1;
 }
-.anchors {
-  margin: 24px 0;
+.scale-help > .table-scroll {
+  width: min(640px, calc(100vw - 48px));
+  max-width: none;
+  max-height: 70vh;
+  overflow: auto;
 }
-.anchors summary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
+.scale-help .data-table {
+  min-width: 440px;
 }
 .numeric {
   font-variant-numeric: tabular-nums;
