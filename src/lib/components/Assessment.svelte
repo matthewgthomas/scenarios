@@ -454,6 +454,15 @@
             editorOpen = false;
           }}><Check size={16} /> Approve these scores</button
         >
+        {#if selection}<label class="check-label uncertainty-selection">
+            <input
+              type="checkbox"
+              aria-label={`Select ${selected.title} as a critical uncertainty`}
+              checked={selected.selected}
+              onchange={() => toggle(selected.id)}
+            />
+            Select as a critical uncertainty
+          </label>{/if}
         <p class="small muted">Changes are recorded as an explicit analyst decision.</p>
       </div>
     </section>
@@ -494,6 +503,9 @@
 </footer>
 
 <style>
+  .uncertainty-selection {
+    margin-top: 16px;
+  }
   .overlapping-drivers {
     margin-bottom: 24px;
   }
