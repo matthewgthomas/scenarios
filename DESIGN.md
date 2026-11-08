@@ -116,7 +116,7 @@ At 1280px, use a 216px sidebar and a flexible work area with 32px padding. At 10
 
 Keep the question and horizon inspectable from the exercise title. Show Quick/Research mode, truthful save state, and access to model settings, budget, project backup and exports. `Saved on this device` means the latest edit has actually been committed to IndexedDB; also implement saving and save-failure states. Local storage must not be described as confidential storage.
 
-The sidebar exposes setup, the seven named analytical stages from the spec, and completion/export. In Research Mode, insert the evidence checkpoint after setup; do not invent a second numbered analytical methodology. Completed stages remain navigable. Use the stage names from the spec consistently, with numbers only for the actual ordered stages.
+The sidebar exposes setup, the six named analytical stages from the spec, and export. Writing and final review share the “Write & review scenarios” workspace. In Research Mode, insert the evidence checkpoint after setup; do not invent a second numbered analytical methodology. Completed stages remain navigable. Use the stage names from the spec consistently, with numbers only for the actual ordered stages.
 
 Display `Not started`, `Working`, `Complete`, `Review suggested` and `Blocked` with text and a distinguishable mark. The active stage has a wheat background and dark text. If a stage is unavailable, explain its unmet prerequisite. Navigation must not delete work, silently approve it or regenerate it.
 
@@ -168,8 +168,7 @@ The footer uses an accurate action such as `Approve 3 selected chains`, with the
 | Select uncertainties | Reuse the approved matrix/table with selection controls and a selected-items summary | Recommend 4–6 without enforcing a cap; explain increasing combination complexity; no required causal map |
 | Develop hypotheses | One expandable uncertainty section with distinct future-state options and provenance | The number of alternatives varies; support add/edit/merge/split/remove and explicit approval; do not force three states |
 | Construct chains | Scenario columns, uncertainty rows, contextual reasoning/editor below | See the interaction contract above; explicit coherence rechecks and distinct wildcard handling |
-| Write scenarios | Open the human editor first; keep chain guidance visible; collapse optional AI help | Write from an approved chain; compare optional AI edits or generated drafts before explicit application |
-| Review & complete | Quiet, width-limited prose editor with rich-text/Markdown switch, undo/redo, optional AI help and advisory checklist | Every selected scenario needs text; original human or AI, working and final snapshots remain distinguishable; QA never blocks completion |
+| Write & review scenarios | One prose workspace with chain guidance, rich-text/Markdown editing, undo/redo, collapsed AI help and an optional review checklist in each editor | Write from approved chains; compare AI proposals before explicit application; require text for every selected scenario before saving the final set and continuing to export; preserve original/working/final snapshots; QA checkboxes never block completion |
 | Completion/export | Scenario list and straightforward export choices, with annotation options | Copy, Markdown, DOCX, PDF, full analytical record and project/analytical JSON; explain the difference between portable project and analytical data |
 
 ### Matrix detail

@@ -51,7 +51,8 @@ describe('human-first narrative writing', () => {
     editNarrative(p, p.chains[0].id, 'My first scenario.');
     expect(p.narratives[0].chainRevision).toBe(1);
     expect(p.narratives[0].chosenId).toBeNull();
-    expect(prerequisite(p, 7)).toContain('every selected');
+    // Partial drafts stay accessible in the merged writing/review workspace.
+    expect(prerequisite(p, 7)).toBeNull();
     p.chains.slice(1).forEach((c) => editNarrative(p, c.id, `Scenario ${c.title}`));
     expect(allNarrativesWritten(p)).toBe(true);
     expect(prerequisite(p, 7)).toBeNull();

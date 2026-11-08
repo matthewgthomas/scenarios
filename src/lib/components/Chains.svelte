@@ -7,7 +7,6 @@
     ArrowRight,
     Layers,
     CircleHelp,
-    Plus,
     Trash2
   } from '@lucide/svelte';
   import {
@@ -15,7 +14,6 @@
     statesFor,
     setChainItem,
     snapshotChain,
-    complete,
     flagDownstream,
     id,
     modelName,
@@ -23,6 +21,9 @@
     type Change
   } from '$lib/domain/project';
   import Modal from './Modal.svelte';
+  import StageGuide from './StageGuide.svelte';
+  import StageActions from './StageActions.svelte';
+  import { chainReadiness, approveChainSet } from '$lib/domain/workflow';
   let {
     p,
     change,
@@ -39,7 +40,6 @@
   let selectedDriver = $state('');
   let perspective = $state('');
   let showAll = $state(true);
-  let selectionMessage = $state('');
   const rows = $derived(uncertainties(p));
   const columns = $derived(p.chains.filter((c) => showAll || c.selected));
   const chain = $derived(p.chains.find((c) => c.id === selectedChain) ?? columns[0]);
@@ -51,56 +51,45 @@
       .filter((n) => n.modelId === (models.includes(perspective) ? perspective : models[0]))
       .at(-1)
   );
-  const selected = $derived(p.chains.filter((c) => c.selected));
+  const readiness = $derived(chainReadiness(p));
+  const selected = $derived(readiness.selected);
   const mainSelected = $derived(selected.filter((c) => c.kind === 'main').length);
   const wildSelected = $derived(selected.filter((c) => c.kind === 'wildcard').length);
   const allApproved = $derived(
-    selected.length > 0 &&
+    readiness.canApprove &&
       mainSelected === p.mainCount &&
       wildSelected === p.wildcardCount &&
-      selected.every((c) => c.approvedRevision === c.revision)
+      selected.every((c) => c.approvedRevision === c.revision && !c.review)
   );
+  function openIssue(issue: { chainId: string; driverId?: string }) {
+    selectedChain = issue.chainId;
+    selectedDriver = issue.driverId ?? rows[0]?.id ?? '';
+    editorOpen = true;
+  }
+  function chooseScenarios() {
+    if (!p.chains.length) {
+      addChain();
+      return;
+    }
+    showAll = true;
+    setTimeout(
+      () =>
+        document.querySelector<HTMLInputElement>('.chain-table input[type="checkbox"]')?.focus(),
+      0
+    );
+  }
   function approve() {
-    if (
-      selected.some((c) =>
-        rows.some(
-          (d) =>
-            c.items[d.id] &&
-            !p.hypotheses.some(
-              (h) => h.id === c.items[d.id] && h.driverId === d.id && h.approved && !h.archived
-            )
-        )
-      )
-    ) {
-      selectionMessage =
-        'Some chains reference unapproved or removed hypotheses. Approve the states in Develop hypotheses, or choose Unresolved.';
-      return;
-    }
-    const missing = selected
-      .flatMap((c) => c.wildcardDriverIds)
-      .some((id) => !p.drivers.find((d) => d.id === id)?.approved);
-    if (missing) {
-      selectionMessage = 'Accept or remove each novel wildcard driver before approving its chain.';
-      return;
-    }
-    if (mainSelected !== p.mainCount || wildSelected !== p.wildcardCount) {
-      selectionMessage = `Select ${p.mainCount} main scenarios and ${p.wildcardCount} wildcards, or change your portfolio targets above.`;
-      return;
-    }
+    if (!readiness.canApprove) return false;
     change((p) => {
-      selected.forEach((c) => {
-        const saved = p.chains.find((v) => v.id === c.id)!;
-        snapshotChain(p, saved);
-        saved.approvedRevision = saved.revision;
-      });
-      complete(p, 5);
+      approveChainSet(p);
     }, `${selected.length} chains approved at their current revisions.`);
-    selectionMessage = '';
+    return true;
   }
   function addChain() {
+    const newId = id('chain');
     change((p) =>
       p.chains.push({
-        id: id('chain'),
+        id: newId,
         title: 'Untitled scenario',
         kind: 'main',
         colour: (p.chains.length % 6) + 1,
@@ -115,6 +104,10 @@
         distinctiveness: 'Analyst-created chain'
       })
     );
+    selectedChain = newId;
+    selectedDriver = rows[0]?.id ?? '';
+    showAll = true;
+    editorOpen = true;
   }
   function editWildcard(
     driverId: string,
@@ -163,7 +156,7 @@
 <div class="stage-heading">
   <div>
     <h1>Construct chains of hypotheses.</h1>
-    <p>Compare how your uncertainties could combine. Each column is a different story.</p>
+    <p>Compare how your critical uncertainties could combine into scenarios.</p>
   </div>
   <details class="chain-help">
     <summary aria-label="About scenario chains"><CircleHelp size={20} /></summary>
@@ -174,45 +167,75 @@
     </p>
   </details>
 </div>
-<div class="toolbar">
-  <div class="toolbar-group">
-    <span class="muted">Construct hypothesis chains</span><span class="divider"></span><button
-      class="text-button"
-      onclick={() => request('chains')}><Plus size={16} /> Generate chains</button
-    ><button class="text-button" onclick={addChain}>Add a chain manually</button>
-  </div>
-  <details class="portfolio">
-    <summary
-      >{p.mainCount} main scenarios / {p.wildcardCount} wildcards <ChevronDown size={14} /></summary
-    >
-    <div class="popover-fields">
-      <label
-        >Main scenarios<input
-          type="number"
-          min="1"
-          max="12"
-          value={p.mainCount}
-          onchange={(e) => {
-            const n = +e.currentTarget.value;
-            if (n >= 1 && n <= 12) change((p) => (p.mainCount = Math.round(n)));
-          }}
-        /></label
-      ><label
-        >Wildcards<input
-          type="number"
-          min="0"
-          max="6"
-          value={p.wildcardCount}
-          onchange={(e) => {
-            const n = +e.currentTarget.value;
-            if (n >= 0 && n <= 6) change((p) => (p.wildcardCount = Math.round(n)));
-          }}
-        /></label
+<StageGuide
+  title={allApproved
+    ? 'Your scenario set is ready to write'
+    : readiness.canApprove
+      ? `Your ${selected.length} ${selected.length === 1 ? 'scenario is' : 'scenarios are'} ready for approval`
+      : readiness.issues.length
+        ? `${readiness.issues.length} chain ${readiness.issues.length === 1 ? 'issue needs' : 'issues need'} your attention`
+        : `Choose ${p.mainCount} main ${p.mainCount === 1 ? 'scenario' : 'scenarios'}${p.wildcardCount ? ` and ${p.wildcardCount} ${p.wildcardCount === 1 ? 'wildcard' : 'wildcards'}` : ''}`}
+  description="Each scenario will appear in its own column and represents a combination of futures for your critical uncertainties. Include the ones you want in your set, open cells to review their hypotheses, then approve the set. Inclusion chooses your scenarios; approval confirms your review."
+  ready={allApproved}
+  helpTitle="How do I build a useful set of scenarios?"
+>
+  {#snippet children()}
+    <span class="workflow-chip">{mainSelected} of {p.mainCount} main scenarios included</span>
+    <span class="workflow-chip">{wildSelected} of {p.wildcardCount} wildcards included</span>
+    {#each readiness.issues as issue}<button class="workflow-link" onclick={() => openIssue(issue)}
+        >{issue.message}<ArrowRight size={14} /></button
+      >{/each}
+  {/snippet}
+  {#snippet help()}<p>
+      Look for contrasting stories with choices that make sense together. A wildcard explores a
+      surprising but plausible disruption. You can deliberately leave a hypothesis unresolved. An AI
+      coherence check is optional; editing never runs one automatically.
+    </p>{/snippet}
+</StageGuide>
+<StageActions
+  generate={{ label: 'Generate chains', onclick: () => request('chains') }}
+  add={{ label: 'Add chain', onclick: addChain }}
+>
+  {#snippet context()}
+    <details class="portfolio">
+      <summary
+        >Portfolio targets: {p.mainCount} main / {p.wildcardCount} wildcards <ChevronDown
+          size={14}
+        /></summary
       >
-    </div>
-  </details>
-</div>
+      <div class="popover-fields">
+        <label
+          >Main scenarios<input
+            type="number"
+            min="1"
+            max="12"
+            value={p.mainCount}
+            onchange={(e) => {
+              const n = +e.currentTarget.value;
+              if (n >= 1 && n <= 12) change((p) => (p.mainCount = Math.round(n)));
+            }}
+          /></label
+        ><label
+          >Wildcards<input
+            type="number"
+            min="0"
+            max="6"
+            value={p.wildcardCount}
+            onchange={(e) => {
+              const n = +e.currentTarget.value;
+              if (n >= 0 && n <= 6) change((p) => (p.wildcardCount = Math.round(n)));
+            }}
+          /></label
+        >
+      </div>
+    </details>
+  {/snippet}
+</StageActions>
 {#if p.chains.length}
+  {#if !columns.length}<div class="workflow-empty">
+      <h3>No scenarios are included yet</h3>
+      <button class="secondary" onclick={() => (showAll = true)}>Show all candidates</button>
+    </div>{/if}
   <div class="table-scroll chain-scroll">
     <table class="chain-table">
       <caption class="sr-only"
@@ -223,17 +246,19 @@
         ><tr
           ><th class="uncertainty-heading" scope="col">Critical uncertainty</th
           >{#each columns as c (c.id)}<th scope="col" class="scenario-heading scenario-{c.colour}"
-              ><div class="scenario-heading-top">
-                <input
-                  aria-label={`Select ${c.title}`}
+              ><label class="chain-include"
+                ><input
+                  aria-label={`Include ${c.title} in scenario set`}
                   type="checkbox"
                   checked={c.selected}
                   onchange={(e) => {
                     const checked = e.currentTarget.checked;
                     change((p) => (p.chains.find((v) => v.id === c.id)!.selected = checked));
-                    selectionMessage = '';
                   }}
-                /><button
+                /><span>Include in set</span></label
+              >
+              <div class="scenario-heading-top">
+                <button
                   class="scenario-name"
                   aria-label={`Edit scenario: ${c.title}`}
                   aria-haspopup="dialog"
@@ -447,34 +472,67 @@
     <p>
       Generate independent candidate chains from your approved hypotheses, or build one yourself.
     </p>
-    <button class="primary" onclick={() => request('chains')}>Generate candidates</button>
+    <p class="small muted">
+      Use Generate chains above for AI suggestions, or Add chain to build your own.
+    </p>
   </div>{/if}
-{#if selectionMessage}<p class="notice review" role="alert">{selectionMessage}</p>{/if}
-<footer class="stage-footer">
-  <div class="footer-description">
-    <Layers size={20} />
-    <div>
-      <strong
-        >{allApproved
-          ? `${selected.length} chains approved`
-          : 'Your judgement, at every stage'}</strong
-      ><small
-        >{mainSelected} main / {wildSelected} wildcard selected. Approval does not call any AI models.</small
-      >
+{#if p.chains.length}<footer class="stage-footer">
+    <div class="footer-description">
+      <Layers size={20} />
+      <div>
+        <strong
+          >{allApproved
+            ? `${selected.length} hypothesis chains approved`
+            : 'Your judgement, at every stage'}</strong
+        ><small
+          >{readiness.issues.length
+            ? 'Open the named issues above and choose approved hypotheses or Unresolved.'
+            : !readiness.targetsMet
+              ? `Your target is ${p.mainCount} main scenarios and ${p.wildcardCount} wildcards. Tick a hypothesis chain to include it in your final set of scenarios.`
+              : 'Next, turn these combinations into narratives in your own words.'}</small
+        >
+      </div>
     </div>
-  </div>
-  <div class="toolbar-group">
-    {#if allApproved}<button
-        class="text-button"
-        onclick={() =>
-          change((p) => {
-            p.chains.filter((c) => c.selected).forEach((c) => (c.approvedRevision = null));
-            p.completed = p.completed.filter((s) => s !== 5);
-          }, 'Chain approval undone. Drafts preserved.')}
-        ><RotateCcw size={16} /> Undo approval</button
-      ><button class="primary" onclick={next}>Write scenarios <ArrowRight size={16} /></button
-      >{:else}<button class="primary" disabled={!selected.length} onclick={approve}
-        ><Check size={16} /> Approve {selected.length} selected chains</button
-      >{/if}
-  </div>
-</footer>
+    <div class="toolbar-group">
+      {#if allApproved}<button
+          class="text-button"
+          onclick={() =>
+            change((p) => {
+              p.chains.filter((c) => c.selected).forEach((c) => (c.approvedRevision = null));
+              p.completed = p.completed.filter((s) => s !== 5);
+            }, 'Chain approval undone. Drafts preserved.')}
+          ><RotateCcw size={16} /> Undo approval</button
+        ><button class="primary" onclick={next}
+          >Write & review scenarios <ArrowRight size={16} /></button
+        >{:else if readiness.issues.length}<button
+          class="primary"
+          onclick={() => openIssue(readiness.issues[0])}
+          >Review next chain issue <ArrowRight size={16} /></button
+        >
+      {:else if !readiness.targetsMet}<button class="primary" onclick={chooseScenarios}
+          >{p.chains.length ? 'Choose your scenarios' : 'Build your first chain'}
+          <ArrowRight size={16} /></button
+        >
+      {:else}<button
+          class="primary"
+          onclick={() => {
+            if (approve()) next();
+          }}><Check size={16} /> Approve set & write scenarios</button
+        >{/if}
+    </div>
+  </footer>{/if}
+
+<style>
+  .chain-include {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .chain-include input {
+    width: 17px;
+  }
+</style>

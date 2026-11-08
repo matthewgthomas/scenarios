@@ -10,45 +10,44 @@
     Redo2
   } from '@lucide/svelte';
   import {
-    complete,
-    now,
     uncertainties,
     modelName,
     allNarrativesWritten,
     canWriteNarrative,
     editNarrative,
     undoNarrative,
-    prepareNarrativeReview,
     proposalIsCurrent,
     applyNarrativeProposal,
     type Project,
     type Change
   } from '$lib/domain/project';
   import Modal from './Modal.svelte';
+  import StageGuide from './StageGuide.svelte';
+  import StageActions from './StageActions.svelte';
+  import ActionButton from './ActionButton.svelte';
+  import { completeScenarioSet } from '$lib/domain/workflow';
   let {
     p,
     change,
     request,
-    review = false,
     busy = false,
     next
   }: {
     p: Project;
     change: Change;
     request: (task: 'narrative' | 'narrative_edit', chainId: string, instructions?: string) => void;
-    review?: boolean;
     busy?: boolean;
     next: () => void;
   } = $props();
   let selectedId = $state('');
+  type WritingAction = 'generate' | 'write';
+  let choosing = $state<WritingAction | null>(null);
   let editorOpen = $state(false);
   let mode = $state('rich');
-  let annotations = $state(false);
   let snapshot = $state('');
   let restoring = $state(false);
   let instructions = $state<Record<string, string>>({});
   let proposalsHeading = $state<HTMLHeadingElement>();
-  let noticeHeight = $state(0);
   const uid = $props.id();
   const proposalsHeadingId = `${uid}-proposals-heading`;
   let RichEditor = $state<typeof import('./Editor.svelte').default>();
@@ -90,12 +89,41 @@
         ? 'AI edit ready for your review'
         : 'AI draft ready for your review'
   );
+  const missingDrafts = $derived(
+    chains.filter((c) => !p.narratives.find((n) => n.chainId === c.id)?.working.trim())
+  );
   const allWritten = $derived(allNarrativesWritten(p));
+  function openScenario(chainId: string) {
+    selectedId = chainId;
+    editorOpen = true;
+    snapshot = '';
+    restoring = false;
+  }
+  function canPerform(action: WritingAction | null, chainId: string) {
+    const c = chains.find((c) => c.id === chainId);
+    if (!c) return false;
+    return action === 'generate'
+      ? !busy && c.approvedRevision === c.revision
+      : action === 'write' && canWriteNarrative(p, c.id);
+  }
+  function perform(action: WritingAction, chainId: string) {
+    if (!canPerform(action, chainId)) return;
+    choosing = null;
+    if (action === 'generate') request('narrative', chainId);
+    else openScenario(chainId);
+  }
+  function startAction(action: WritingAction) {
+    if (chains.length === 1) perform(action, chains[0].id);
+    else choosing = action;
+  }
+
   const allFinal = $derived(
     p.completed.includes(7) &&
       allWritten &&
       chains.every((c) =>
-        p.narratives.some((n) => n.chainId === c.id && n.final !== null && n.final === n.working)
+        p.narratives.some(
+          (n) => n.chainId === c.id && n.final !== null && n.final === n.working && !n.review
+        )
       )
   );
   const checks = [
@@ -128,28 +156,123 @@
 
 <div class="stage-heading">
   <div>
-    <h1>{review ? 'Make these stories your own.' : 'Write your scenario in your own words.'}</h1>
-    <p>
-      {review
-        ? 'Review your narratives and save the final scenario set when you are ready.'
-        : 'Start with your own account of how this future could unfold. AI help is optional.'}
-    </p>
+    <h1>Write & review scenarios</h1>
+    <p>Shape each story, review it alongside its hypothesis chains, then save your final set of scenarios.</p>
   </div>
 </div>
-<div class="toolbar">
-  <span class="muted"
-    >{chains.length} selected {chains.length === 1 ? 'scenario' : 'scenarios'}</span
+<StageGuide
+  title={allFinal
+    ? 'Your final set of scenarios is saved'
+    : allWritten
+      ? 'Every story has a draft. Ready for a final read?'
+      : `${chains.length - missingDrafts.length} of ${chains.length} scenario drafts written`}
+  description="Write a narrative for every included scenario, then review the stories and save a final snapshot. The review checklist is optional. Your writing saves as you type, and you can keep editing after completing the set."
+  ready={allFinal}
+  helpTitle="A simple way to shape your story"
+>
+  {#snippet children()}
+    {#each missingDrafts as c}<button class="workflow-link" onclick={() => openScenario(c.id)}
+        >Write {c.title}<ArrowRight size={14} /></button
+      >{/each}
+    {#if allWritten && !allFinal}<button
+        class="workflow-link"
+        onclick={() =>
+          openScenario(
+            (
+              chains.find((c) =>
+                p.narratives.some((n) => n.chainId === c.id && (n.review || n.final !== n.working))
+              ) ?? chains[0]
+            ).id
+          )}>Click/tap a story to review <ArrowRight size={14} /></button
+      >{/if}
+  {/snippet}
+  {#snippet help()}<ol>
+      <li>Set the scene: what does this future look and feel like?</li>
+      <li>
+        Trace the path: how do the choices in the hypothesis chain reinforce or challenge each
+        other?
+      </li>
+      <li>Make it human: who is affected, in what ways, and what remains uncertain?</li>
+    </ol>
+    <p>
+      Aim for around 400–600 words per scenario. AI drafts and edits are proposals for you
+      to review before applying.
+    </p>{/snippet}
+</StageGuide>
+<StageActions
+  generate={{
+    label: 'Generate draft',
+    disabled: !chains.some((c) => canPerform('generate', c.id)),
+    onclick: () => startAction('generate')
+  }}
+  add={{
+    label: 'Write scenario',
+    disabled: !chains.some((c) => canPerform('write', c.id)),
+    onclick: () => startAction('write')
+  }}
+/>
+{#if choosing}
+  <Modal
+    title={choosing === 'generate'
+      ? 'Choose a scenario for the draft'
+      : 'Choose a scenario to write'}
+    close={() => (choosing = null)}
   >
-</div>
+    <p>
+      {choosing === 'generate'
+        ? 'Which scenario would you like an AI draft for? You’ll review the models and cost before running.'
+        : 'Which story would you like to write or review?'}
+    </p>
+    <ul class="scenario-choices">
+      {#each chains as c (c.id)}
+        <li>
+          <ActionButton
+            kind={choosing === 'generate' ? 'generate' : 'add'}
+            label={c.title}
+            disabled={!canPerform(choosing, c.id)}
+            onclick={() => {
+              if (choosing) perform(choosing, c.id);
+            }}
+          />
+          {#if !canPerform(choosing, c.id)}<p class="small muted">
+              {choosing === 'generate' && busy
+                ? 'Wait for the current model operation to finish.'
+                : 'Approve this chain in Construct chains first.'}
+            </p>{/if}
+        </li>
+      {/each}
+    </ul>
+  </Modal>
+{/if}
+{#if attentionTarget && !editorOpen}
+  <aside class="proposal-attention" aria-label="AI proposals awaiting review">
+    <MessageSquareText size={22} aria-hidden="true" />
+    <div class="proposal-attention-copy">
+      <strong>{attentionTitle}</strong>
+      <p>
+        For {attentionTarget.title}. Open the editor to review the {pendingAI.length === 1
+          ? 'proposal'
+          : 'proposals'}
+        before deciding what to keep.
+      </p>
+    </div>
+    <button class="primary" aria-haspopup="dialog" onclick={reviewProposals}>
+      Review AI {pendingAI.length === 1 ? 'proposal' : 'proposals'}
+      <ArrowRight size={16} aria-hidden="true" />
+    </button>
+  </aside>
+{/if}
+
 <p class="small muted scenario-tabs-hint">
-  Click a scenario to write, edit or review it in a popup. Your writing is saved as you type.
+  Click/tap a scenario to work on its story. You can move between scenarios inside the editor.
 </p>
 <div class="scenario-tabs" aria-label="Narratives">
   {#each chains as c}{@const pendingCount = pendingAI.filter(
       (entry) => entry.chainId === c.id
-    ).length}<button
+    ).length}{@const story = p.narratives.find((n) => n.chainId === c.id)}<button
       class:active={editorOpen && chain?.id === c.id}
       class="scenario-tab scenario-{c.colour}"
+      aria-label={`Write and review scenario: ${c.title}. ${story?.working.trim() ? 'Draft written' : 'Not started'}${pendingCount ? `. ${pendingCount} AI proposals to review` : ''}`}
       aria-haspopup="dialog"
       onclick={() => {
         selectedId = c.id;
@@ -161,23 +284,30 @@
         >{c.kind === 'wildcard' ? 'Wildcard · ' : ''}{p.narratives
           .find((n) => n.chainId === c.id)
           ?.working.trim()
-          ? '✓ Draft written'
+          ? story?.final === story?.working
+            ? '✓ Final snapshot saved'
+            : '✓ Draft written'
           : '○ Not started'}</span
-      >{#if pendingCount}<span class="proposal-tab-badge"
+      >{#if story?.working.trim()}<p class="scenario-preview">
+          {story.working.replace(/[#*_>`]/g, '').slice(0, 180)}{story.working.length > 180
+            ? '…'
+            : ''}
+        </p>
+        <span class="small muted">{story.working.trim().split(/\s+/).length} words</span>{:else}<p
+          class="scenario-preview"
+        >
+          A story waiting to be written. Start with what changes and who is affected.
+        </p>{/if}{#if pendingCount}<span class="proposal-tab-badge"
           ><MessageSquareText size={13} aria-hidden="true" />
           {pendingCount} AI {pendingCount === 1 ? 'proposal' : 'proposals'} to review</span
         >{/if}<span class="scenario-tab-action small"
         ><PencilLine size={14} aria-hidden="true" />
-        Click to write / edit</span
+        {story?.working.trim() ? 'Write or review' : 'Start writing'}</span
       ></button
     >{/each}
 </div>
 {#if editorOpen && chain}
-  <Modal
-    title={`${review ? 'Review' : 'Write / edit'} scenario: ${chain.title}`}
-    close={() => (editorOpen = false)}
-    wide
-  >
+  <Modal title={`Write & review scenario: ${chain.title}`} close={() => (editorOpen = false)} wide>
     {#if chain.review || narrative?.review}<p class="notice review">
         Review suggested: the chain or an upstream hypothesis changed. Your narrative and original
         snapshots are preserved.
@@ -270,39 +400,29 @@
               </p>{/if}
           {/each}
         </div>
-        {#if review && narrative}
+        {#if narrative}
           <hr />
-          <h2>Your review</h2>
-          <p class="small muted">
-            This checklist is advisory. You can complete with every box unchecked.
-          </p>
-          {#each checks as check}<label class="check-label qa-check"
-              ><input
-                type="checkbox"
-                checked={narrative.checklist.includes(check)}
-                onchange={(e) => {
-                  const checked = e.currentTarget.checked;
-                  change((p) => {
-                    const n = p.narratives.find((n) => n.chainId === chain.id)!;
-                    n.checklist = checked
-                      ? [...n.checklist, check]
-                      : n.checklist.filter((c) => c !== check);
-                  });
-                }}
-              />{check}</label
-            >{/each}
-        {/if}
-        <hr />
-        <label class="check-label"
-          ><input type="checkbox" bind:checked={annotations} /> Show annotation details</label
-        >
-        {#if annotations}<p class="small muted">
-            Hypotheses and assumptions, not historical citations.
-          </p>
-          {#if narrative?.annotationsDetached}<p class="notice review small">
-              Text changed. Chain annotations are contextual and are not attached to particular
-              sentences.
-            </p>{/if}
+          <details class="review-checklist">
+            <summary>Review checklist (optional)</summary>
+            <p class="small muted">
+              This checklist is advisory. You can complete with every box unchecked.
+            </p>
+            {#each checks as check}<label class="check-label qa-check"
+                ><input
+                  type="checkbox"
+                  checked={narrative.checklist.includes(check)}
+                  onchange={(e) => {
+                    const checked = e.currentTarget.checked;
+                    change((p) => {
+                      const n = p.narratives.find((n) => n.chainId === chain.id)!;
+                      n.checklist = checked
+                        ? [...n.checklist, check]
+                        : n.checklist.filter((c) => c !== check);
+                    });
+                  }}
+                />{check}</label
+              >{/each}
+          </details>
         {/if}
         {#if narrative?.original || (narrative?.final !== null && narrative?.final !== undefined)}
           <hr />
@@ -344,7 +464,7 @@
     {#key chain.id}<details class="ai-help">
         <summary>AI help</summary>
         <p class="small muted">
-          Your writing comes first. Ask for an edit or, if you prefer, request a generated starting
+          Ask AI to edit your draft or, if you prefer, request an AI-generated
           draft. You review every proposal before applying it.
         </p>
         <label class="inline-label"
@@ -366,25 +486,21 @@
             oninput={(e) => (instructions[chain.id] = e.currentTarget.value)}></textarea></label
         >
         <div class="toolbar-group spaced">
-          <button
-            class="primary"
+          <ActionButton
+            kind="generate"
+            label="Ask AI to edit this draft"
             disabled={busy ||
               !narrative?.working.trim() ||
               chain.approvedRevision !== chain.revision}
             onclick={() => {
               editorOpen = false;
               request('narrative_edit', chain.id, instructions[chain.id]);
-            }}>Ask AI to edit this draft</button
-          >
-          <button
-            class="secondary"
-            disabled={busy || chain.approvedRevision !== chain.revision}
-            onclick={() => {
-              editorOpen = false;
-              request('narrative', chain.id);
-            }}>Generate a draft with AI</button
-          >
+            }}
+          />
         </div>
+        <p class="small muted">
+          For a new starting draft, use Generate draft in the page action bar.
+        </p>
       </details>{/key}
     {#if proposals.length}<section class="narrative-proposals" aria-label="AI proposals">
         <h2 id={proposalsHeadingId} bind:this={proposalsHeading} tabindex="-1">
@@ -450,28 +566,38 @@
         {/each}
       </section>{/if}
     <div class="dialog-actions">
-      <span class="small muted">Your writing is saved as you type.</span><button
-        class="primary"
-        onclick={() => (editorOpen = false)}>Done</button
-      >
+      <span class="small muted">Your writing is saved as you type.</span>
+      {#if chains.length > 1}<button
+          class="secondary"
+          onclick={() =>
+            openScenario(
+              chains[(chains.findIndex((c) => c.id === chain.id) + 1) % chains.length].id
+            )}>Next scenario <ArrowRight size={15} /></button
+        >{/if}<button class="primary" onclick={() => (editorOpen = false)}>Done</button>
     </div>
   </Modal>
 {/if}
 <footer class="stage-footer">
   <div>
-    <strong>{review ? 'Ready when you are.' : 'Your scenarios, in your own words.'}</strong><small
-      >{review
-        ? 'Completion records a final snapshot. It does not run an AI critique.'
-        : 'Write a draft for each selected scenario to continue. AI help is optional.'}</small
+    <strong
+      >{missingDrafts.length
+        ? `${missingDrafts.length} ${missingDrafts.length === 1 ? 'story still needs' : 'stories still need'} a draft`
+        : allFinal
+          ? 'Your final set is ready to share'
+          : 'Ready to save your final set?'}</strong
+    >
+    <small
+      >{missingDrafts.length
+        ? 'Write a draft for every selected scenario. AI help is optional.'
+        : allFinal
+          ? 'You can export now, or keep refining your stories.'
+          : 'Give your stories a final read, then save a snapshot of the whole set. The checklist is optional.'}</small
     >
   </div>
-  {#if !review}<button
+  {#if missingDrafts.length}<button
       class="primary"
-      disabled={!allWritten}
-      onclick={() => {
-        change(prepareNarrativeReview);
-        next();
-      }}>Review & complete <ArrowRight size={16} /></button
+      onclick={() => openScenario(missingDrafts[0].id)}
+      >Write the next missing draft <ArrowRight size={16} /></button
     >
   {:else if allFinal}<button class="primary" onclick={next}
       >Export scenarios <ArrowRight size={16} /></button
@@ -479,46 +605,55 @@
   {:else}<button
       class="primary"
       disabled={!allWritten}
-      onclick={() =>
+      onclick={() => {
         change((p) => {
-          if (!allNarrativesWritten(p)) return;
-          prepareNarrativeReview(p);
-          p.narratives
-            .filter((n) => chains.some((c) => c.id === n.chainId))
-            .forEach((n) => {
-              n.final = n.working;
-              n.finalAt = now();
-            });
-          complete(p, 7);
-        }, 'Final narrative snapshots saved. You can keep editing.')}
-      ><Check size={16} /> Complete scenario set</button
-    >
-  {/if}
+          completeScenarioSet(p);
+        }, 'Final narrative snapshots saved. You can keep editing.');
+        next();
+      }}><Check size={16} /> Save final set & export</button
+    >{/if}
 </footer>
 <div class="sr-only" role="status" aria-atomic="true">
   {#if attentionTarget}{attentionTitle}. For {attentionTarget.title}. Review the proposals in the
     scenario editor.{/if}
 </div>
-{#if attentionTarget && !editorOpen}
-  <div aria-hidden="true" style:height={`${noticeHeight + 24}px`}></div>
-  <aside
-    class="proposal-attention"
-    aria-label="AI proposals awaiting review"
-    bind:clientHeight={noticeHeight}
-  >
-    <MessageSquareText size={22} aria-hidden="true" />
-    <div class="proposal-attention-copy">
-      <strong>{attentionTitle}</strong>
-      <p>
-        For {attentionTarget.title}. Open the editor to review the {pendingAI.length === 1
-          ? 'proposal'
-          : 'proposals'}
-        before deciding what to keep.
-      </p>
-    </div>
-    <button class="primary" aria-haspopup="dialog" onclick={reviewProposals}>
-      Review AI {pendingAI.length === 1 ? 'proposal' : 'proposals'}
-      <ArrowRight size={16} aria-hidden="true" />
-    </button>
-  </aside>
-{/if}
+
+<style>
+  .scenario-choices {
+    display: grid;
+    gap: 12px;
+    list-style: none;
+    margin: 20px 0 0;
+    padding: 0;
+  }
+  .scenario-choices :global(.stage-action) {
+    width: 100%;
+    justify-content: flex-start;
+    text-align: left;
+  }
+  .scenario-choices p {
+    margin: 6px 0 0;
+  }
+  .review-checklist summary {
+    cursor: pointer;
+    color: var(--cg-action);
+    font-weight: 700;
+  }
+  .review-checklist {
+    margin-bottom: 16px;
+  }
+  .scenario-preview {
+    margin: 12px 0;
+    font-size: 0.875rem;
+    font-weight: 400;
+    color: var(--cg-text-muted);
+    line-height: 1.7;
+    max-width: 60ch;
+  }
+  .proposal-attention {
+    position: static;
+    width: auto;
+    margin: 0 0 24px;
+    transform: none;
+  }
+</style>

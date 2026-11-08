@@ -7,10 +7,24 @@ export const stages = [
   'Select uncertainties',
   'Develop hypotheses',
   'Construct chains',
-  'Write scenarios',
-  'Review & complete',
+  'Write & review scenarios',
+  'Write & review scenarios',
   'Export'
 ] as const;
+// Keep persisted stage IDs and historical run records compatible with version 1.0.
+// Stage 7 is the former review stage; it now opens the unified writing workspace.
+export const canonicalStage = (stage: number) => (stage === 7 ? 6 : stage);
+export const workflowStages = [0, 1, 2, 3, 4, 5, 6, 8].map((id) => ({ id, title: stages[id] }));
+export const coreStageCount = workflowStages.length - 1;
+export const stageIsComplete = (p: Project, stage: number) =>
+  p.completed.includes(canonicalStage(stage) === 6 ? 7 : stage);
+export const stageNeedsReview = (p: Project, stage: number) =>
+  canonicalStage(stage) === 6
+    ? p.stale.includes(6) || p.stale.includes(7)
+    : p.stale.includes(stage);
+export const completedStageCount = (p: Project) =>
+  workflowStages.filter(({ id }) => id !== 8 && stageIsComplete(p, id) && !stageNeedsReview(p, id))
+    .length;
 const origin = z.object({ modelId: z.string(), text: z.string(), runId: z.string() });
 const score = z.number().min(1).max(5);
 const rating = z.object({
@@ -404,12 +418,11 @@ export function canSpend(p: Project, estimate: number) {
   return p.budget === null || spent(p) + reserved(p) + uncertainSpend(p) + estimate <= p.budget;
 }
 export function prerequisite(p: Project, stage: number): string | null {
+  stage = canonicalStage(stage);
   if (stage === 0 || stage === 8) return null;
-  if (stage === 7 && !allNarrativesWritten(p))
-    return 'Write a narrative for every selected scenario in Write scenarios.';
   // Reopening existing prose must remain possible after upstream decisions change.
   if (
-    (stage === 6 || stage === 7) &&
+    stage === 6 &&
     p.narratives.some(
       (n) =>
         p.chains.some((c) => c.selected && c.id === n.chainId) &&
@@ -433,6 +446,8 @@ export function prerequisite(p: Project, stage: number): string | null {
 }
 export function parseProject(value: unknown): Project {
   const p = projectSchema.parse(value);
+  p.stage = canonicalStage(p.stage);
+  if (!p.overrides['6'] && p.overrides['7']) p.overrides['6'] = [...p.overrides['7']];
   if (
     new Set(p.drivers.map((d) => d.id)).size !== p.drivers.length ||
     new Set(p.hypotheses.map((h) => h.id)).size !== p.hypotheses.length ||

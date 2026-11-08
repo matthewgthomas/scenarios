@@ -1,3 +1,4 @@
+import { showModeLabels } from '$lib/config/presentation';
 import {
   parseProject,
   uncertainties,
@@ -34,7 +35,7 @@ export function analyticalJSON(p: Project) {
   );
 }
 export function markdown(p: Project, annotations = false, full = false): string {
-  let text = `# ${p.title}\n\n${p.question}\n\nTime horizon: ${p.horizon}\n\nQuick Mode — hypothetical futures, not forecasts.${p.example ? ' This is an authored example exercise.' : ''}\n\n`;
+  let text = `# ${p.title}\n\n${p.question}\n\nTime horizon: ${p.horizon}\n\n${showModeLabels ? 'Quick Mode — hypothetical' : 'Hypothetical'} futures, not forecasts.${p.example ? ' This is an authored example exercise.' : ''}\n\n`;
   for (const c of p.chains.filter((c) => c.selected)) {
     const n = p.narratives.find((n) => n.chainId === c.id);
     text += `## ${c.title}${c.kind === 'wildcard' ? ' (Wildcard)' : ''}\n\n`;
@@ -184,7 +185,11 @@ export async function exportPDF(p: Project, annotations: boolean, full: boolean)
     doc.setPage(page);
     doc.setFontSize(8);
     doc.setTextColor(84, 107, 96);
-    doc.text(`Scenario Designer | Quick Mode | ${page} / ${pages}`, 23, 287);
+    doc.text(
+      `Scenario Designer${showModeLabels ? ' | Quick Mode' : ''} | ${page} / ${pages}`,
+      23,
+      287
+    );
   }
   download(
     doc.output('arraybuffer'),

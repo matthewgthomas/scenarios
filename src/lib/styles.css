@@ -47,6 +47,11 @@ textarea,
 summary {
   scroll-margin: 80px 0 30px;
 }
+.workspace-content :is(button, a, input, select, textarea, summary):not(dialog *) {
+  scroll-margin-top: calc(
+    var(--workspace-topbar-height, 72px) + var(--stage-actions-height, 0px) + 16px
+  );
+}
 :focus-visible {
   outline: 3px solid var(--cg-focus);
   outline-offset: 3px;
@@ -917,6 +922,100 @@ main {
   gap: 10px;
   flex-wrap: wrap;
 }
+.action-scope {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  font-size: 0.8125rem;
+  color: var(--cg-text-muted);
+}
+.action-scope select {
+  width: 230px;
+  max-width: 100%;
+  font-weight: 400;
+}
+.stage-action-context .search-field {
+  max-width: 100%;
+}
+.stage-action-context .search-field input {
+  width: 210px;
+  max-width: 100%;
+}
+.workflow-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 20px;
+}
+.workflow-filter > button {
+  padding: 8px 12px;
+  border: 1px solid var(--cg-border);
+  background: var(--cg-paper);
+  min-height: 38px;
+  font-size: 0.8125rem;
+}
+.workflow-filter > button.active {
+  background: var(--cg-selection);
+  border-color: var(--cg-selection-border);
+  color: var(--cg-action);
+  font-weight: 700;
+}
+.workflow-filter > span {
+  margin-left: auto;
+}
+.workflow-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  color: var(--cg-action);
+  font-weight: 700;
+  padding: 6px 0;
+  font-size: 0.8125rem;
+}
+.workflow-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.workflow-link svg {
+  flex-shrink: 0;
+}
+.workflow-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--cg-action);
+  background: var(--cg-selection);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.8125rem;
+}
+.workflow-empty {
+  padding: 30px 20px;
+  text-align: center;
+  border: 1px dashed var(--cg-control-border);
+  border-radius: 8px;
+  margin: 16px 0;
+}
+.workflow-empty p {
+  margin-inline: auto;
+  color: var(--cg-text-muted);
+}
+.export-contents {
+  background: var(--cg-workspace);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  font-size: 0.875rem;
+}
+.export-contents ul {
+  color: var(--cg-text-muted);
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
 .divider {
   height: 18px;
   border-left: 1px solid var(--cg-border);
@@ -958,6 +1057,7 @@ main {
   margin-bottom: 0;
 }
 .table-scroll {
+  position: relative;
   overflow-x: auto;
   max-width: 100%;
 }
@@ -1211,6 +1311,9 @@ table {
   color: var(--cg-model-c);
 }
 .stage-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 12;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1220,6 +1323,7 @@ table {
   border-top: 1px solid var(--cg-border);
   margin: 40px calc(-1 * var(--cg-work-padding)) 0;
   padding: 20px var(--cg-work-padding);
+  box-shadow: 0 -5px 20px light-dark(rgb(23 41 30 / 4%), rgb(0 0 0 / 12%));
 }
 .stage-footer strong {
   display: block;
@@ -1376,6 +1480,9 @@ table {
 .task-results h2 {
   font-size: 1rem;
 }
+.merge-suggestions > summary h2 {
+  display: inline;
+}
 .merge-suggestion {
   padding-top: 16px;
   margin-top: 16px;
@@ -1455,6 +1562,9 @@ table {
   }
 }
 .selection-bar {
+  position: sticky;
+  top: calc(var(--workspace-topbar-height, 72px) + var(--stage-actions-height, 0px) + 8px);
+  z-index: 10;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1481,8 +1591,10 @@ table {
 }
 .matrix-panel {
   position: sticky;
-  top: calc(var(--workspace-topbar-height, 72px) + 16px);
-  max-height: calc(100dvh - var(--workspace-topbar-height, 72px) - 32px);
+  top: calc(var(--workspace-topbar-height, 72px) + var(--stage-actions-height, 0px) + 16px);
+  max-height: calc(
+    100dvh - var(--workspace-topbar-height, 72px) - var(--stage-actions-height, 0px) - 32px
+  );
   overflow-y: auto;
   background: var(--cg-paper);
   padding: 20px;
@@ -2344,6 +2456,35 @@ dialog::backdrop {
   flex: 1;
   min-width: 0;
 }
+.project-open .exercise-progress {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 0.75rem;
+}
+.exercise-progress progress {
+  appearance: none;
+  width: 110px;
+  height: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--cg-selection);
+  accent-color: var(--cg-action);
+}
+.exercise-progress progress::-webkit-progress-bar {
+  background: var(--cg-selection);
+  border-radius: 6px;
+}
+.exercise-progress progress::-webkit-progress-value {
+  background: var(--cg-action);
+  border-radius: 6px;
+}
+.exercise-progress progress::-moz-progress-bar {
+  background: var(--cg-action);
+  border-radius: 6px;
+}
 .project-icon {
   display: inline-flex;
   padding: 12px;
@@ -2709,6 +2850,7 @@ dialog::backdrop {
     padding: 18px;
   }
   .stage-footer {
+    position: static;
     margin-top: 30px;
   }
   .table-scroll {
@@ -2725,6 +2867,11 @@ dialog::backdrop {
   }
   .project-icon {
     padding: 9px;
+  }
+}
+@media (max-height: 600px) {
+  .stage-footer {
+    position: static;
   }
 }
 @media (prefers-reduced-motion: reduce) {

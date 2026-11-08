@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { showModeLabels } from '$lib/config/presentation';
   import '@fontsource-variable/nunito-sans';
   import '../../design/tokens.css';
   import '$lib/styles.css';
@@ -43,7 +44,12 @@
     uncertainSpend,
     prerequisite,
     modelName,
-    prepareNarrativeReview,
+    workflowStages,
+    canonicalStage,
+    stageIsComplete,
+    stageNeedsReview,
+    completedStageCount,
+    coreStageCount,
     type Project,
     type Change,
     type Run
@@ -77,6 +83,7 @@
   import Exports from '$lib/components/Exports.svelte';
   import Modal from '$lib/components/Modal.svelte';
   import ModelActivity from '$lib/components/ModelActivity.svelte';
+  import { prerequisiteStage } from '$lib/domain/workflow';
 
   let project = $state<Project | null>(null);
   let projects = $state<Project[]>([]);
@@ -120,12 +127,13 @@
       .filter((m) => `${m.name} ${m.id}`.toLowerCase().includes(modelSearch.toLowerCase()))
       .slice(0, 40)
   );
-  const stageRuns = $derived(p?.runs.filter((r) => r.stage === p.stage) ?? []);
+  const stageRuns = $derived(
+    p?.runs.filter((r) => canonicalStage(r.stage) === canonicalStage(p.stage)) ?? []
+  );
   const latestOperationRuns = $derived(
     stageRuns.filter((r) => r.operationId === stageRuns.at(-1)?.operationId)
   );
-  // Review remains editable if someone clears a draft after entering it.
-  const blocked = $derived(p ? prerequisite(p, p.stage === 7 ? 6 : p.stage) : null);
+  const blocked = $derived(p ? prerequisite(p, p.stage) : null);
   const paidModels = $derived(paidContributors.filter((c) => c.included).map((c) => c.modelId));
   const paidPlan = $derived(
     p && dialog === 'paid'
@@ -133,17 +141,6 @@
       : null
   );
   const paidEstimate = $derived(paidPlan?.estimatedTotal ?? null);
-  const iconSet = [
-    Settings2,
-    Sprout,
-    Layers,
-    GitBranch,
-    Layers,
-    GitBranch,
-    BookOpen,
-    Check,
-    Download
-  ];
 
   async function persist(snapshot: Project) {
     saveQueue = saveQueue
@@ -245,16 +242,9 @@
     error = '';
   }
   function navigate(stage: number) {
-    if (p && stage === 7) {
-      const reason = prerequisite(p, stage);
-      if (reason) {
-        error = reason;
-        return;
-      }
-    }
+    stage = canonicalStage(stage);
     updateProject(
       (p) => {
-        if (stage === 7) prepareNarrativeReview(p);
         p.stage = stage;
       },
       undefined,
@@ -435,7 +425,7 @@
     >{p ? `${p.title} · Scenario Designer` : 'Scenario Designer — imagine futures together'}</title
   ><meta
     name="description"
-    content="An analyst-led workbench for exploring humanitarian futures with independent AI perspectives. Quick Mode, local projects, and decisions that stay yours."
+    content={`An analyst-led workbench for exploring humanitarian futures with independent AI perspectives. ${showModeLabels ? 'Quick Mode, local projects, and decisions that stay yours.' : 'Local projects and decisions that stay yours.'}`}
   /></svelte:head
 >
 <a class="skip-link" href="#main">Skip to workspace</a>
@@ -463,15 +453,15 @@
         ><strong>{p.title}</strong><span>{p.horizon || 'Set your time horizon'}</span></button
       >
       <nav aria-label="Workflow stages">
-        {#each stages as stage, i}{@const Icon = iconSet[i]}<button
+        {#each workflowStages as { id: i, title: stage }}<button
             class:current={p.stage === i}
-            class:stage-completed={p.completed.includes(i)}
+            class:stage-completed={stageIsComplete(p, i)}
             aria-current={p.stage === i ? 'step' : undefined}
             onclick={() => navigate(i)}
             ><span class="stage-number"
-              >{p.stale.includes(i)
+              >{stageNeedsReview(p, i)
                 ? '◒'
-                : p.completed.includes(i)
+                : stageIsComplete(p, i)
                   ? '✓'
                   : i === 0
                     ? '◇'
@@ -480,9 +470,9 @@
                       : i}</span
             ><span
               >{stage}<small
-                >{p.stale.includes(i)
+                >{stageNeedsReview(p, i)
                   ? 'Review suggested'
-                  : p.completed.includes(i)
+                  : stageIsComplete(p, i)
                     ? 'Complete'
                     : p.stage === i
                       ? 'Working'
@@ -526,11 +516,12 @@
   <div class="workspace" style:--workspace-topbar-height={`${topbarHeight}px`}>
     <header class="topbar" bind:offsetHeight={topbarHeight}>
       <div class="topbar-context">
-        {#if p}<button class="title-button" onclick={() => navigate(0)}>{p.title}</button><span
-            class="mode-badge">Quick mode</span
-          >{#if p.example}<span class="example-label">Example</span>{/if}{:else}<span
-            >Your exercises</span
-          ><span class="mode-badge">Quick mode</span>{/if}
+        {#if p}<button class="title-button" onclick={() => navigate(0)}>{p.title}</button
+          >{#if showModeLabels}<span class="mode-badge">Quick mode</span>{/if}{#if p.example}<span
+              class="example-label">Example</span
+            >{/if}{:else}<span>Your exercises</span>{#if showModeLabels}<span class="mode-badge"
+              >Quick mode</span
+            >{/if}{/if}
       </div>
       <div class="topbar-tools">
         {#if p}<span class:error-text={saveState === 'Changes not saved'} class="save-status"
@@ -606,7 +597,7 @@
                 model results.</span
               >
             </div>{/if}
-          {#if p.stale.includes(p.stage)}<div class="notice review">
+          {#if stageNeedsReview(p, p.stage)}<div class="notice review">
               <AlertTriangle size={18} /><span
                 >Review suggested after an upstream change. Your decisions and edits are preserved.</span
               >
@@ -615,8 +606,8 @@
               <GitBranch size={34} />
               <h1>{stages[p.stage]}</h1>
               <p>{blocked}</p>
-              <button class="primary" onclick={() => navigate(Math.max(0, p.stage - 1))}
-                >Go to previous stage <ArrowRight size={16} /></button
+              <button class="primary" onclick={() => navigate(prerequisiteStage(p, p.stage))}
+                >Go to {stages[prerequisiteStage(p, p.stage)]} <ArrowRight size={16} /></button
               >
             </div>
           {:else}{#key `${p.id}:${p.stage}`}
@@ -637,7 +628,7 @@
               {:else if p.stage === 4}<Hypotheses
                   {p}
                   {change}
-                  request={(task) => request(task ?? 'hypotheses')}
+                  request={(task, ids) => request(task ?? 'hypotheses', ids)}
                   next={() => navigate(5)}
                 />
               {:else if p.stage === 5}<Chains
@@ -649,13 +640,12 @@
               {:else if p.stage === 6 || p.stage === 7}<Writing
                   {p}
                   {change}
-                  review={p.stage === 7}
                   {busy}
                   request={(task, id, instructions) =>
                     request(task, [id], undefined, undefined, { instructions })}
-                  next={() => navigate(p.stage + 1)}
+                  next={() => navigate(8)}
                 />
-              {:else}<Exports {p} />{/if}
+              {:else}<Exports {p} {navigate} />{/if}
             {/key}{/if}
           {#if stageRuns.length}<section class="run-list" aria-label="Model operations">
               <div class="section-line">
@@ -734,14 +724,14 @@
           <section class="home-hero">
             <div class="home-hero-copy">
               <div class="home-symbol"><GitBranch size={34} strokeWidth={1.4} /></div>
-              <h1>Make room for<br />different futures.</h1>
+              <h1>A workspace for<br />possible futures.</h1>
               <p>
-                Explore how change might unfold. A scenario design process controlled by you and
-                augmented by AI.
+                Explore how change might unfold through a scenario design process controlled by you
+                and augmented by AI.
               </p>
               <div class="toolbar-group">
                 <button class="primary large" onclick={() => openProject(newProject())}
-                  ><Plus size={18} /> New exercise</button
+                  ><Plus size={18} /> Design a new set of scenarios</button
                 ><button class="text-button" onclick={() => openProject(exampleProject())}
                   >Explore an example <ArrowRight size={17} /></button
                 >
@@ -790,13 +780,21 @@
                             ? ' · Example'
                             : ''}</span
                         ><small
-                          >{stages[saved.stage]} · saved {new Date(
+                          >Continue with {stages[saved.stage]} · saved {new Date(
                             saved.updatedAt
                           ).toLocaleDateString(undefined, {
                             day: 'numeric',
                             month: 'short',
                             year: 'numeric'
                           })}</small
+                        ><span class="exercise-progress"
+                          ><progress
+                            max={coreStageCount}
+                            value={completedStageCount(saved)}
+                            aria-label={`${saved.title} completed stages`}
+                          ></progress><span
+                            >{completedStageCount(saved)} of {coreStageCount} stages complete</span
+                          ></span
                         ></span
                       ><ArrowRight size={19} /></button
                     ><button
@@ -816,7 +814,8 @@
               </div>{/if}
           </section>
           <div class="home-footnote">
-            <span><Zap size={17} /> Quick Mode · no external research</span>
+            {#if showModeLabels}<span><Zap size={17} /> Quick Mode · no external research</span
+              >{/if}
             <button class="text-button" onclick={() => (dialog = 'help')}
               >How it works <ArrowUpRight size={15} /></button
             >
@@ -837,7 +836,7 @@
       <section>
         <h3>Connect OpenRouter</h3>
         <p class="small muted">
-          Your key stays in memory for this page session. It is never saved with your project.
+          Your key stays in memory for this page session. It is never saved with your project, so you might need to re-enter it here if you reload the page.
         </p>
         <label
           >API key<input
@@ -920,15 +919,16 @@
         </p>
       </section>
       <section>
-        <h3>Independent model ensemble</h3>
+        <h3>Choose AI models</h3>
         <p class="small muted">
-          Use one or more models. Three models from different developers are a useful starting
+          Choose one or more models. Three models from different developers are a useful starting
           point. Exact identifiers and current catalogue prices are shown below.
         </p>
         <label
           >Model scope<select bind:value={modelScope}
             ><option value="default">Whole exercise</option
-            >{#each stages.slice(1, 8) as name, i}<option value={String(i + 1)}>{name}</option
+            >{#each workflowStages.filter((s) => s.id > 0 && s.id < 8) as { id, title }}<option
+                value={String(id)}>{title}</option
               >{/each}</select
           ></label
         >{#if modelScope !== 'default'}<button
@@ -998,10 +998,10 @@
           : paidTask === 'narrative'
             ? 'Generate a draft with AI'
             : paidTask === 'consolidate'
-              ? 'Suggest overlapping contributions'
+              ? 'Spot overlapping contributions'
               : `Generate ${paidTask === 'ratings' ? 'independent scores' : paidTask}`}
     close={() => (dialog = '')}
-    ><p>Review the models and estimate before sending this analysis to OpenRouter.</p>
+    ><p>Review the models and estimated cost before sending this analysis to OpenRouter.</p>
     {#if paidTask === 'narrative_edit'}<p class="small">
         <strong>Editing request:</strong>
         {paidNarrativeOptions?.instructions?.trim() ||

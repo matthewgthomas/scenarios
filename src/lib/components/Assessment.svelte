@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     ArrowRight,
+    ArrowLeft,
     ArrowUp,
     ArrowDown,
     ArrowUpDown,
@@ -10,6 +11,8 @@
     CircleHelp
   } from '@lucide/svelte';
   import Modal from './Modal.svelte';
+  import StageGuide from './StageGuide.svelte';
+  import StageActions from './StageActions.svelte';
   import ScoreStrip from './ScoreStrip.svelte';
   import ModelScoreComparison from './ModelScoreComparison.svelte';
   import AssessmentResults from './AssessmentResults.svelte';
@@ -49,11 +52,25 @@
   let tableSort = $state<TableSortKey>('disagreement');
   let tableDirection = $state<'ascending' | 'descending'>('descending');
   let error = $state('');
+  let attentionOnly = $state(false);
+  let missingOnly = $state(false);
   let impact = $state(3);
   let uncertainty = $state(3);
+  let assessmentOrder = $state<string[]>([]);
+  let scoreDrafts = $state<Record<string, { impact: number; uncertainty: number }>>({});
   const drivers = $derived(activeDrivers(p));
+  const hasModelScores = $derived(
+    drivers.some((d) => d.ratings.some((r) => r.driverRevision === d.revision))
+  );
+  const pending = $derived(drivers.filter((d) => d.decision?.revision !== d.revision));
+  const missing = $derived(
+    pending.filter((d) => coordinates(d).impact === null || coordinates(d).uncertainty === null)
+  );
+  const visibleDrivers = $derived(
+    !selection && missingOnly ? missing : attentionOnly && !selection ? pending : drivers
+  );
   const sorted = $derived(
-    [...drivers].sort((a, b) =>
+    [...visibleDrivers].sort((a, b) =>
       sort === 'impact'
         ? (coordinates(b).impact ?? -1) - (coordinates(a).impact ?? -1)
         : sort === 'uncertainty'
@@ -64,6 +81,8 @@
     )
   );
   const selected = $derived(drivers.find((d) => d.id === selectedId));
+  const assessmentIds = $derived(assessmentOrder.filter((id) => drivers.some((d) => d.id === id)));
+  const assessmentIndex = $derived(assessmentIds.indexOf(selectedId));
   const expectedModels = $derived(p.overrides['2'] ?? p.models);
   const comparisonModels = $derived(p.example ? comparisonModelIds([], drivers) : expectedModels);
   const modelIds = $derived(comparisonModelIds(comparisonModels, drivers));
@@ -75,7 +94,9 @@
     { key: 'title', label: 'Driver' },
     { key: 'impact', label: 'Humanitarian impact' },
     { key: 'uncertainty', label: 'Uncertainty' },
-    ...(!selection ? [{ key: 'disagreement' as const, label: 'AI score comparison' }] : []),
+    ...(!selection && hasModelScores
+      ? [{ key: 'disagreement' as const, label: 'AI score comparison' }]
+      : []),
     { key: 'review', label: 'Review state' }
   ]);
   function reviewState(d: Driver) {
@@ -102,7 +123,7 @@
     }
   }
   const tableDrivers = $derived(
-    [...drivers].sort((a, b) => {
+    [...visibleDrivers].sort((a, b) => {
       const left = tableValue(a);
       const right = tableValue(b);
       if (left === null || right === null) return left === right ? 0 : left === null ? 1 : -1;
@@ -125,15 +146,6 @@
     tableSort = key;
   }
   const selectedCount = $derived(drivers.filter((d) => d.selected).length);
-  const combinations = $derived(
-    drivers
-      .filter((d) => d.selected)
-      .reduce(
-        (n, d) =>
-          n * Math.max(2, p.hypotheses.filter((h) => h.driverId === d.id && !h.archived).length),
-        1
-      )
-  );
   const groups = $derived(
     Object.values(
       drivers.reduce<Record<string, typeof drivers>>((all, d) => {
@@ -148,11 +160,18 @@
     groups.find((group) => group.some((d) => d.id === selectedId)) ?? []
   );
   function inspect(driverId: string) {
+    if (!editorOpen) {
+      assessmentOrder = (view === 'table' ? tableDrivers : sorted).map((d) => d.id);
+      scoreDrafts = {};
+    } else if (selectedId) {
+      scoreDrafts[selectedId] = { impact, uncertainty };
+    }
+    if (!assessmentOrder.includes(driverId)) assessmentOrder.push(driverId);
     selectedId = driverId;
     editorOpen = true;
     const c = coordinates(drivers.find((d) => d.id === driverId)!);
-    impact = c.impact ?? 3;
-    uncertainty = c.uncertainty ?? 3;
+    impact = scoreDrafts[driverId]?.impact ?? c.impact ?? 3;
+    uncertainty = scoreDrafts[driverId]?.uncertainty ?? c.uncertainty ?? 3;
   }
   function inspectGroup(group: typeof drivers) {
     const current = group.findIndex((d) => d.id === selectedId);
@@ -180,7 +199,7 @@
     ) {
       error =
         'Some drivers have no scores. Run the models, retry missing work, or enter an explicit analyst score for each missing driver.';
-      return;
+      return false;
     }
     change((p) => {
       activeDrivers(p).forEach((d) => {
@@ -198,6 +217,7 @@
       complete(p, 2);
     }, 'Remaining provisional medians explicitly accepted.');
     error = '';
+    return true;
   }
 </script>
 
@@ -205,13 +225,13 @@
   <div>
     <h1>
       {selection
-        ? 'Which uncertainties change the story?'
+        ? 'Choose critical uncertainties.'
         : 'Assess potential impact and uncertainty.'}
     </h1>
     <p>
       {selection
-        ? 'Choose the drivers with meaningfully different futures. Four to six is a useful starting point.'
-        : 'Explore the differences in how AI models assess the potential humanitarian impact and uncertainty of each driver. Median scores are a starting point for your judgement.'}
+        ? 'Choose the high-impact, high-uncertainty drivers of change. Four to six is a useful starting point.'
+        : 'Explore the differences in how AI models assess the potential humanitarian impact and uncertainty of each driver, or score each driver yourself.'}
     </p>
   </div>
   <details class="scale-help">
@@ -234,27 +254,109 @@
     </div>
   </details>
 </div>
-{#if !p.example && drivers.some( (d) => expectedModels.some((m) => !d.ratings.some((r) => r.modelId === m && r.driverRevision === d.revision)) )}<p
+<StageGuide
+  title={selection
+    ? selectedCount
+      ? `${selectedCount} critical uncertainties selected`
+      : 'Choose the uncertainties to explore through your scenarios'
+    : `${drivers.length - pending.length} of ${drivers.length} assessments approved`}
+  description={selection
+    ? 'Select the drivers that could shape the future. Choose at least one; four to six is a useful guide. Checkboxes here choose what goes into your scenarios.'
+    : 'Give every driver an impact score and an uncertainty score from 1 to 5. Open a driver to enter your judgement, or review AI scores and accept their medians. AI scoring is optional.'}
+  ready={selection ? selectedCount > 0 : !pending.length}
+  helpTitle={selection ? 'How should I choose?' : 'What do these scores mean?'}
+>
+  {#snippet children()}
+    {#if !selection && missing.length}<span class="small review-text">Missing scores:</span
+      >{#each missing.slice(0, 5) as d}<button class="workflow-link" onclick={() => inspect(d.id)}
+          >{d.title}<ArrowRight size={13} /></button
+        >{/each}{#if missing.length > 5}<button
+          class="workflow-link"
+          onclick={() => {
+            attentionOnly = true;
+            missingOnly = true;
+          }}>See all {missing.length} missing assessments</button
+        >{/if}
+    {:else if selection}{#each drivers.filter((d) => d.selected) as d}<button
+          class="workflow-chip"
+          aria-label={`Remove ${d.title} from critical uncertainties`}
+          onclick={() => toggle(d.id)}>{d.title}<span aria-hidden="true">×</span></button
+        >{/each}{/if}
+  {/snippet}
+  {#snippet help()}<p>
+      {selection
+        ? 'Look for drivers with both high humanitarian impact and an uncertain direction. Keep a mix that creates meaningfully different stories. Selecting a driver keeps all its future alternatives available; you’ll develop those next.'
+        : 'Impact describes the scale of humanitarian consequences. Uncertainty describes how differently the driver might unfold, not how little you know about it. AI medians remain provisional until you approve them; missing model contributions do not prevent your own assessment.'}
+    </p>{/snippet}
+</StageGuide>
+{#if !selection}<StageActions
+    generate={{ label: 'Generate scores', onclick: request }}
+    add={{
+      label: 'Enter scores',
+      disabled: !drivers.length,
+      onclick: () => inspect((missing[0] ?? pending[0] ?? drivers[0]).id)
+    }}
+  >
+    {#snippet context()}<div class="segmented" aria-label="Assessment view">
+        <button
+          class:active={view === 'plot'}
+          aria-pressed={view === 'plot'}
+          onclick={() => (view = 'plot')}><ChartScatter size={16} /> Matrix</button
+        ><button
+          class:active={view === 'table'}
+          aria-pressed={view === 'table'}
+          onclick={() => (view = 'table')}><List size={16} /> Table</button
+        >
+      </div>{/snippet}
+  </StageActions>{:else}<div class="toolbar">
+    <div class="segmented" aria-label="Assessment view">
+      <button
+        class:active={view === 'plot'}
+        aria-pressed={view === 'plot'}
+        onclick={() => (view = 'plot')}><ChartScatter size={16} /> Matrix</button
+      ><button
+        class:active={view === 'table'}
+        aria-pressed={view === 'table'}
+        onclick={() => (view = 'table')}><List size={16} /> Table</button
+      >
+    </div>
+    <span class="badge">{selectedCount} selected for your scenarios</span>
+  </div>{/if}
+{#if !p.example && hasModelScores && pending.length && drivers.some( (d) => expectedModels.some((m) => !d.ratings.some((r) => r.modelId === m && r.driverRevision === d.revision)) )}<p
     class="notice review"
   >
     Some drivers are missing AI-generated impact/uncertainty scores from one or more models in your
     configured ensemble. You can continue with available scores, run additional models, or add your
     own scores.
   </p>{/if}
-<div class="toolbar">
-  <div class="segmented">
-    <button class:active={view === 'plot'} onclick={() => (view = 'plot')}
-      ><ChartScatter size={16} /> Matrix</button
-    ><button class:active={view === 'table'} onclick={() => (view = 'table')}
-      ><List size={16} /> Table</button
-    >
-  </div>
-  {#if !selection}<button class="primary" onclick={request}
-      >Generate impact/uncertainty scores</button
-    >{:else}<span class="badge"
-      >{selectedCount} selected · at least {combinations.toLocaleString()} combinations</span
-    >{/if}
-</div>
+{#if !selection}<div class="workflow-filter">
+    <button
+      class:active={!attentionOnly}
+      aria-pressed={!attentionOnly}
+      onclick={() => {
+        attentionOnly = false;
+        missingOnly = false;
+      }}>All drivers ({drivers.length})</button
+    ><button
+      class:active={attentionOnly && !missingOnly}
+      aria-pressed={attentionOnly && !missingOnly}
+      onclick={() => {
+        attentionOnly = true;
+        missingOnly = false;
+      }}>Needs approval ({pending.length})</button
+    >{#if missing.length}<button
+        class:active={missingOnly}
+        aria-pressed={missingOnly}
+        onclick={() => {
+          attentionOnly = true;
+          missingOnly = true;
+        }}>Missing scores ({missing.length})</button
+      >{/if}{#if pending.length}<button
+        class="workflow-link"
+        onclick={() => inspect((missing[0] ?? pending[0]).id)}
+        >Review next driver <ArrowRight size={14} /></button
+      >{/if}
+  </div>{/if}
 {#if !selection}<AssessmentResults {p} expectedModels={comparisonModels} {inspect} />{/if}
 {#if view === 'plot'}
   <div class="assessment-layout">
@@ -348,23 +450,31 @@
     </section>
     <section class="review-queue">
       <div class="queue-header">
-        <h2>{selection ? 'Critical uncertainties' : 'Review by exception'}</h2>
+        <h2>
+          {selection
+            ? 'Critical uncertainties'
+            : hasModelScores
+              ? 'Review by exception'
+              : 'Your assessments'}
+        </h2>
         <label class="small"
           >Sort by<select bind:value={sort}
-            ><option value="disagreement">Score disagreement</option><option value="impact"
-              >Humanitarian impact</option
-            ><option value="uncertainty">Uncertainty</option><option value="unique"
-              >Unique contributions</option
-            ></select
+            ><option value="disagreement"
+              >{hasModelScores ? 'Score disagreement' : 'Original order'}</option
+            ><option value="impact">Humanitarian impact</option><option value="uncertainty"
+              >Uncertainty</option
+            ><option value="unique">Unique contributions</option></select
           ></label
         >
       </div>
       <p class="small muted">
         {selection
-          ? 'No minimum or maximum is enforced.'
-          : 'Larger score ranges appear first. This is a review aid, not a scientific threshold.'}
+          ? 'Choose at least one. Four to six is a guide, not a limit.'
+          : hasModelScores
+            ? 'Larger score ranges appear first. This is a review aid, not a scientific threshold.'
+            : 'Open a driver to enter or change your impact and uncertainty scores.'}
       </p>
-      {#if !selection}<p class="small muted score-strip-help">
+      {#if !selection && hasModelScores}<p class="small muted score-strip-help">
           Each strip shows the available AI score range on a 1–5 scale. The outlined diamond marks
           the AI median; ranges show differences in judgements.
         </p>{/if}
@@ -379,10 +489,10 @@
                 onchange={() => toggle(d.id)}
               />{/if}<button class="queue-button" onclick={() => inspect(d.id)}
               ><strong>{d.title}</strong><span class="small muted"
-                >{c.impact ?? '—'} impact / {c.uncertainty ?? '—'} uncertainty · {d.ratings.filter(
-                  (r) => r.driverRevision === d.revision
-                ).length} perspectives</span
-              >{#if !selection}<span class="queue-score-strips">
+                >{c.impact ?? '—'} impact / {c.uncertainty ?? '—'} uncertainty {#if hasModelScores}· {d.ratings.filter(
+                    (r) => r.driverRevision === d.revision
+                  ).length} perspectives{/if}</span
+              >{#if !selection && hasModelScores}<span class="queue-score-strips">
                   <ScoreStrip label="Humanitarian impact" scores={comparison.impact} />
                   <ScoreStrip label="Uncertainty" scores={comparison.uncertainty} />
                 </span><span class="small muted score-comparison-status"
@@ -392,9 +502,11 @@
                 >{/if}<span class="small"
                 >{d.decision?.revision === d.revision
                   ? '✓ Analyst-approved'
-                  : disagreement(d) >= (selection ? 2 : 1)
-                    ? '◒ Differing scores'
-                    : '○ Provisional median'}</span
+                  : c.impact === null || c.uncertainty === null
+                    ? 'Scores missing'
+                    : disagreement(d) >= (selection ? 2 : 1)
+                      ? '◒ Differing scores'
+                      : '○ Provisional median'}</span
               ></button
             >
           </div>{/each}
@@ -432,9 +544,8 @@
                   onchange={() => toggle(d.id)}
                 /></td
               >{/if}<th scope="row">{d.title}</th><td class="numeric">{c.impact ?? 'Missing'}</td
-            ><td class="numeric">{c.uncertainty ?? 'Missing'}</td>{#if !selection}<td
-                class="assessment-comparison-cell"
-              >
+            ><td class="numeric">{c.uncertainty ?? 'Missing'}</td
+            >{#if !selection && hasModelScores}<td class="assessment-comparison-cell">
                 <ScoreStrip label="Humanitarian impact" scores={comparison.impact} />
                 <ScoreStrip label="Uncertainty" scores={comparison.uncertainty} />
                 <p class="small muted">
@@ -448,6 +559,23 @@
           >{/each}</tbody
       >
     </table>
+  </div>{/if}
+{#if !selection && attentionOnly && !(missingOnly ? missing.length : pending.length)}<div
+    class="workflow-empty"
+  >
+    <h3>{missingOnly ? 'Every driver has scores.' : 'Every assessment is approved.'}</h3>
+    <p>
+      {pending.length
+        ? 'Review the remaining provisional scores before continuing.'
+        : 'You’re ready to choose the uncertainties to explore.'}
+    </p>
+    <button
+      class="secondary"
+      onclick={() => {
+        attentionOnly = false;
+        missingOnly = false;
+      }}>Show all assessments</button
+    >
   </div>{/if}
 {#if editorOpen && selected}<Modal
     title={`Assessment: ${selected.title}`}
@@ -536,10 +664,26 @@
             />
             Select as a critical uncertainty
           </label>{/if}
-        <p class="small muted">Changes are recorded as an explicit analyst decision.</p>
+        <p class="small muted">
+          Approve scores to save them as an explicit analyst decision. Unapproved edits are kept
+          while you move between drivers, until you close this dialog.
+        </p>
       </div>
     </section>
     <div class="dialog-actions">
+      <button
+        class="secondary"
+        disabled={assessmentIndex <= 0}
+        onclick={() => inspect(assessmentIds[assessmentIndex - 1])}
+        ><ArrowLeft size={16} /> Previous</button
+      >
+      <span class="small muted">Driver {assessmentIndex + 1} of {assessmentIds.length}</span>
+      <button
+        class="secondary"
+        disabled={assessmentIndex < 0 || assessmentIndex >= assessmentIds.length - 1}
+        onclick={() => inspect(assessmentIds[assessmentIndex + 1])}
+        >Next <ArrowRight size={16} /></button
+      >
       <button class="secondary" onclick={() => (editorOpen = false)}>Close</button>
     </div>
   </Modal>{/if}
@@ -554,24 +698,43 @@
     ><small
       >{selection
         ? 'More uncertainties increase the space to explore; choose what you can meaningfully compare.'
-        : 'Inspect any AI-generated scores before accepting the remaining medians.'}</small
+        : !pending.length
+          ? 'Next, choose the drivers whose different futures could change your story.'
+          : missing.length
+            ? `${missing.length} drivers still need scores. Open the next one to enter your judgement.`
+            : 'Review available AI scores before accepting the remaining medians.'}</small
     >
   </div>
   {#if selection}<button
       class="primary"
-      disabled={!selectedCount}
       onclick={() => {
+        if (!selectedCount) {
+          inspect(
+            [...drivers].sort(
+              (a, b) => (coordinates(b).impact ?? 0) - (coordinates(a).impact ?? 0)
+            )[0].id
+          );
+          return;
+        }
         change((p) => complete(p, 3), 'Critical uncertainty selection approved.');
         next();
-      }}>Approve selection <ArrowRight size={16} /></button
+      }}
+      >{selectedCount ? 'Confirm selection & develop hypotheses' : 'Choose an uncertainty'}
+      <ArrowRight size={16} /></button
     >{:else if drivers.every((d) => d.decision?.revision === d.revision)}<button
       class="primary"
       onclick={() => {
         change((p) => complete(p, 2));
         next();
-      }}>Select uncertainties <ArrowRight size={16} /></button
-    >{:else}<button class="primary" onclick={approveRemaining}
-      ><Check size={16} /> Accept remaining medians</button
+      }}>Select critical uncertainties <ArrowRight size={16} /></button
+    >{:else if missing.length}<button class="primary" onclick={() => inspect(missing[0].id)}
+      >Score the next missing driver <ArrowRight size={16} /></button
+    >
+  {:else}<button
+      class="primary"
+      onclick={() => {
+        if (approveRemaining()) next();
+      }}><Check size={16} /> Accept scores & choose critical uncertainties</button
     >{/if}
 </footer>
 

@@ -6,43 +6,43 @@
   let { p, change, kind }: { p: Project; change: Change; kind: 'driver' | 'hypothesis' } = $props();
   let error = $state('');
   const results = $derived(mergeResults(p, kind));
+  const showRunStatus = $derived(
+    results.runs.length > 0 && (!results.unavailable || results.state === 'running')
+  );
   const noun = $derived(kind === 'hypothesis' ? 'hypothesis' : 'driver');
 </script>
 
-{#if results.runs.length || results.pending.length || results.decisions.length}
-  <section class="merge-suggestions task-results" aria-label="Merge results">
-    <div role="status" aria-live="polite" aria-atomic="true">
-      <h2>
+{#if showRunStatus || results.pending.length || results.decisions.length}
+  <details class="merge-suggestions task-results" aria-label="Merge results" open>
+    <summary>
+      <h2 role="status" aria-live="polite" aria-atomic="true">
         {#if results.pending.length}
           {results.pending.length} merge {results.pending.length === 1
             ? 'suggestion'
             : 'suggestions'} ready for review
         {:else if results.state === 'running'}Reviewing possible merges…
-        {:else if results.unavailable}Request a fresh merge review
-        {:else if results.runs.length && results.state === 'complete' && !results.proposed}No merges
+        {:else if showRunStatus && results.state === 'complete' && !results.proposed}No merges
           suggested
         {:else if results.decisions.length}Merge decisions saved
         {:else}No merge suggestions received{/if}
       </h2>
-      {#if results.runs.length}
-        <p class="small muted">
-          {#if results.state === 'running'}The latest merge review is still running.
-          {:else if results.unavailable}Earlier suggestions are unavailable. Request a fresh merge
-            review to see and apply them.
-          {:else if results.state === 'complete'}
-            Latest review: {results.proposed
-              ? `${results.proposed} merge ${results.proposed === 1 ? 'suggestion' : 'suggestions'} proposed.`
-              : 'No merges suggested. Existing records are unchanged.'}
-          {:else if results.state === 'partial'}The latest review finished with some results
-            missing. Available suggestions are kept.
-          {:else if results.state === 'cancelled'}The latest review was cancelled. Earlier
-            suggestions are still available.
-          {:else if results.state === 'skipped'}The latest review was skipped. Earlier suggestions
-            are still available.
-          {:else}The latest review failed. Retry it in Model contributions below.{/if}
-        </p>
-      {/if}
-    </div>
+    </summary>
+    {#if showRunStatus}
+      <p class="small muted">
+        {#if results.state === 'running'}The latest merge review is still running.
+        {:else if results.state === 'complete'}
+          Latest review: {results.proposed
+            ? `${results.proposed} merge ${results.proposed === 1 ? 'suggestion' : 'suggestions'} proposed.`
+            : 'No merges suggested. Existing records are unchanged.'}
+        {:else if results.state === 'partial'}The latest review finished with some results missing.
+          Available suggestions are kept.
+        {:else if results.state === 'cancelled'}The latest review was cancelled. Earlier suggestions
+          are still available.
+        {:else if results.state === 'skipped'}The latest review was skipped. Earlier suggestions are
+          still available.
+        {:else}The latest review failed. Retry it in Model contributions below.{/if}
+      </p>
+    {/if}
     {#if results.pending.length}
       <p class="small">
         Review the proposed replacements below. Accept merge applies the changes; no records change
@@ -137,5 +137,5 @@
       </div>
     {/if}
     {#if error}<p class="notice error" role="alert">{error}</p>{/if}
-  </section>
+  </details>
 {/if}

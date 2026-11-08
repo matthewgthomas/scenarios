@@ -131,7 +131,7 @@ An analyst asks: “How might the UK's cost-of-living crisis evolve over the nex
 
 ## 5. End-to-end journey
 
-The seven core analytical stages, plus onboarding and completion, form the primary navigation. Stage-level results persist as structured objects.
+The six core analytical stages, plus setup and export, form the primary navigation. Writing, optional review and final approval share one stage. Stage-level results persist as structured objects.
 
 | Step | Analyst activity | AI/system responsibility | Exit / output |
 |---|---|---|---|
@@ -141,9 +141,8 @@ The seven core analytical stages, plus onboarding and completion, form the prima
 | 3. Select uncertainties | Choose critical drivers (suggested 4–6) | Show candidates/complexity feedback; **no relationship analysis required here** | Approved selection |
 | 4. Develop hypotheses | Review distinct futures for each selected driver | Independent generation; consolidation; recommend number per driver | Approved future-state hypotheses |
 | 5. Construct chains | Compare/edit/choose chains; request coherence check on demand after edits | Independent candidate construction; evaluate interactions/contradictions | Approved scenario chains |
-| 6. Write scenarios | Write narratives from approved chains; optionally request AI help | Autosave human drafts; return optional AI edits or starting drafts as proposals | Draft scenarios |
-| 7. Review & complete | Manually edit narratives; optional QA checklist; approve final set | Autosave, snapshots, evidence annotations | Completed exercise |
-| 8. Export/next steps | Download narratives/full record/JSON; consider next uses | Generate requested export; suggest follow-on analytical activities | Portable output |
+| 6. Write & review scenarios | Write and edit narratives from approved chains; optionally request AI help or use the QA checklist; approve the final set | Autosave drafts; return AI proposals for explicit acceptance; preserve original/working/final snapshots and annotations | Completed scenario set |
+| 7. Export/next steps | Download narratives/full record/JSON; consider next uses | Generate requested export; suggest follow-on analytical activities | Portable output |
 
 **Research Mode insertion:** After setup, independent source discovery → consolidation → prioritised review and approval, before driver assessment proceeds. Evidence may inform driver discovery as well. Later stages can propose narrow research questions, but **never launch follow-up research without analyst approval**. Results of follow-up research must identify potentially affected earlier decisions.
 
