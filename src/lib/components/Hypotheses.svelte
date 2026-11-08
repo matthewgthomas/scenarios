@@ -232,3 +232,11 @@
         }, 'Future-state hypotheses approved.')}><Check size={16} /> Approve future states</button
     >{/if}
 </footer>
+
+<style>
+  .selection-bar {
+    position: sticky;
+    top: var(--workspace-topbar-height, 72px);
+    z-index: 10;
+  }
+</style>
