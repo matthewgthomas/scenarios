@@ -23,7 +23,7 @@ The methodology is inspired by the product owner's published reflection, [*Human
 
 **Input:** An anticipatory analytical question, a time horizon and, optionally, a preliminary list of drivers. The analyst selects Quick or Research Mode, AI models and optional spending budget.
 
-**Output:** A user-defined set of narrative scenarios (three main scenarios by default, optional additional wildcards), alongside a retrievable analytical record and exports.
+**Output:** A user-selected set of one or more narrative scenarios, alongside a retrievable analytical record and exports.
 
 **Not the product's job:** Conducting humanitarian consequence assessments after scenarios are complete, deriving early-warning indicators, wind-tunnelling strategies, creating briefings or publishing polished decision-maker products. The completion screen may *suggest* these next steps.
 
@@ -59,9 +59,9 @@ The following decisions were explicitly made during requirements discovery. Reco
 | Scenario method | Multiple hypotheses / coherent hypothesis chains; not a 2×2 quadrant method |
 | Chains | AI candidate combinations + systematic coherence review; table and detail views |
 | Chain completeness | One hypothesis per uncertainty by default; explicit unresolved options permitted |
-| Rechecks | Coherence re-check after edits **only on explicit request** |
-| Scenario count | Analyst-selected; 3 main scenarios default; wildcards separately configurable (0 default) |
-| Wildcards | Diverse yet plausible; new drivers can be proposed, lightly assessed, and explicitly approved |
+| Chain review | Analyst reviews edits and reapproves; no separate AI coherence recheck |
+| Scenario count | Any selection of one or more chains; generation offers 3 candidates per model, or 1 through optional disruption exploration |
+| Disruption exploration | Optional; one surprising candidate per model, with additional drivers reviewed before approval |
 | Writing | Human-written first draft; optional whole-scenario AI editing or generated starting drafts on request |
 | Narrative format | Flowing analytical prose, flexible structure, roughly 400–600 words provisionally |
 | Revisions | Rich-text and Markdown editing; optional AI proposals require explicit application |
@@ -107,7 +107,7 @@ An analyst asks: “How might the UK's cost-of-living crisis evolve over the nex
 
 **Foundation:** onboarding; privacy notice; OpenRouter API key; model selection; mode selection; project list; autosave/import/export; spending control; stage navigation.
 
-**Analytical workflow:** model-independent driver generation; consolidation; model-independent impact and uncertainty scoring; matrix and review-by-exception; critical uncertainty selection; hypothesis generation; chain construction and coherence checks; scenario drafting; manual editing; advisory QA.
+**Analytical workflow:** model-independent driver generation; consolidation; model-independent impact and uncertainty scoring; matrix and review-by-exception; critical uncertainty selection; hypothesis generation; chain construction with initial coherence reasoning; scenario drafting; manual editing; advisory QA.
 
 **Research Mode:** independent source discovery, source consolidation, source validation/provenance, prioritised evidence review, user-initiated follow-up research, annotations.
 
@@ -140,7 +140,7 @@ The six core analytical stages, plus setup and export, form the primary navigati
 | 2. Assess drivers | Examine disagreement, adjust positions, bulk approve | Independent 1–5 impact + uncertainty scores and explanations | Approved impact × uncertainty matrix |
 | 3. Select uncertainties | Choose critical drivers (suggested 4–6) | Show candidates/complexity feedback; **no relationship analysis required here** | Approved selection |
 | 4. Develop hypotheses | Review distinct futures for each selected driver | Independent generation; consolidation; recommend number per driver | Approved future-state hypotheses |
-| 5. Construct chains | Compare/edit/choose chains; request coherence check on demand after edits | Independent candidate construction; evaluate interactions/contradictions | Approved scenario chains |
+| 5. Construct chains | Compare/edit/choose chains; review edits and approve | Independent candidate construction; evaluate interactions/contradictions | Approved scenario chains |
 | 6. Write & review scenarios | Write and edit narratives from approved chains; optionally request AI help or use the QA checklist; approve the final set | Autosave drafts; return AI proposals for explicit acceptance; preserve original/working/final snapshots and annotations | Completed scenario set |
 | 7. Export/next steps | Download narratives/full record/JSON; consider next uses | Generate requested export; suggest follow-on analytical activities | Portable output |
 
@@ -154,7 +154,7 @@ The six core analytical stages, plus setup and export, form the primary navigati
 4. Accept/rework consolidated PESTLE-informed driver list; approve.
 5. Review impact × uncertainty matrix; inspect outliers, human-adjust selected points; bulk-approve remaining provisional medians.
 6. Choose critical uncertainties and approve AI-generated alternatives for each.
-7. Compare proposed chains in matrix; inspect coherence explanations; edit and optionally re-check; select desired chains and wildcard variants.
+7. Compare proposed chains in matrix; inspect coherence explanations; edit and review; select any one or more desired chains; optionally explore an additional disruption.
 8. Write narratives directly; optionally ask AI to edit the whole scenario or generate a starting draft, then review and explicitly apply or dismiss its proposal.
 9. Consult optional QA checklist; approve final narratives; export.
 
@@ -197,7 +197,7 @@ Requirements have stable IDs (FR-xx) to support design tickets and test traceabi
 
 **FR-11 — Critical uncertainties.** Allow arbitrary user-defined selection count, recommend 4–6, show complexity implications, don't force preselection causal assessment. **Accept:** selection is editable; impact × uncertainty scores remain inspectable after selection.
 
-### 6.3 Hypotheses, chains and wildcards
+### 6.3 Hypotheses, chains and disruption exploration
 
 **FR-12 — Independent hypotheses.** Models independently propose future states for each selected uncertainty; consolidate overlaps, recommend a suitable number per uncertainty; no fixed hypothesis count. **Accept:** analyst can add/edit/split/merge/delete and approve states; alternatives are distinguishable and belong to a specific uncertainty.
 
@@ -205,11 +205,11 @@ Requirements have stable IDs (FR-xx) to support design tickets and test traceabi
 
 **FR-14 — Chain editing UI.** Provide comparison matrix plus expandable detailed explanation of chain logic and coherence; edit hypotheses in cells. **Accept:** change in either view updates the same chain record without duplicating data.
 
-**FR-15 — On-demand coherence recheck.** Initial coherence checking is part of generation, but after human edits, an AI recheck happens **only** when user requests it; allow individual and selected-batch requests. **Accept:** cell edits generate zero unrequested model calls; old results remain timestamped and marked as preceding the edits.
+**FR-15 — Analyst review after edits.** Generation includes initial coherence reasoning. There is no separate coherence recheck feature. Edits preserve earlier reasoning with timestamps and revisions, and require analyst review and renewed approval. **Accept:** editing and approval make zero model calls; historical reasoning and operation records remain readable, while new coherence requests and retries are unavailable.
 
-**FR-16 — Scenario portfolio.** Allow main scenario count (default 3) and separate wildcard count (default 0). Seek diversity and avoid automatic optimistic/base/pessimistic framing. **Accept:** 3+1 produces three main plus one labelled wildcard.
+**FR-16 — Free scenario selection.** Users choose any number of chains to take into writing, with at least one required. Generate three candidates per selected model per standard run, independently of final selection. Seek diversity and avoid automatic optimistic/base/pessimistic framing. **Accept:** one, two, seven or more valid chains can be approved without quotas or main/wildcard categories; zero selected chains cannot proceed.
 
-**FR-17 — Novel wildcard drivers.** AI may suggest new disruptive drivers; analyst explicitly accepts/edits/rejects, using a brief plausibility/humanitarian significance/interactions assessment. Option for full multi-model scoring. **Accept:** lightly assessed new drivers are not assigned fabricated matrix scores and retain origin `wildcard`.
+**FR-17 — Optional disruption exploration.** Explore a disruption generates one independent candidate per selected model. An optional “What if…?” prompt guides the model; when blank, it proposes a surprising but plausible disruption. Candidates use the approved hypotheses and may propose up to two additional drivers. The analyst accepts, edits or removes additional drivers after reviewing plausibility, humanitarian significance and interactions. **Accept:** all candidates join the same selection list; additional drivers remain unscored and must be accepted or removed before their chain can be approved. Legacy `wildcard` origin/type metadata remains readable for compatibility.
 
 ### 6.4 Writing, evidence and QA
 
@@ -272,7 +272,7 @@ Requirements have stable IDs (FR-xx) to support design tickets and test traceabi
 | Matrix / driver assessment | 1–5 axes, provisional medians, model positions, disagreement indicators, sorted review queue | Inspect, override, bulk approve |
 | Critical uncertainty picker | Approved matrix, selected drivers, count and complexity feedback | Select/deselect, proceed |
 | Hypothesis workspace | Uncertainty panels with distinct AI-proposed future states and provenance | Add/edit/merge/split/remove/approve |
-| Chain workbench | Scenario comparison matrix and detail drawer, AI coherence analysis | Edit cell, compare, request recheck, select chains |
+| Chain workbench | Scenario comparison matrix and detail drawer, AI coherence analysis | Edit cell, compare reasoning, select and approve chains |
 | Narrative workbench | Human-first rich-text/Markdown editor, optional AI-help proposals, chain reference, advisory QA | Write, optionally request/apply edits, finalise |
 | Completion & export | Scenario summary, copy/download choices, next-step suggestions | Export, archive, resume editing |
 | Global shell | Workflow sidebar, stage status, project name, save state, estimated/actual cost, model settings | Navigate, open controls, export |
@@ -285,7 +285,7 @@ Requirements have stable IDs (FR-xx) to support design tickets and test traceabi
 - **Hypothesis chains:** grid columns represent scenarios, rows uncertainties, cells hypothesis selectors with deliberate “unresolved” option; expanded view explains causal relationships and critiques.
 - **Research:** show a short default synthesis with expandable source cards, confidence/provenance warnings, explicit “approve evidence base” action and no automatic hidden searches.
 - **AI operations:** show queued/running/succeeded/failed/cancelled states per model; cancellation should prevent additional calls, although requests already sent may be billable.
-- **Microcopy:** distinguish `AI-proposed`, `Analyst-approved`, `Analyst-edited`, `Needs review`, `Evidence unavailable`, `Unverified source`, `Wildcard`.
+- **Microcopy:** distinguish `AI-proposed`, `Analyst-approved`, `Analyst-edited`, `Needs review`, `Evidence unavailable`, `Unverified source`.
 - **Empty states:** teach the next action (“Generate drivers”, “Select uncertainties”) rather than leaving a blank dashboard.
 
 ### 7.4 Representative design deliverables
@@ -336,11 +336,11 @@ Hypotheses are **distinct alternative future states**, plausibly reachable withi
 
 ### 8.6 Chain generation and coherence
 
-Generate multiple candidate combinations without exhaustive Cartesian enumeration. For each chain, capture selected hypothesis for each uncertainty or `unresolved`; causal compatibility assessment, reinforcing interactions, conflicts/assumptions and a short distinctiveness note. Compare combinations across the desired portfolio; seek meaningful diversity without forcing “optimistic/central/pessimistic” labels. Unusual ≠ implausible. Analyst controls selection and may edit; after edit, any AI coherence recheck is **user initiated**.
+Generate multiple candidate combinations without exhaustive Cartesian enumeration. For each chain, capture selected hypothesis for each uncertainty or `unresolved`; causal compatibility assessment, reinforcing interactions, conflicts/assumptions and a short distinctiveness note. Compare combinations with a frozen snapshot of existing candidate choices; seek meaningful diversity without forcing “optimistic/central/pessimistic” labels. Unusual ≠ implausible. Analyst controls selection and may edit; after edits, the analyst reviews and reapproves the chain without a separate model recheck.
 
-### 8.7 Wildcards
+### 8.7 Optional disruption exploration
 
-Wildcards count **separately** from standard scenarios. They can include new AI-proposed drivers but each needs analyst approval and at least a brief plausibility/humanitarian significance/interaction assessment. If no full impact/uncertainty evaluation took place, do not fabricate a matrix score. Coherence, explicit assumptions and narrative fidelity still apply.
+Explore a disruption creates one new candidate per selected model. The optional “What if…?” prompt can describe a disruption; otherwise the model proposes one. Candidates join the same comparison and selection list as every other chain, and any valid selection of one or more can proceed. Up to two additional AI-proposed drivers may be included; each needs analyst acceptance after a brief plausibility/humanitarian significance/interaction assessment, or removal from the chain. If no full impact/uncertainty evaluation took place, do not fabricate a matrix score. Coherence, explicit assumptions and narrative fidelity still apply.
 
 ### 8.8 Narrative drafting and QA
 
@@ -408,8 +408,7 @@ Portable **project JSON** contains editable state plus provenance (but no key); 
     "id": "ex_123",
     "question": "How might the UK cost-of-living crisis evolve?",
     "horizon": { "label": "3 years" },
-    "mode": "quick",
-    "scenarioTargets": { "main": 3, "wildcards": 0 }
+    "mode": "quick"
   },
   "models": { "default": ["provider-a/model-a", "provider-b/model-b", "provider-c/model-c"], "stageOverrides": {} },
   "drivers": [
@@ -531,7 +530,7 @@ Recruit approximately five humanitarian analysts for early qualitative usability
 | Dimension | Measure | Success interpretation |
 |---|---|---|
 | Augmentation (primary) | Blind ratings of diversity, originality, causal coherence, plausibility, humanitarian usefulness | App-assisted scenario sets outperform solo baseline at equal time |
-| Productivity | Active time to approved 3-scenario set; session completion | Most Quick sessions within 1–2 h; half-day maximum target |
+| Productivity | Active time to the approved, user-selected scenario set; session completion | Most Quick sessions within 1–2 h; half-day maximum target |
 | Usability | Task success, observed friction, errors/assistance, qualitative ease-of-use | Analyst can complete without a facilitator or extensive manual |
 | Collaboration | Interviews and brief ratings of intellectual stimulation, surprise, agency and enjoyment | Users report discoveries they would not have made alone and feel ownership |
 | Trust | Correct interpretation of median vs approved ratings; source provenance and missing model calls | No misleading “consensus”, false sources or hidden replacements |
@@ -546,7 +545,7 @@ Avoid claiming statistical proof from five participants; use the first pilot to 
 3. **Partial failure:** One model times out; two remain; analyst retries only failed items or proceeds explicitly with partial coverage.
 4. **Research provenance:** Models return overlapping/contradictory sources; shared review surfaces distinction; analyst excludes one; scenario annotation points to remaining source and identifies speculative future claims.
 5. **Hypothesis revision:** Editing a hypothesis marks dependent chains/narratives as review suggested; makes **no paid AI call**; user can selectively regenerate or retain.
-6. **Wildcard:** One additional wildcard introduces an analyst-approved novel driver without artificial matrix scores.
+6. **Disruption:** Explore a disruption creates an independently selectable candidate with an optional additional driver; acceptance is explicit and no matrix scores are fabricated.
 7. **Budget:** An operation that would breach estimated remaining budget is blocked or asks for budget change; running operations preserve known cost data.
 8. **Resume/import:** Export a project, clear local browser storage, import file and retrieve approved decisions and working narrative with no API key embedded.
 9. **Human-first writing:** Complete narratives without a model key. Typing produces no AI calls; optional model proposals require explicit application, stale proposals cannot overwrite newer text, and original/working/final snapshots remain available.
@@ -560,7 +559,7 @@ Avoid claiming statistical proof from five participants; use the first pilot to 
 
 **Phase 1 — Core Quick Mode vertical slice:** Exercise setup → driver generation/consolidation → matrix/rating approval → hypotheses → chains → initial narratives → local autosave/project JSON. Use fixture/mock model responses before live API integration.
 
-**Phase 2 — MVP completeness:** Alternate drafts, wildcards, selective dependency tracking, evidence annotations, DOCX/PDF exports, OpenRouter onboarding, budgets, failure handling, quality checklist, accessibility.
+**Phase 2 — MVP completeness:** Alternate drafts, disruption exploration, selective dependency tracking, evidence annotations, DOCX/PDF exports, OpenRouter onboarding, budgets, failure handling, quality checklist, accessibility.
 
 **Phase 3 — Research Mode and public launch:** Independent search, evidence review and source validation, targeted research, annotations, regression tests, documentation, usability pilot and release hardening. Research Mode is a **required MVP capability** for public launch; phasing here is implementation order, not removal from MVP scope.
 

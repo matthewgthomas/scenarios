@@ -1,7 +1,10 @@
 <script lang="ts">
+  import { tick, onDestroy } from 'svelte';
   import {
     GitBranch,
     ChevronDown,
+    ChevronLeft,
+    ChevronRight,
     Check,
     RotateCcw,
     ArrowRight,
@@ -17,11 +20,18 @@
     flagDownstream,
     id,
     modelName,
+    activeChains,
+    chainExplanation,
+    approvedChainSet,
+    includeChain,
+    editChainExplanation,
+    archiveChain,
+    invalidateChainSet,
     type Project,
     type Change
   } from '$lib/domain/project';
+  import type { ChainGenerationOptions } from '$lib/ai/openrouter';
   import Modal from './Modal.svelte';
-  import StageGuide from './StageGuide.svelte';
   import StageActions from './StageActions.svelte';
   import { chainReadiness, approveChainSet } from '$lib/domain/workflow';
   let {
@@ -32,18 +42,32 @@
   }: {
     p: Project;
     change: Change;
-    request: (task: 'chains' | 'coherence', ids?: string[]) => void;
+    request: (task: 'chains', ids?: string[], options?: ChainGenerationOptions) => void;
     next: () => void;
   } = $props();
   let selectedChain = $state('');
   let editorOpen = $state(false);
+  let choosing = $state(false);
+  let returnToChooser = $state(false);
   let selectedDriver = $state('');
   let perspective = $state('');
   let showAll = $state(true);
+  let removedId = $state('');
+  let scrollRegion = $state<HTMLDivElement>();
+  let comparisonHeading = $state<HTMLHeadingElement>();
+  let firstVisible = $state(0);
+  let lastVisible = $state(0);
+  let pendingExplanation = $state<{ chainId: string; value: string } | null>(null);
+  let explanationTimer: ReturnType<typeof setTimeout>;
   const rows = $derived(uncertainties(p));
-  const columns = $derived(p.chains.filter((c) => showAll || c.selected));
-  const chain = $derived(p.chains.find((c) => c.id === selectedChain) ?? columns[0]);
-  const driver = $derived(rows.find((d) => d.id === selectedDriver) ?? rows[1] ?? rows[0]);
+  const candidates = $derived(activeChains(p));
+  const removed = $derived(p.chains.filter((c) => c.archived));
+  const columns = $derived(candidates.filter((c) => showAll || c.selected));
+  const chain = $derived(
+    candidates.find((c) => c.id === selectedChain) ?? columns[0] ?? candidates[0]
+  );
+  const driver = $derived(rows.find((d) => d.id === selectedDriver) ?? rows[0]);
+  const driverIndex = $derived(rows.findIndex((d) => d.id === driver?.id));
   const notes = $derived(chain?.notes ?? []);
   const models = $derived([...new Set(notes.map((n) => n.modelId))]);
   const note = $derived(
@@ -53,61 +77,141 @@
   );
   const readiness = $derived(chainReadiness(p));
   const selected = $derived(readiness.selected);
-  const mainSelected = $derived(selected.filter((c) => c.kind === 'main').length);
-  const wildSelected = $derived(selected.filter((c) => c.kind === 'wildcard').length);
-  const allApproved = $derived(
-    readiness.canApprove &&
-      mainSelected === p.mainCount &&
-      wildSelected === p.wildcardCount &&
-      selected.every((c) => c.approvedRevision === c.revision && !c.review)
+  const allApproved = $derived(readiness.canApprove && approvedChainSet(p));
+  const progress = $derived(
+    allApproved
+      ? 'Your scenario set is ready to write.'
+      : !selected.length
+        ? 'Choose at least one hypothesis chain to take into the writing stage.'
+        : readiness.issues.length
+          ? `Review ${readiness.issues.length} ${readiness.issues.length === 1 ? 'issue' : 'issues'} in your chosen chains.`
+          : `${selected.length} ${selected.length === 1 ? 'chain' : 'chains'} selected. Ready to approve.`
   );
-  function openIssue(issue: { chainId: string; driverId?: string }) {
-    selectedChain = issue.chainId;
-    selectedDriver = issue.driverId ?? rows[0]?.id ?? '';
-    editorOpen = true;
+
+  function saveExplanation() {
+    clearTimeout(explanationTimer);
+    if (!pendingExplanation) return;
+    const draft = pendingExplanation;
+    pendingExplanation = null;
+    change((p) => editChainExplanation(p, draft.chainId, draft.value));
+  }
+  function queueExplanation(chainId: string, value: string) {
+    pendingExplanation = { chainId, value };
+    clearTimeout(explanationTimer);
+    explanationTimer = setTimeout(saveExplanation, 350);
+  }
+  onDestroy(saveExplanation);
+
+  function measureColumns() {
+    if (!scrollRegion) return;
+    const region = scrollRegion.getBoundingClientRect();
+    const headers = [...scrollRegion.querySelectorAll<HTMLElement>('.scenario-heading')];
+    const visible = headers.flatMap((h, i) => {
+      const box = h.getBoundingClientRect();
+      return box.right > region.left + 185 && box.left < region.right - 8 ? [i] : [];
+    });
+    firstVisible = visible[0] ?? 0;
+    lastVisible = visible.at(-1) ?? 0;
+  }
+  $effect(() => {
+    columns.map((c) => c.id).join(',');
+    const region = scrollRegion;
+    if (!region) return;
+    const observer = new ResizeObserver(measureColumns);
+    observer.observe(region);
+    void tick().then(measureColumns);
+    return () => observer.disconnect();
+  });
+  function scrollToChain(index: number) {
+    const header = scrollRegion?.querySelectorAll<HTMLElement>('.scenario-heading')[index];
+    if (!header || !scrollRegion) return;
+    const left =
+      header.getBoundingClientRect().left -
+      scrollRegion.getBoundingClientRect().left +
+      scrollRegion.scrollLeft -
+      186;
+    scrollRegion.scrollTo({
+      left: Math.max(0, left),
+      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'
+    });
   }
   function chooseScenarios() {
-    if (!p.chains.length) {
-      addChain();
-      return;
-    }
-    showAll = true;
-    setTimeout(
-      () =>
-        document.querySelector<HTMLInputElement>('.chain-table input[type="checkbox"]')?.focus(),
-      0
-    );
+    choosing = true;
+  }
+  function openIssue(issue: { chainId: string; driverId?: string }) {
+    returnToChooser = choosing;
+    choosing = false;
+    selectedChain = issue.chainId;
+    selectedDriver = issue.driverId ?? rows[0]?.id ?? '';
+    perspective = '';
+    editorOpen = true;
+  }
+  function closeEditor() {
+    saveExplanation();
+    editorOpen = false;
+    if (returnToChooser) choosing = true;
+    returnToChooser = false;
   }
   function approve() {
-    if (!readiness.canApprove) return false;
+    if (!readiness.canApprove) return;
     change((p) => {
       approveChainSet(p);
-    }, `${selected.length} chains approved at their current revisions.`);
-    return true;
+    }, `${selected.length} scenarios approved. Your set is ready to write.`);
+    choosing = false;
+    next();
   }
   function addChain() {
     const newId = id('chain');
-    change((p) =>
-      p.chains.push({
-        id: newId,
-        title: 'Untitled scenario',
-        kind: 'main',
-        colour: (p.chains.length % 6) + 1,
-        items: Object.fromEntries(rows.map((d) => [d.id, null])),
-        revision: 1,
-        selected: false,
-        approvedRevision: null,
-        review: false,
-        notes: [],
-        origins: [],
-        wildcardDriverIds: [],
-        distinctiveness: 'Analyst-created chain'
-      })
+    change(
+      (p) =>
+        p.chains.push({
+          id: newId,
+          title: 'Untitled scenario',
+          kind: 'main',
+          colour: (p.chains.length % 6) + 1,
+          items: Object.fromEntries(rows.map((d) => [d.id, null])),
+          revision: 1,
+          selected: false,
+          archived: false,
+          explanation: null,
+          approvedRevision: null,
+          review: false,
+          notes: [],
+          origins: [],
+          wildcardDriverIds: [],
+          distinctiveness: 'Analyst-created chain'
+        }),
+      'Chain added. Give it a name and choose how your uncertainties combine.'
     );
     selectedChain = newId;
     selectedDriver = rows[0]?.id ?? '';
     showAll = true;
+    returnToChooser = false;
     editorOpen = true;
+  }
+  async function removeChain(chainId: string) {
+    saveExplanation();
+    const title = candidates.find((c) => c.id === chainId)?.title;
+    change(
+      (p) => archiveChain(p, chainId),
+      `${title} removed. Its writing and history are kept; you can restore it.`
+    );
+    removedId = chainId;
+    if (selectedChain === chainId || editorOpen) {
+      editorOpen = false;
+      returnToChooser = false;
+    }
+    selectedChain = candidates[0]?.id ?? '';
+    await tick();
+    comparisonHeading?.focus();
+  }
+  function restoreChain(chainId: string) {
+    change(
+      (p) => archiveChain(p, chainId, false),
+      'Chain restored. Review it and include it when you are ready.'
+    );
+    if (removedId === chainId) removedId = '';
+    showAll = true;
   }
   function editWildcard(
     driverId: string,
@@ -118,7 +222,7 @@
     change((p) => {
       const d = p.drivers.find((d) => d.id === driverId)!;
       (d.history ??= []).push({ title: d.title, summary: d.summary, revision: d.revision });
-      const affected = p.chains.filter((c) => c.wildcardDriverIds.includes(driverId));
+      const affected = activeChains(p).filter((c) => c.wildcardDriverIds.includes(driverId));
       affected.forEach((c) => {
         snapshotChain(p, c);
         c.revision++;
@@ -126,6 +230,10 @@
       d[field] = value;
       d.revision++;
       d.approved = false;
+      invalidateChainSet(
+        p,
+        affected.map((c) => c.id)
+      );
       flagDownstream(
         p,
         5,
@@ -137,12 +245,16 @@
   function approveWildcard(driverId: string) {
     change((p) => {
       const d = p.drivers.find((d) => d.id === driverId)!;
-      const affected = p.chains.filter((c) => c.wildcardDriverIds.includes(driverId));
+      const affected = activeChains(p).filter((c) => c.wildcardDriverIds.includes(driverId));
       affected.forEach((c) => {
         snapshotChain(p, c);
         c.revision++;
       });
       d.approved = !d.approved;
+      invalidateChainSet(
+        p,
+        affected.map((c) => c.id)
+      );
       flagDownstream(
         p,
         5,
@@ -155,341 +267,239 @@
 
 <div class="stage-heading">
   <div>
-    <h1>Construct chains of hypotheses.</h1>
-    <p>Compare how your critical uncertainties could combine into scenarios.</p>
+    <h1>Construct hypothesis chains.</h1>
+    <p>
+      Each hypothesis chain combines one hypothesis per critical uncertainty into a possible
+      scenario.
+    </p>
   </div>
   <details class="chain-help">
     <summary aria-label="About scenario chains"><CircleHelp size={20} /></summary>
     <p>
-      Each chain combines one future state per critical uncertainty. Select cells to inspect the
-      reasoning and change a choice. Unresolved is an intentional option. Chains explore plausible
-      combinations; they do not predict likelihood.
+      Look for contrasting futures whose choices make sense together. Select one or more chains to
+      write. Explore a disruption when you want to consider a surprising but plausible change.
     </p>
   </details>
 </div>
-<StageGuide
-  title={allApproved
-    ? 'Your scenario set is ready to write'
-    : readiness.canApprove
-      ? `Your ${selected.length} ${selected.length === 1 ? 'scenario is' : 'scenarios are'} ready for approval`
-      : readiness.issues.length
-        ? `${readiness.issues.length} chain ${readiness.issues.length === 1 ? 'issue needs' : 'issues need'} your attention`
-        : `Choose ${p.mainCount} main ${p.mainCount === 1 ? 'scenario' : 'scenarios'}${p.wildcardCount ? ` and ${p.wildcardCount} ${p.wildcardCount === 1 ? 'wildcard' : 'wildcards'}` : ''}`}
-  description="Each scenario will appear in its own column and represents a combination of futures for your critical uncertainties. Include the ones you want in your set, open cells to review their hypotheses, then approve the set. Inclusion chooses your scenarios; approval confirms your review."
-  ready={allApproved}
-  helpTitle="How do I build a useful set of scenarios?"
->
-  {#snippet children()}
-    <span class="workflow-chip">{mainSelected} of {p.mainCount} main scenarios included</span>
-    <span class="workflow-chip">{wildSelected} of {p.wildcardCount} wildcards included</span>
-    {#each readiness.issues as issue}<button class="workflow-link" onclick={() => openIssue(issue)}
-        >{issue.message}<ArrowRight size={14} /></button
-      >{/each}
-  {/snippet}
-  {#snippet help()}<p>
-      Look for contrasting stories with choices that make sense together. A wildcard explores a
-      surprising but plausible disruption. You can deliberately leave a hypothesis unresolved. An AI
-      coherence check is optional; editing never runs one automatically.
-    </p>{/snippet}
-</StageGuide>
+<ol class="chain-steps" aria-label="Steps to complete hypothesis chains">
+  <li class:step-done={candidates.length > 0}>
+    <span class="step-number">1</span>
+    <div>
+      <strong>Create hypothesis chains</strong><small
+        >Generate ideas with AI or build your own.</small
+      >
+    </div>
+  </li>
+  <li>
+    <span class="step-number">2</span>
+    <div>
+      <strong>Explore & refine</strong><small>Compare choices and make each chain your own.</small>
+    </div>
+  </li>
+  <li class:step-done={allApproved}>
+    <span class="step-number"
+      >{#if allApproved}<Check size={16} />{:else}3{/if}</span
+    >
+    <div>
+      <strong>Choose & approve</strong><small>Take any selection of one or more into writing.</small
+      >
+    </div>
+  </li>
+</ol>
 <StageActions
   generate={{ label: 'Generate chains', onclick: () => request('chains') }}
   add={{ label: 'Add chain', onclick: addChain }}
 >
-  {#snippet context()}
-    <details class="portfolio">
-      <summary
-        >Portfolio targets: {p.mainCount} main / {p.wildcardCount} wildcards <ChevronDown
-          size={14}
-        /></summary
-      >
-      <div class="popover-fields">
-        <label
-          >Main scenarios<input
-            type="number"
-            min="1"
-            max="12"
-            value={p.mainCount}
-            onchange={(e) => {
-              const n = +e.currentTarget.value;
-              if (n >= 1 && n <= 12) change((p) => (p.mainCount = Math.round(n)));
-            }}
-          /></label
-        ><label
-          >Wildcards<input
-            type="number"
-            min="0"
-            max="6"
-            value={p.wildcardCount}
-            onchange={(e) => {
-              const n = +e.currentTarget.value;
-              if (n >= 0 && n <= 6) change((p) => (p.wildcardCount = Math.round(n)));
-            }}
-          /></label
-        >
-      </div>
-    </details>
-  {/snippet}
+  {#snippet tools()}<button
+      class="secondary"
+      onclick={() => request('chains', undefined, { mode: 'disruption' })}
+      ><GitBranch size={16} /> Explore a disruptive wildcard</button
+    >{/snippet}
 </StageActions>
-{#if p.chains.length}
+
+{#if removedId && removed.some((c) => c.id === removedId)}
+  <div class="removal-receipt" role="status">
+    <span>Chain removed. Its writing and history are kept.</span><button
+      class="text-button"
+      onclick={() => restoreChain(removedId)}><RotateCcw size={15} /> Undo removal</button
+    >
+  </div>
+{/if}
+<div class="comparison-toolbar">
+  <div>
+    <h2 tabindex="-1" bind:this={comparisonHeading}>
+      {candidates.length
+        ? `${candidates.length} candidate ${candidates.length === 1 ? 'chain' : 'chains'} to explore`
+        : 'Your possible futures start here'}
+    </h2>
+    <p>
+      {candidates.length
+        ? 'Compare the columns. Open any hypothesis to shape its chain.'
+        : 'Generate a starting set from your approved hypotheses, or add a chain yourself.'}
+    </p>
+  </div>
+  {#if candidates.length}<button class="secondary" onclick={chooseScenarios}
+      >View {candidates.length === 1 ? '' : 'all'}
+      {candidates.length}
+      {candidates.length === 1 ? 'chain' : 'chains'}
+      <Layers size={16} /></button
+    >{/if}
+</div>
+{#if candidates.length}
+  <div class="comparison-navigation">
+    <label class="check-label"
+      ><input type="checkbox" bind:checked={showAll} /> Show all candidates</label
+    >
+    {#if columns.length}<div class="toolbar-group">
+        <span class="small" aria-live="polite"
+          >Showing {firstVisible + 1}{#if lastVisible !== firstVisible}–{lastVisible + 1}{/if} of {columns.length}{#if !showAll}
+            included{/if}</span
+        >
+        <button
+          class="secondary small"
+          aria-label="Previous chains"
+          disabled={firstVisible === 0}
+          onclick={() => scrollToChain(Math.max(0, firstVisible - 1))}
+          ><ChevronLeft size={16} /> Previous</button
+        >
+        <button
+          class="secondary small"
+          aria-label="Next chains"
+          disabled={lastVisible >= columns.length - 1}
+          onclick={() => scrollToChain(Math.min(columns.length - 1, firstVisible + 1))}
+          >Next <ChevronRight size={16} /></button
+        >
+      </div>{/if}
+  </div>
   {#if !columns.length}<div class="workflow-empty">
       <h3>No scenarios are included yet</h3>
       <button class="secondary" onclick={() => (showAll = true)}>Show all candidates</button>
-    </div>{/if}
-  <div class="table-scroll chain-scroll">
-    <table class="chain-table">
-      <caption class="sr-only"
-        >Scenario chains: one hypothesis per critical uncertainty. Select a cell to inspect or
-        change it.</caption
-      >
-      <thead
-        ><tr
-          ><th class="uncertainty-heading" scope="col">Critical uncertainty</th
-          >{#each columns as c (c.id)}<th scope="col" class="scenario-heading scenario-{c.colour}"
-              ><label class="chain-include"
-                ><input
-                  aria-label={`Include ${c.title} in scenario set`}
-                  type="checkbox"
-                  checked={c.selected}
-                  onchange={(e) => {
-                    const checked = e.currentTarget.checked;
-                    change((p) => (p.chains.find((v) => v.id === c.id)!.selected = checked));
-                  }}
-                /><span>Include in set</span></label
+    </div>
+  {:else}<div
+      class="table-scroll chain-scroll"
+      bind:this={scrollRegion}
+      onscroll={measureColumns}
+      role="region"
+      aria-label="Compare hypothesis chains"
+    >
+      <table class="chain-table" style:min-width={`${180 + columns.length * 250}px`}>
+        <caption class="sr-only"
+          >One hypothesis per critical uncertainty. Open a cell to inspect or change it. Choose
+          chains with Include in set.</caption
+        >
+        <colgroup
+          ><col class="uncertainty-column" />{#each columns as c (c.id)}<col />{/each}</colgroup
+        >
+        <thead
+          ><tr
+            ><th class="uncertainty-heading" scope="col">Critical uncertainty</th>
+            {#each columns as c (c.id)}<th
+                scope="col"
+                class="scenario-heading scenario-{c.colour}"
+                class:chain-included={c.selected}
               >
-              <div class="scenario-heading-top">
+                <label class="chain-include"
+                  ><input
+                    aria-label={`Include ${c.title} in scenario set`}
+                    type="checkbox"
+                    checked={c.selected}
+                    onchange={(e) => {
+                      const checked = e.currentTarget.checked;
+                      change((p) => includeChain(p, c.id, checked));
+                    }}
+                  /><span>{c.selected ? 'Included in your set' : 'Include in set'}</span></label
+                >
                 <button
                   class="scenario-name"
                   aria-label={`Edit scenario: ${c.title}`}
                   aria-haspopup="dialog"
                   onclick={() => {
                     selectedChain = c.id;
+                    selectedDriver = rows[0]?.id ?? '';
+                    perspective = '';
+                    returnToChooser = false;
                     editorOpen = true;
                   }}>{c.title}</button
                 >
-              </div>
-              <div class="scenario-heading-state">
-                {#if c.kind === 'wildcard'}<span class="badge">Wildcard</span>{/if}<span
-                  >{c.approvedRevision === c.revision
-                    ? '✓ Analyst-approved'
-                    : c.review
+                <div class="scenario-heading-state">
+                  <span
+                    >{c.review
                       ? '◒ Review suggested'
-                      : c.origins.length
-                        ? '○ Proposed chain'
-                        : '○ Analyst-created'}</span
-                >
-              </div>
-              <button
-                class="text-button small"
-                onclick={() =>
-                  change((p) => {
-                    const chain = p.chains.find((v) => v.id === c.id)!;
-                    chain.kind = chain.kind === 'main' ? 'wildcard' : 'main';
-                    chain.revision++;
-                    flagDownstream(p, 5, 'Scenario type changed.', [c.id]);
-                  })}>Make {c.kind === 'main' ? 'wildcard' : 'main'}</button
-              ></th
-            >{/each}</tr
-        ></thead
-      >
-      <tbody
-        >{#each rows as d (d.id)}<tr
-            ><th scope="row"><span>{d.title}</span><small>{d.tags.join(' / ')}</small></th
-            >{#each columns as c (c.id)}{@const h = p.hypotheses.find(
-                (h) => h.id === c.items[d.id]
-              )}<td
-                ><button
-                  class:selected-cell={chain?.id === c.id && driver?.id === d.id}
-                  class="hypothesis-cell"
-                  onclick={() => {
-                    selectedChain = c.id;
-                    selectedDriver = d.id;
-                    perspective = '';
-                    editorOpen = true;
-                  }}
-                  aria-haspopup="dialog"
-                  aria-pressed={chain?.id === c.id && driver?.id === d.id}
-                  ><span
-                    >{h?.title ?? 'Unresolved'}{#if h?.archived}<small class="review-text"
-                        >Removed state · review suggested</small
-                      >{/if}</span
-                  ><ChevronDown size={16} /></button
-                ></td
-              >{/each}</tr
-          >{/each}</tbody
-      >
-    </table>
-  </div>
-  <div class="under-table">
-    <div class="toolbar-group">
-      <span>Select a hypothesis to inspect or change it.</span><button
-        class="text-button small"
-        onclick={() => (editorOpen = true)}
-        aria-haspopup="dialog">Edit selected hypothesis</button
-      >
-    </div>
-    <label class="check-label"
-      ><input type="checkbox" bind:checked={showAll} /> Show all candidates</label
-    >
-  </div>
-  {#if editorOpen && chain && driver}
-    <Modal title={`Edit chain: ${chain.title}`} close={() => (editorOpen = false)} wide>
-      <section class="inspector modal-inspector" aria-label="Chain reasoning and hypothesis editor">
-        <div>
-          <div class="context-line">
-            <GitBranch size={18} /><span>{chain.title} / {driver.title}</span>
-          </div>
-          <h2>What connects these choices?</h2>
-          {#if note}<p>{note.reasoning}</p>
-            <div class="segmented model-tabs" aria-label="Model perspectives">
-              {#each models as model, i}<button
-                  class:active={note.modelId === model}
-                  onclick={() => (perspective = model)}
-                  ><span class="model-mark">{['●', '■', '▲', '◆'][i % 4]}</span>{modelName(
-                    model
-                  )}</button
+                      : c.approvedRevision === c.revision
+                        ? '✓ Analyst-approved'
+                        : c.origins.length
+                          ? '○ Proposed chain'
+                          : '○ Analyst-created'}</span
+                  >
+                </div>
+                <div class="chain-header-actions">
+                  <button
+                    class="text-button"
+                    aria-label={`Remove chain: ${c.title}`}
+                    onclick={() => removeChain(c.id)}><Trash2 size={14} /> Remove chain</button
+                  >
+                </div>
+              </th>{/each}</tr
+          ></thead
+        >
+        <tbody
+          >{#each rows as d (d.id)}<tr
+              ><th scope="row"><span>{d.title}</span><small>{d.tags.join(' / ')}</small></th>
+              {#each columns as c (c.id)}{@const h = p.hypotheses.find(
+                  (h) => h.id === c.items[d.id]
+                )}<td
+                  ><button
+                    class="hypothesis-cell"
+                    class:selected-cell={chain?.id === c.id && driver?.id === d.id}
+                    onclick={() => {
+                      selectedChain = c.id;
+                      selectedDriver = d.id;
+                      perspective = '';
+                      returnToChooser = false;
+                      editorOpen = true;
+                    }}
+                    aria-haspopup="dialog"
+                    aria-label={`${c.title}: ${d.title} — ${h?.title ?? 'Unresolved'}`}
+                  >
+                    <span
+                      >{h?.title ?? 'Unresolved'}{#if h?.archived}<small class="review-text"
+                          >Removed state · review suggested</small
+                        >{/if}</span
+                    ><ChevronDown size={16} /></button
+                  ></td
                 >{/each}
-            </div>
-            <p class="small muted">
-              {note.modelId} · checked revision {note.revision} · {new Date(
-                note.at
-              ).toLocaleDateString()}{#if note.revision !== chain.revision}
-                <span class="review-text">— Review suggested after your edit</span>{/if}
-            </p>
-            <details>
-              <summary>Inspect tensions and assumptions</summary>
-              <h3>Tensions</h3>
-              <ul>
-                {#each note.tensions as text}<li>{text}</li>{/each}
-              </ul>
-              <h3>Assumptions</h3>
-              <ul>
-                {#each note.assumptions as text}<li>{text}</li>{/each}
-              </ul>
-            </details>
-          {:else}<p class="muted">
-              No model coherence check yet. You can inspect and edit the chain, then request a check
-              when useful.
-            </p>{/if}
-        </div>
-        <div class="inspector-editor">
-          <label class="spaced"
-            >Scenario name<input
-              value={chain.title}
-              onchange={(e) => {
-                const value = e.currentTarget.value.trim();
-                if (value && value !== chain.title)
-                  change((p) => {
-                    const saved = p.chains.find((c) => c.id === chain.id)!;
-                    snapshotChain(p, saved);
-                    saved.title = value;
-                    saved.revision++;
-                    flagDownstream(p, 5, `${value} was renamed.`, [saved.id]);
-                  });
-                else e.currentTarget.value = chain.title;
-              }}
-            /></label
-          >
-          <label
-            >{driver.title} hypothesis<select
-              id="chain-hypothesis"
-              value={chain.items[driver.id] ?? ''}
-              onchange={(e) => {
-                const value = e.currentTarget.value;
-                change(
-                  (p) => setChainItem(p, chain.id, driver.id, value || null),
-                  'Hypothesis changed. Earlier coherence notes are preserved.'
-                );
-              }}
-              ><option value="">Unresolved</option>{#each statesFor(p, driver.id) as h}<option
-                  value={h.id}>{h.title}{h.approved ? '' : ' (not approved)'}</option
-                >{/each}</select
-            ></label
-          >
-          <p>
-            {p.hypotheses.find((h) => h.id === chain.items[driver.id])?.description ??
-              'This uncertainty is intentionally unresolved. It will remain explicit in drafting and exports.'}
-          </p>
-          <p class="small muted">Your judgement decides. Editing preserves earlier work.</p>
-          <button
-            class="secondary"
-            onclick={() => {
-              editorOpen = false;
-              request('coherence', [chain.id]);
-            }}><GitBranch size={16} /> Recheck coherence</button
-          >
-          <p class="small muted">Choose models and review the estimate before running.</p>
-          {#if chain.wildcardDriverIds.length}<div class="notice review">
-              <strong>Novel wildcard drivers · unscored</strong
-              >{#each chain.wildcardDriverIds as driverId}{@const d = p.drivers.find(
-                  (d) => d.id === driverId
-                )}{#if d}<label class="spaced"
-                    >Novel driver name<input
-                      value={d.title}
-                      onchange={(e) => editWildcard(driverId, 'title', e.currentTarget.value)}
-                    /></label
-                  >
-                  <label class="spaced"
-                    >Future disruption<textarea
-                      rows="2"
-                      value={d.summary}
-                      onchange={(e) => editWildcard(driverId, 'summary', e.currentTarget.value)}
-                    ></textarea></label
-                  >
-                  <label class="spaced"
-                    >Plausibility, humanitarian significance and interactions<textarea
-                      rows="3"
-                      value={d.assessment ?? ''}
-                      onchange={(e) => editWildcard(driverId, 'assessment', e.currentTarget.value)}
-                    ></textarea></label
-                  >
-                  <p class="small">Unscored. No matrix positions have been assigned.</p>
-                  <div class="toolbar-group">
-                    <button class="secondary" onclick={() => approveWildcard(driverId)}
-                      >{d.approved ? '✓ Accepted · undo' : 'Accept driver'}</button
-                    ><button
-                      class="text-button"
-                      onclick={() =>
-                        change((p) => {
-                          const c = p.chains.find((c) => c.id === chain.id)!;
-                          c.wildcardDriverIds = c.wildcardDriverIds.filter((i) => i !== driverId);
-                          c.revision++;
-                          c.review = true;
-                        })}><Trash2 size={14} /> Remove</button
-                    >
-                  </div>{/if}{/each}
-            </div>{/if}
-        </div>
-      </section>
-      <div class="dialog-actions">
-        <button class="primary" onclick={() => (editorOpen = false)}>Done</button>
-      </div>
-    </Modal>
-  {/if}
-{:else}<div class="empty-state">
-    <GitBranch size={34} />
-    <h2>Different futures start with different combinations.</h2>
+            </tr>{/each}</tbody
+        >
+      </table>
+    </div>{/if}
+{:else}<div class="chain-empty">
+    <GitBranch size={36} />
+    <h3>What could happen when these futures meet?</h3>
     <p>
-      Generate independent candidate chains from your approved hypotheses, or build one yourself.
-    </p>
-    <p class="small muted">
-      Use Generate chains above for AI suggestions, or Add chain to build your own.
+      Use Generate chains for a first set of ideas, or Add chain to follow your own thinking. Every
+      combination stays editable.
     </p>
   </div>{/if}
-{#if p.chains.length}<footer class="stage-footer">
+
+{#if removed.length}<details class="removed-chains">
+    <summary>Removed chains ({removed.length})</summary>
+    <p class="small muted">
+      Their writing and history are saved. Restoring a chain does not automatically include or
+      approve it.
+    </p>
+    {#each removed as c (c.id)}<div class="removed-chain">
+        <span>{c.title}</span><button class="secondary small" onclick={() => restoreChain(c.id)}
+          ><RotateCcw size={14} /> Restore chain</button
+        >
+      </div>{/each}
+  </details>{/if}
+
+{#if candidates.length}<footer class="stage-footer">
     <div class="footer-description">
       <Layers size={20} />
       <div>
-        <strong
-          >{allApproved
-            ? `${selected.length} hypothesis chains approved`
-            : 'Your judgement, at every stage'}</strong
-        ><small
-          >{readiness.issues.length
-            ? 'Open the named issues above and choose approved hypotheses or Unresolved.'
-            : !readiness.targetsMet
-              ? `Your target is ${p.mainCount} main scenarios and ${p.wildcardCount} wildcards. Tick a hypothesis chain to include it in your final set of scenarios.`
-              : 'Next, turn these combinations into narratives in your own words.'}</small
+        <strong role="status">{progress}</strong><small
+          >{selected.length} {selected.length === 1 ? 'chain' : 'chains'} selected</small
         >
       </div>
     </div>
@@ -498,41 +508,570 @@
           class="text-button"
           onclick={() =>
             change((p) => {
-              p.chains.filter((c) => c.selected).forEach((c) => (c.approvedRevision = null));
-              p.completed = p.completed.filter((s) => s !== 5);
-            }, 'Chain approval undone. Drafts preserved.')}
+              selected.forEach((c) => {
+                p.chains.find((v) => v.id === c.id)!.approvedRevision = null;
+              });
+              invalidateChainSet(p);
+            }, 'Scenario approval undone. Writing preserved.')}
           ><RotateCcw size={16} /> Undo approval</button
         ><button class="primary" onclick={next}
           >Write & review scenarios <ArrowRight size={16} /></button
-        >{:else if readiness.issues.length}<button
-          class="primary"
-          onclick={() => openIssue(readiness.issues[0])}
-          >Review next chain issue <ArrowRight size={16} /></button
         >
-      {:else if !readiness.targetsMet}<button class="primary" onclick={chooseScenarios}
-          >{p.chains.length ? 'Choose your scenarios' : 'Build your first chain'}
+      {:else}<button class="primary" onclick={chooseScenarios} aria-haspopup="dialog"
+          >{readiness.canApprove
+            ? `Review & approve ${selected.length} ${selected.length === 1 ? 'chain' : 'chains'}`
+            : 'Choose chains to write'}
           <ArrowRight size={16} /></button
-        >
-      {:else}<button
-          class="primary"
-          onclick={() => {
-            if (approve()) next();
-          }}><Check size={16} /> Approve set & write scenarios</button
         >{/if}
     </div>
   </footer>{/if}
 
+{#if choosing}<Modal title="Choose chains to write" close={() => (choosing = false)} wide>
+    <p class="chooser-intro">
+      Choose any chains you want to turn into scenarios. Select at least one. Your choices are saved
+      as you go.
+    </p>
+    <div class="chooser-progress" aria-live="polite">
+      <strong>{selected.length} {selected.length === 1 ? 'chain' : 'chains'} selected</strong>
+    </div>
+    <section aria-label="Candidate chains">
+      {#each candidates as c (c.id)}{@const issues = readiness.candidateIssues.filter(
+          (issue) => issue.chainId === c.id
+        )}
+        <article class="chain-choice" class:included={c.selected}>
+          <label class="choice-label"
+            ><input
+              type="checkbox"
+              aria-label={`Include ${c.title} in scenario set`}
+              checked={c.selected}
+              onchange={(e) => {
+                const checked = e.currentTarget.checked;
+                change((p) => includeChain(p, c.id, checked));
+              }}
+            />
+            <span
+              ><strong>{c.title}</strong><small
+                >{c.distinctiveness ||
+                  chainExplanation(c) ||
+                  'Your own combination of hypotheses.'}</small
+              ></span
+            ></label
+          >
+          <button class="text-button" onclick={() => openIssue({ chainId: c.id })}
+            >Review chain <ChevronRight size={16} /></button
+          >
+          {#if issues.length}<div class="choice-issues">
+              {#each issues as issue}<button class="workflow-link" onclick={() => openIssue(issue)}
+                  >{issue.message} <ArrowRight size={14} /></button
+                >{/each}
+            </div>{/if}
+        </article>
+      {/each}
+    </section>
+    <div class="chooser-footer">
+      <div class="chooser-readiness" role="status">
+        {#if !selected.length}<p>Choose at least one hypothesis chain to take into writing.</p>
+        {:else if readiness.issues.length}<p>
+            Review the named issues in your included chains before approving.
+          </p>
+        {:else}<p>
+            <Check size={16} /> Your set is ready to approve. Next, you’ll write each scenario.
+          </p>{/if}
+      </div>
+      <div class="dialog-actions">
+        <button class="secondary" onclick={() => (choosing = false)}>Back to comparison</button
+        ><button class="primary" disabled={!readiness.canApprove} onclick={approve}
+          ><Check size={16} /> Approve {selected.length}
+          {selected.length === 1 ? 'chain' : 'chains'} & start writing</button
+        >
+      </div>
+    </div>
+  </Modal>{/if}
+
+{#if editorOpen && chain && driver}<Modal
+    title={`Edit chain: ${chain.title}`}
+    close={closeEditor}
+    wide
+  >
+    <section class="inspector modal-inspector" aria-label="Chain reasoning and hypothesis editor">
+      <div class="chain-reasoning">
+        <div class="context-line"><GitBranch size={18} /><span>{chain.title}</span></div>
+        <label class="explanation-label" for="chain-explanation">What connects these choices?</label
+        >
+        <p class="small muted" id="explanation-help">
+          Make this explanation your own. It is optional and saves automatically. Original model
+          reasoning is kept below.
+        </p>
+        <textarea
+          id="chain-explanation"
+          rows="7"
+          aria-describedby="explanation-help"
+          value={pendingExplanation?.chainId === chain.id
+            ? pendingExplanation.value
+            : chainExplanation(chain)}
+          placeholder="How do these futures reinforce or challenge each other?"
+          oninput={(e) => queueExplanation(chain.id, e.currentTarget.value)}
+          onblur={saveExplanation}></textarea>
+        <p class="small muted">
+          {chain.explanation == null && chain.notes.length
+            ? 'Starting text from the original model contribution.'
+            : chain.explanation != null
+              ? 'Your explanation · analyst-edited'
+              : 'Your thinking can start here.'}
+        </p>
+        {#if note}<details class="model-reference">
+            <summary>Model reasoning</summary>
+            <div class="segmented model-tabs" aria-label="Model perspectives">
+              {#each models as model, i}<button
+                  class:active={note.modelId === model}
+                  aria-pressed={note.modelId === model}
+                  onclick={() => (perspective = model)}
+                  ><span class="model-mark">{['●', '■', '▲', '◆'][i % 4]}</span>{modelName(
+                    model
+                  )}</button
+                >{/each}
+            </div>
+            <p>{note.reasoning}</p>
+            <p class="small muted">
+              {note.modelId} · checked revision {note.revision} · {new Date(
+                note.at
+              ).toLocaleDateString()}{#if note.revision !== chain.revision}<span
+                  class="review-text"
+                >
+                  — Review suggested after your edit</span
+                >{/if}
+            </p>
+            <details>
+              <summary>Original model contribution</summary>
+              <p>{chain.notes[0].reasoning}</p>
+              <p class="small muted">{chain.notes[0].modelId}</p>
+            </details>
+            <h3>Tensions</h3>
+            <ul>
+              {#each note.tensions as text}<li>{text}</li>{/each}
+            </ul>
+            <h3>Assumptions</h3>
+            <ul>
+              {#each note.assumptions as text}<li>{text}</li>{/each}
+            </ul>
+          </details>{:else}<p class="small muted">
+            No model check yet. You can complete your set using your own judgement.
+          </p>{/if}
+      </div>
+      <div class="inspector-editor">
+        <label class="spaced"
+          >Scenario name<input
+            value={chain.title}
+            onchange={(e) => {
+              const value = e.currentTarget.value.trim();
+              if (value && value !== chain.title)
+                change((p) => {
+                  const c = p.chains.find((c) => c.id === chain.id)!;
+                  snapshotChain(p, c);
+                  c.title = value;
+                  c.revision++;
+                  invalidateChainSet(p, [c.id]);
+                });
+              else e.currentTarget.value = chain.title;
+            }}
+          /></label
+        >
+        <div class="uncertainty-navigation">
+          <label
+            >Uncertainty to explore<select
+              aria-label="Uncertainty to explore"
+              value={driver.id}
+              onchange={(e) => (selectedDriver = e.currentTarget.value)}
+              >{#each rows as d}<option value={d.id}>{d.title}</option>{/each}</select
+            ></label
+          >
+          <div class="toolbar-group">
+            <button
+              class="secondary small"
+              aria-label="Previous uncertainty"
+              disabled={driverIndex === 0}
+              onclick={() => (selectedDriver = rows[driverIndex - 1].id)}
+              ><ChevronLeft size={16} /></button
+            ><span class="small">{driverIndex + 1} of {rows.length} uncertainties</span><button
+              class="secondary small"
+              aria-label="Next uncertainty"
+              disabled={driverIndex === rows.length - 1}
+              onclick={() => (selectedDriver = rows[driverIndex + 1].id)}
+              ><ChevronRight size={16} /></button
+            >
+          </div>
+        </div>
+        <label
+          >{driver.title} hypothesis<select
+            id="chain-hypothesis"
+            value={chain.items[driver.id] ?? ''}
+            onchange={(e) => {
+              const value = e.currentTarget.value;
+              change(
+                (p) => setChainItem(p, chain.id, driver.id, value || null),
+                'Hypothesis changed. Earlier reasoning and writing are preserved.'
+              );
+            }}
+            ><option value="">Unresolved</option>{#each statesFor(p, driver.id) as h}<option
+                value={h.id}>{h.title}{h.approved ? '' : ' (not approved)'}</option
+              >{/each}</select
+          ></label
+        >
+        <p>
+          {p.hypotheses.find((h) => h.id === chain.items[driver.id])?.description ??
+            'This uncertainty is intentionally unresolved. It will remain explicit in writing and exports.'}
+        </p>
+        {#if chain.wildcardDriverIds.length}<div class="notice review">
+            <strong>Additional drivers to review · unscored</strong
+            >{#each chain.wildcardDriverIds as driverId}{@const d = p.drivers.find(
+                (d) => d.id === driverId
+              )}{#if d}<label class="spaced"
+                  >Additional driver name<input
+                    value={d.title}
+                    onchange={(e) => editWildcard(driverId, 'title', e.currentTarget.value)}
+                  /></label
+                >
+                <label class="spaced"
+                  >Future disruption<textarea
+                    rows="2"
+                    value={d.summary}
+                    onchange={(e) => editWildcard(driverId, 'summary', e.currentTarget.value)}
+                  ></textarea></label
+                >
+                <label class="spaced"
+                  >Plausibility, humanitarian significance and interactions<textarea
+                    rows="3"
+                    value={d.assessment ?? ''}
+                    onchange={(e) => editWildcard(driverId, 'assessment', e.currentTarget.value)}
+                  ></textarea></label
+                >
+                <p class="small">Unscored. No matrix positions have been assigned.</p>
+                <div class="toolbar-group">
+                  <button class="secondary" onclick={() => approveWildcard(driverId)}
+                    >{d.approved ? '✓ Accepted · undo' : 'Accept driver'}</button
+                  ><button
+                    class="text-button"
+                    onclick={() =>
+                      change((p) => {
+                        const c = p.chains.find((c) => c.id === chain.id)!;
+                        c.wildcardDriverIds = c.wildcardDriverIds.filter((i) => i !== driverId);
+                        c.revision++;
+                        invalidateChainSet(p, [c.id]);
+                      })}><Trash2 size={14} /> Remove</button
+                  >
+                </div>{/if}{/each}
+          </div>{/if}
+      </div>
+    </section>
+    <div class="dialog-actions">
+      <button class="text-button" onclick={() => removeChain(chain.id)}
+        ><Trash2 size={16} /> Remove chain</button
+      ><button class="primary" onclick={closeEditor}
+        >{returnToChooser ? 'Back to your choices' : 'Done'}</button
+      >
+    </div>
+  </Modal>{/if}
+
 <style>
+  .stage-heading > div {
+    max-width: 76ch;
+  }
+  .chain-steps {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    padding: 0;
+    margin: 0 0 28px;
+    gap: 24px;
+  }
+  .chain-steps li {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .step-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--cg-control-border);
+    border-radius: 50%;
+    flex-shrink: 0;
+    font-weight: 700;
+    color: var(--cg-action);
+  }
+  .step-done .step-number {
+    background: var(--cg-selection);
+    border-color: var(--cg-action);
+  }
+  .chain-steps strong {
+    font-size: 0.875rem;
+  }
+  .chain-steps small {
+    display: block;
+    color: var(--cg-text-muted);
+    line-height: 1.5;
+    margin-top: 3px;
+  }
+  .comparison-toolbar,
+  .comparison-navigation,
+  .removal-receipt,
+  .removed-chain {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .comparison-toolbar {
+    margin: 24px 0 16px;
+  }
+  .comparison-navigation {
+    margin-bottom: 16px;
+    font-size: 0.875rem;
+  }
+  .chain-scroll {
+    margin-bottom: 28px;
+  }
+  .chain-table {
+    width: 100%;
+  }
+  .uncertainty-column {
+    width: 180px;
+  }
+  .chain-table .uncertainty-heading {
+    position: sticky;
+    left: -6px;
+    background: var(--cg-workspace);
+    z-index: 2;
+    font-size: 0.875rem;
+  }
+  .chain-table .scenario-heading {
+    width: auto;
+    border: 2px solid transparent;
+    transition: border-color var(--cg-duration-feedback);
+  }
+  .chain-table .chain-included {
+    border-color: var(--cg-action);
+  }
   .chain-include {
     display: flex;
     flex-direction: row;
     align-items: center;
     gap: 8px;
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: 0.875rem;
     margin-bottom: 12px;
+    font-weight: 600;
   }
   .chain-include input {
-    width: 17px;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+  .chain-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    margin-top: 10px;
+  }
+  .chain-header-actions .text-button {
+    font-size: 0.875rem;
+    min-height: 32px;
+    opacity: 1;
+  }
+  .chain-empty {
+    text-align: center;
+    padding: 36px 24px 48px;
+    color: var(--cg-text-muted);
+  }
+  .chain-empty > :global(svg) {
+    color: var(--cg-action);
+  }
+  .chain-empty h3 {
+    color: var(--cg-text);
+    font-size: 1.25rem;
+    margin: 12px 0;
+  }
+  .chain-empty p {
+    max-width: 60ch;
+    margin: 0 auto;
+  }
+  .removal-receipt {
+    background: var(--cg-selection);
+    padding: 12px 18px;
+    border-radius: 8px;
+  }
+  .removed-chains {
+    border-top: 1px solid var(--cg-border);
+    padding: 18px 0;
+    margin: 16px 0;
+  }
+  .removed-chains summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .removed-chain {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--cg-border);
+  }
+  .chooser-intro {
+    margin-top: 0;
+  }
+  .chooser-progress {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 24px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--cg-border);
+    font-size: 0.875rem;
+  }
+  .chain-choice {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px;
+    margin: 8px 0;
+    background: var(--cg-workspace);
+    border: 2px solid transparent;
+    border-radius: 8px;
+    transition:
+      background var(--cg-duration-feedback),
+      border-color var(--cg-duration-feedback);
+  }
+  .chain-choice.included {
+    border-color: var(--cg-action);
+    background: var(--cg-selection);
+  }
+  .choice-label {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 180px;
+    cursor: pointer;
+  }
+  .choice-label input {
+    width: 18px;
+    height: 18px;
+    margin-top: 3px;
+    flex-shrink: 0;
+  }
+  .choice-label strong {
+    display: block;
+  }
+  .choice-label small {
+    display: block;
+    font-weight: 400;
+    color: var(--cg-text-muted);
+    line-height: 1.5;
+    margin-top: 4px;
+  }
+  .choice-issues {
+    width: 100%;
+    padding-left: 30px;
+  }
+  .choice-issues button {
+    text-align: left;
+  }
+  .chooser-readiness {
+    margin: 20px 0 8px;
+    font-size: 0.875rem;
+    color: var(--cg-text-muted);
+  }
+  .chooser-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    background: var(--cg-paper);
+    border-top: 1px solid var(--cg-border);
+    padding: 8px 0 16px;
+  }
+  .chooser-footer .dialog-actions {
+    margin-top: 14px;
+  }
+  @media (max-height: 640px), (max-width: 680px) {
+    .chooser-footer {
+      position: static;
+    }
+  }
+  .chooser-readiness p {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+  }
+  .explanation-label {
+    display: block;
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin: 16px 0 8px;
+  }
+  .chain-reasoning textarea {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    line-height: 1.7;
+  }
+  .model-reference {
+    border-top: 1px solid var(--cg-border);
+    margin-top: 24px;
+    padding-top: 16px;
+  }
+  .model-reference summary {
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .model-reference .model-tabs {
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .uncertainty-navigation {
+    padding: 16px 0;
+    border-top: 1px solid var(--cg-border);
+    margin: 16px 0;
+  }
+  .uncertainty-navigation .toolbar-group {
+    margin-top: 10px;
+    justify-content: space-between;
+  }
+  .dialog-actions {
+    flex-wrap: wrap;
+  }
+  @media (max-width: 1100px) {
+    .chain-steps {
+      gap: 16px;
+    }
+  }
+  @media (max-width: 680px) {
+    .chain-steps {
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    .comparison-navigation .toolbar-group {
+      width: 100%;
+    }
+    .chain-choice {
+      align-items: flex-start;
+    }
+    .choice-label {
+      min-width: 0;
+      flex-basis: 100%;
+    }
+    .choice-issues {
+      padding-left: 0;
+    }
+    .dialog-actions > button {
+      flex: 1 1 100%;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chain-choice,
+    .chain-table .scenario-heading {
+      transition: none;
+    }
   }
 </style>

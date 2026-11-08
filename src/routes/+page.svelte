@@ -68,10 +68,12 @@
     testKey,
     planRequests,
     responseText,
+    isRunnableTask,
     type Model,
     type Operation,
     type Task,
-    type NarrativeOptions
+    type NarrativeOptions,
+    type ChainGenerationOptions
   } from '$lib/ai/openrouter';
   import { download, projectJSON, filename } from '$lib/export/files';
   import Chains from '$lib/components/Chains.svelte';
@@ -107,6 +109,7 @@
   let paidTargets = $state<string[] | undefined>();
   let paidContributors = $state<{ modelId: string; included: boolean }[]>([]);
   let retryId = $state<string | undefined>();
+  let paidChainOptions = $state<ChainGenerationOptions>({ mode: 'standard' });
   let paidNarrativeOptions = $state<NarrativeOptions | undefined>();
   let paidError = $state('');
   let busy = $state(false);
@@ -137,10 +140,28 @@
   const paidModels = $derived(paidContributors.filter((c) => c.included).map((c) => c.modelId));
   const paidPlan = $derived(
     p && dialog === 'paid'
-      ? planRequests(p, catalogue, paidTask, paidModels, paidTargets, retryId, paidNarrativeOptions)
+      ? planRequests(
+          p,
+          catalogue,
+          paidTask,
+          paidModels,
+          paidTargets,
+          retryId,
+          paidNarrativeOptions,
+          paidChainOptions
+        )
       : null
   );
   const paidEstimate = $derived(paidPlan?.estimatedTotal ?? null);
+  const paidCandidateCount = $derived(
+    paidTask === 'chains'
+      ? (paidPlan?.requests.reduce(
+          (total, request) =>
+            total + Number((request.context.chainBatch as { count: number }).count),
+          0
+        ) ?? 0)
+      : 0
+  );
 
   async function persist(snapshot: Project) {
     saveQueue = saveQueue
@@ -304,10 +325,18 @@
     targets?: string[],
     writer?: string,
     retry?: Run,
-    narrativeOptions?: NarrativeOptions
+    narrativeOptions?: NarrativeOptions,
+    chainOptions?: ChainGenerationOptions
   ) {
     if (!p || busy) return;
     paidTask = task;
+    const savedGeneration = retry?.context as
+      { chainGeneration?: ChainGenerationOptions; chainBatch?: { kind: string } } | undefined;
+    paidChainOptions = savedGeneration?.chainGeneration ??
+      chainOptions ?? {
+        mode: savedGeneration?.chainBatch?.kind === 'wildcard' ? 'disruption' : 'standard'
+      };
+    if (task === 'chains') modelSearch = '';
     paidTargets = targets;
     retryId = retry?.id;
     paidNarrativeOptions =
@@ -318,10 +347,21 @@
       : task === 'narrative' || task === 'narrative_edit' || task === 'consolidate'
         ? [writer || p.writer]
         : [...(p.overrides[String(p.stage)] ?? p.models)];
-    paidContributors = models.map((modelId) => ({ modelId, included: true }));
+    paidContributors = models.map((modelId, i) => ({
+      modelId,
+      included: task !== 'chains' || !!retry || i === 0
+    }));
     paidError = '';
     dialog = 'paid';
     if (!catalogue.length && !catalogueLoading) void loadCatalogue();
+  }
+  function addChainContributor() {
+    const unused = paidContributors.find((c) => !c.included);
+    if (unused) unused.included = true;
+    else {
+      const model = catalogue.find((m) => !paidModels.includes(m.id));
+      if (model) paidContributors.push({ modelId: model.id, included: true });
+    }
   }
   async function run() {
     if (!project) return;
@@ -336,7 +376,8 @@
         [...paidModels],
         paidTargets,
         retryId,
-        paidNarrativeOptions
+        paidNarrativeOptions,
+        paidChainOptions
       );
       started = true;
       dialog = '';
@@ -358,6 +399,7 @@
     }
   }
   function retry(run: Run) {
+    if (!isRunnableTask(run.task)) return;
     request(run.task, run.targetIds.length ? run.targetIds : undefined, undefined, run);
   }
   async function importFile(event: Event) {
@@ -634,7 +676,8 @@
               {:else if p.stage === 5}<Chains
                   {p}
                   {change}
-                  request={(task, ids) => request(task, ids)}
+                  request={(task, ids, options) =>
+                    request(task, ids, undefined, undefined, undefined, options)}
                   next={() => navigate(6)}
                 />
               {:else if p.stage === 6 || p.stage === 7}<Writing
@@ -644,6 +687,7 @@
                   request={(task, id, instructions) =>
                     request(task, [id], undefined, undefined, { instructions })}
                   next={() => navigate(8)}
+                  reviewChains={() => navigate(5)}
                 />
               {:else}<Exports {p} {navigate} />{/if}
             {/key}{/if}
@@ -707,9 +751,11 @@
                     </details>
                   </div>
                   {#if ['failed', 'cancelled'].includes(r.status)}<div class="toolbar-group">
-                      <button class="secondary" disabled={busy} onclick={() => retry(r)}
-                        >Retry / replace</button
-                      ><button
+                      {#if isRunnableTask(r.task)}<button
+                          class="secondary"
+                          disabled={busy}
+                          onclick={() => retry(r)}>Retry / replace</button
+                        >{/if}<button
                         class="text-button"
                         onclick={() =>
                           change((p) => {
@@ -836,7 +882,8 @@
       <section>
         <h3>Connect OpenRouter</h3>
         <p class="small muted">
-          Your key stays in memory for this page session. It is never saved with your project, so you might need to re-enter it here if you reload the page.
+          Your key stays in memory for this page session. It is never saved with your project, so
+          you might need to re-enter it here if you reload the page.
         </p>
         <label
           >API key<input
@@ -991,8 +1038,8 @@
 {:else if dialog === 'paid' && p}<Modal
     title={retryId
       ? 'Retry or replace this contribution'
-      : paidTask === 'coherence'
-        ? 'Recheck coherence'
+      : paidTask === 'chains' && paidChainOptions.mode === 'disruption'
+        ? 'Explore a disruption'
         : paidTask === 'narrative_edit'
           ? 'Ask AI to edit your scenario'
           : paidTask === 'narrative'
@@ -1021,6 +1068,29 @@
     {#if paidContributors.length > 1}<p class="small muted">
         Choose which contributors to include in this run. Select at least one model.
       </p>{/if}
+    {#if paidTask === 'chains' && paidChainOptions.mode === 'disruption'}
+      {#if retryId}<p>
+          <strong>What if…?</strong>
+          {paidChainOptions.prompt || 'Suggest a surprising but plausible disruption.'}
+        </p>
+      {:else}<label class="spaced"
+          >What if…? (optional)<textarea
+            rows="3"
+            bind:value={paidChainOptions.prompt}
+            placeholder="For example, a prolonged energy supply interruption."></textarea></label
+        >
+        <p class="small muted">
+          Leave this blank for the model to suggest a disruption. Each model creates one new
+          candidate. Any additional drivers will need your review.
+        </p>{/if}
+    {/if}
+    {#if paidTask === 'chains'}<label class="spaced"
+        >Find a model<input
+          type="search"
+          bind:value={modelSearch}
+          placeholder="Search model names or IDs"
+        /></label
+      >{/if}
     <div class="paid-models">
       {#each paidContributors as contributor, i}
         {@const model = contributor.modelId}
@@ -1041,9 +1111,11 @@
             disabled={!contributor.included}
             ><option value={model}>{catalogue.find((c) => c.id === model)?.name ?? model}</option
             >{#each catalogue
-              .filter((c) => c.id !== model && (p.models.includes(c.id) || (modelSearch && c.name
+              .filter((c) => c.id !== model && (paidTask === 'chains' ? !modelSearch || `${c.name} ${c.id}`
                         .toLowerCase()
-                        .includes(modelSearch.toLowerCase()))))
+                        .includes(modelSearch.toLowerCase()) : p.models.includes(c.id) || (modelSearch && c.name
+                          .toLowerCase()
+                          .includes(modelSearch.toLowerCase()))))
               .slice(0, 40) as m}<option value={m.id}>{m.name}</option>{/each}</select
           ><small>{model}</small>{#if !contributor.included}<small>Not included in this run.</small
             >{:else if paidTask === 'ratings'}<small>
@@ -1054,6 +1126,31 @@
             </small>{/if}
         </div>{/each}
     </div>
+    {#if paidTask === 'chains' && !retryId}
+      <button
+        class="secondary"
+        onclick={addChainContributor}
+        disabled={!paidContributors.some((c) => !c.included) &&
+          !catalogue.some((m) => !paidModels.includes(m.id))}
+        ><Plus size={16} /> Add another model</button
+      >
+      <p class="small muted">
+        Start with one perspective, or add more to explore different combinations. Each model offers
+        new candidates for you to choose from.
+      </p>
+    {/if}
+    {#if paidTask === 'chains'}
+      <p class="chain-generation-summary" role="status">
+        <strong
+          >{paidCandidateCount} new candidate {paidCandidateCount === 1
+            ? 'chain'
+            : 'chains'}</strong
+        >
+        from {paidModels.length}
+        {paidModels.length === 1 ? 'model' : 'models'}. Choose any one or more chains to take into
+        writing.
+      </p>
+    {/if}
     <div class="estimate-box">
       <span>Estimated maximum allowance</span><strong
         >{paidEstimate === null ? 'Price unavailable' : `$${paidEstimate.toFixed(4)} USD`}</strong
@@ -1068,9 +1165,12 @@
       >
     </div>
     {#if paidTask === 'chains'}<p class="small muted">
-        Main chains are requested in batches of up to three; each wildcard has its own request.
-        Every chain includes all selected uncertainties. Retry / replace repeats only the failed
-        batch.
+        {#if retryId}The saved request scope is retained for this retry.{:else}Generate chains
+          requests three candidates per model; Explore a disruption requests one per model.{/if} Every
+        chain includes all selected uncertainties. Retry / replace repeats only the failed batch.
+      </p>{/if}
+    {#if new Set(paidModels).size !== paidModels.length}<p class="notice review" role="status">
+        Choose a different model for each contributor.
       </p>{/if}
     {#if !paidModels.length}<p class="notice review" role="status">
         Select at least one model to run.

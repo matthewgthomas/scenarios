@@ -10,14 +10,14 @@
     analyticalJSON,
     filename
   } from '$lib/export/files';
-  import { type Project } from '$lib/domain/project';
+  import { activeChains, type Project } from '$lib/domain/project';
   import StageGuide from './StageGuide.svelte';
   let { p, navigate }: { p: Project; navigate: (stage: number) => void } = $props();
   let annotations = $state(false);
   let full = $state(false);
   let status = $state('');
   let busy = $state(false);
-  const selected = $derived(p.chains.filter((c) => c.selected));
+  const selected = $derived(activeChains(p).filter((c) => c.selected));
   const missing = $derived(
     selected.filter((c) => !p.narratives.find((n) => n.chainId === c.id)?.working.trim())
   );
@@ -103,9 +103,7 @@
       <div>
         <h2>{c.title}</h2>
         <p>
-          {c.kind === 'wildcard' ? 'Wildcard · ' : ''}{p.narratives.some(
-            (n) => n.chainId === c.id && n.final !== null && n.final === n.working
-          )
+          {p.narratives.some((n) => n.chainId === c.id && n.final !== null && n.final === n.working)
             ? 'Final snapshot recorded'
             : p.narratives.find((n) => n.chainId === c.id)?.working.trim()
               ? 'Working draft'

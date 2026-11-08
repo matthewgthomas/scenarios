@@ -11,6 +11,8 @@
   } from '@lucide/svelte';
   import {
     uncertainties,
+    activeChains,
+    approvedChainSet,
     modelName,
     allNarrativesWritten,
     canWriteNarrative,
@@ -31,13 +33,15 @@
     change,
     request,
     busy = false,
-    next
+    next,
+    reviewChains
   }: {
     p: Project;
     change: Change;
     request: (task: 'narrative' | 'narrative_edit', chainId: string, instructions?: string) => void;
     busy?: boolean;
     next: () => void;
+    reviewChains: () => void;
   } = $props();
   let selectedId = $state('');
   type WritingAction = 'generate' | 'write';
@@ -54,7 +58,7 @@
   onMount(() => {
     void import('./Editor.svelte').then((module) => (RichEditor = module.default));
   });
-  const chains = $derived(p.chains.filter((c) => c.selected));
+  const chains = $derived(activeChains(p).filter((c) => c.selected));
   const chain = $derived(chains.find((c) => c.id === selectedId) ?? chains[0]);
   const narrative = $derived(p.narratives.find((n) => n.chainId === chain?.id));
   const editable = $derived(chain ? canWriteNarrative(p, chain.id) : false);
@@ -93,6 +97,7 @@
     chains.filter((c) => !p.narratives.find((n) => n.chainId === c.id)?.working.trim())
   );
   const allWritten = $derived(allNarrativesWritten(p));
+  const chainsApproved = $derived(approvedChainSet(p));
   function openScenario(chainId: string) {
     selectedId = chainId;
     editorOpen = true;
@@ -119,6 +124,7 @@
 
   const allFinal = $derived(
     p.completed.includes(7) &&
+      !p.stale.some((s) => s === 6 || s === 7) &&
       allWritten &&
       chains.every((c) =>
         p.narratives.some(
@@ -157,20 +163,28 @@
 <div class="stage-heading">
   <div>
     <h1>Write & review scenarios</h1>
-    <p>Shape each story, review it alongside its hypothesis chains, then save your final set of scenarios.</p>
+    <p>
+      Shape each story, review it alongside its hypothesis chains, then save your final set of
+      scenarios.
+    </p>
   </div>
 </div>
 <StageGuide
-  title={allFinal
-    ? 'Your final set of scenarios is saved'
-    : allWritten
-      ? 'Every story has a draft. Ready for a final read?'
-      : `${chains.length - missingDrafts.length} of ${chains.length} scenario drafts written`}
+  title={!chainsApproved
+    ? 'Review your updated scenario set before saving final stories'
+    : allFinal
+      ? 'Your final set of scenarios is saved'
+      : allWritten
+        ? 'Every story has a draft. Ready for a final read?'
+        : `${chains.length - missingDrafts.length} of ${chains.length} scenario drafts written`}
   description="Write a narrative for every included scenario, then review the stories and save a final snapshot. The review checklist is optional. Your writing saves as you type, and you can keep editing after completing the set."
   ready={allFinal}
   helpTitle="A simple way to shape your story"
 >
   {#snippet children()}
+    {#if !chainsApproved}<button class="workflow-link" onclick={reviewChains}
+        >Review & approve your chains <ArrowRight size={14} /></button
+      >{/if}
     {#each missingDrafts as c}<button class="workflow-link" onclick={() => openScenario(c.id)}
         >Write {c.title}<ArrowRight size={14} /></button
       >{/each}
@@ -195,8 +209,8 @@
       <li>Make it human: who is affected, in what ways, and what remains uncertain?</li>
     </ol>
     <p>
-      Aim for around 400–600 words per scenario. AI drafts and edits are proposals for you
-      to review before applying.
+      Aim for around 400–600 words per scenario. AI drafts and edits are proposals for you to review
+      before applying.
     </p>{/snippet}
 </StageGuide>
 <StageActions
@@ -281,9 +295,7 @@
         restoring = false;
       }}
       ><strong>{c.title}</strong><span class="small"
-        >{c.kind === 'wildcard' ? 'Wildcard · ' : ''}{p.narratives
-          .find((n) => n.chainId === c.id)
-          ?.working.trim()
+        >{p.narratives.find((n) => n.chainId === c.id)?.working.trim()
           ? story?.final === story?.working
             ? '✓ Final snapshot saved'
             : '✓ Draft written'
@@ -464,8 +476,8 @@
     {#key chain.id}<details class="ai-help">
         <summary>AI help</summary>
         <p class="small muted">
-          Ask AI to edit your draft or, if you prefer, request an AI-generated
-          draft. You review every proposal before applying it.
+          Ask AI to edit your draft or, if you prefer, request an AI-generated draft. You review
+          every proposal before applying it.
         </p>
         <label class="inline-label"
           >Model<select
@@ -580,21 +592,28 @@
 <footer class="stage-footer">
   <div>
     <strong
-      >{missingDrafts.length
-        ? `${missingDrafts.length} ${missingDrafts.length === 1 ? 'story still needs' : 'stories still need'} a draft`
-        : allFinal
-          ? 'Your final set is ready to share'
-          : 'Ready to save your final set?'}</strong
+      >{!chainsApproved
+        ? 'Your scenario set needs approval'
+        : missingDrafts.length
+          ? `${missingDrafts.length} ${missingDrafts.length === 1 ? 'story still needs' : 'stories still need'} a draft`
+          : allFinal
+            ? 'Your final set is ready to share'
+            : 'Ready to save your final set?'}</strong
     >
     <small
-      >{missingDrafts.length
-        ? 'Write a draft for every selected scenario. AI help is optional.'
-        : allFinal
-          ? 'You can export now, or keep refining your stories.'
-          : 'Give your stories a final read, then save a snapshot of the whole set. The checklist is optional.'}</small
+      >{!chainsApproved
+        ? 'Your writing is kept. Review and approve the updated chains before saving a final set.'
+        : missingDrafts.length
+          ? 'Write a draft for every selected scenario. AI help is optional.'
+          : allFinal
+            ? 'You can export now, or keep refining your stories.'
+            : 'Give your stories a final read, then save a snapshot of the whole set. The checklist is optional.'}</small
     >
   </div>
-  {#if missingDrafts.length}<button
+  {#if !chainsApproved}<button class="primary" onclick={reviewChains}
+      >Review & approve your chains <ArrowRight size={16} /></button
+    >
+  {:else if missingDrafts.length}<button
       class="primary"
       onclick={() => openScenario(missingDrafts[0].id)}
       >Write the next missing draft <ArrowRight size={16} /></button

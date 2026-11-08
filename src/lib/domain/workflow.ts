@@ -1,5 +1,7 @@
 import {
   activeDrivers,
+  activeChains,
+  approvedChainSet,
   canonicalStage,
   uncertainties,
   snapshotChain,
@@ -11,11 +13,8 @@ import {
 } from './project';
 
 export function chainReadiness(p: Project) {
-  const selected = p.chains.filter((c) => c.selected);
-  const main = selected.filter((c) => c.kind === 'main').length;
-  const wildcard = selected.filter((c) => c.kind === 'wildcard').length;
-  const targetsMet = main === p.mainCount && wildcard === p.wildcardCount;
-  const issues = selected.flatMap((c) => [
+  const selected = activeChains(p).filter((c) => c.selected);
+  const candidateIssues = activeChains(p).flatMap((c) => [
     ...uncertainties(p)
       .filter(
         (d) =>
@@ -34,16 +33,15 @@ export function chainReadiness(p: Project) {
       .map((id) => ({
         chainId: c.id,
         driverId: undefined,
-        message: `${c.title}: review the new wildcard driver “${p.drivers.find((d) => d.id === id)?.title ?? id}”.`
+        message: `${c.title}: review the additional driver “${p.drivers.find((d) => d.id === id)?.title ?? id}”.`
       }))
   ]);
+  const issues = candidateIssues.filter((issue) => selected.some((c) => c.id === issue.chainId));
   return {
     selected,
-    main,
-    wildcard,
-    targetsMet,
     issues,
-    canApprove: selected.length > 0 && targetsMet && !issues.length
+    candidateIssues,
+    canApprove: selected.length > 0 && !issues.length
   };
 }
 
@@ -60,9 +58,10 @@ export function approveChainSet(p: Project): boolean {
 }
 
 export function completeScenarioSet(p: Project): boolean {
-  if (!allNarrativesWritten(p)) return false;
+  if (!allNarrativesWritten(p) || !approvedChainSet(p) || !chainReadiness(p).canApprove)
+    return false;
   prepareNarrativeReview(p);
-  p.chains
+  activeChains(p)
     .filter((c) => c.selected)
     .forEach((c) => {
       const n = p.narratives.find((n) => n.chainId === c.id)!;
@@ -89,7 +88,6 @@ export function prerequisiteStage(p: Project, stage: number): number {
     )
   )
     return 4;
-  if (stage >= 6 && !p.chains.some((c) => c.selected && c.approvedRevision === c.revision))
-    return 5;
+  if (stage >= 6 && !approvedChainSet(p)) return 5;
   return Math.max(0, stage - 1);
 }

@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { exampleProject } from '$lib/domain/example';
-import { newProject, reserved, type Project, type Run } from '$lib/domain/project';
+import {
+  newProject,
+  parseProject,
+  reserved,
+  archiveChain,
+  editChainExplanation,
+  type Project,
+  type Run
+} from '$lib/domain/project';
+import { chainReadiness, approveChainSet } from '$lib/domain/workflow';
 import { mergeResults } from '$lib/domain/task-results';
 import {
   launch,
@@ -444,7 +453,6 @@ describe.each<Task>([
   'ratings',
   'hypotheses',
   'chains',
-  'coherence',
   'narrative',
   'narrative_edit'
 ])('%s response formats', (task) => {
@@ -491,22 +499,18 @@ describe.each<Task>([
           }
         ]
       },
-      coherence: {
-        checks: [
-          { chainId: chain.id, reasoning: 'Compatible states.', tensions: [], assumptions: [] }
-        ]
-      },
       narrative: { chainId: chain.id, text: 'A possible future.' },
       narrative_edit: { chainId: chain.id, text: 'A clearer possible future.' }
     };
     const output = outputs[task];
+    if (task === 'chains')
+      output.chains = Array.from({ length: 3 }, () =>
+        structuredClone((outputs.chains.chains as unknown[])[0])
+      );
     const fetcher = vi.fn().mockResolvedValue(response(output));
     vi.stubGlobal('fetch', fetcher);
     const h = harness(p);
-    const targets =
-      task === 'coherence' || task === 'narrative' || task === 'narrative_edit'
-        ? [chain.id]
-        : undefined;
+    const targets = task === 'narrative' || task === 'narrative_edit' ? [chain.id] : undefined;
     await launch(h.get, h.change, 'test-key', catalogue, task, [models[0].id], targets).done;
     const body = JSON.parse(fetcher.mock.calls[0][1].body);
     expect(body.response_format?.type).toBe(format);
@@ -554,7 +558,7 @@ describe('chain construction batches', () => {
         tensions: ['Response capacity may improve.'],
         assumptions: ['Current constraints persist.'],
         distinctiveness: 'A different combination of states.',
-        novelDrivers: []
+        novelDrivers: [] as { title: string; summary: string; assessment: string }[]
       }))
     };
   }
@@ -563,7 +567,7 @@ describe('chain construction batches', () => {
     [1, 0],
     [2, 1],
     [12, 6]
-  ])('plans bounded independent portfolios for %i main / %i wildcard chains', (main, wildcards) => {
+  ])('ignores legacy targets %i/%i when planning three candidates per model', (main, wildcards) => {
     const p = project();
     p.mainCount = main;
     p.wildcardCount = wildcards;
@@ -573,25 +577,17 @@ describe('chain construction batches', () => {
       'chains',
       models.map((m) => m.id)
     );
-    const first = plan.requests.filter((r) => r.modelId === models[0].id);
-    expect(first).toHaveLength(Math.ceil(main / 3) + wildcards);
-    for (const model of models) {
-      const requests = plan.requests.filter((r) => r.modelId === model.id);
-      expect(requests.map((r) => r.context)).toEqual(first.map((r) => r.context));
-      for (const kind of ['main', 'wildcard']) {
-        const batches = requests
-          .map((r) => r.context.chainBatch as { kind: string; start: number; count: number })
-          .filter((b) => b.kind === kind);
-        expect(
-          batches.flatMap((b) => Array.from({ length: b.count }, (_, i) => b.start + i))
-        ).toEqual(Array.from({ length: kind === 'main' ? main : wildcards }, (_, i) => i + 1));
-        expect(batches.every((b) => b.count <= (kind === 'main' ? 3 : 1))).toBe(true);
-      }
-      expect(
-        requests.every((r) => r.maxOutputTokens >= 12000 && r.batchCount === requests.length)
-      ).toBe(true);
-      expect(requests.map((r) => r.batchIndex)).toEqual(requests.map((_, i) => i + 1));
-    }
+    expect(plan.requests).toHaveLength(3);
+    expect(
+      plan.requests.every(
+        (r) =>
+          JSON.stringify(r.context.chainBatch) ===
+          JSON.stringify({ kind: 'main', start: 1, count: 3 })
+      )
+    ).toBe(true);
+    expect(plan.requests.every((r) => r.batchCount === 1 && r.batchIndex === 1)).toBe(true);
+    expect(plan.requests[1].context).toEqual(plan.requests[0].context);
+    expect(plan.requests[0].context).not.toHaveProperty('mainCount');
     expect(plan.estimatedTotal).toBe(plan.requests.reduce((sum, r) => sum + r.estimated!, 0));
   });
 
@@ -610,7 +606,7 @@ describe('chain construction batches', () => {
     await launch(h.get, h.change, 'test-key', catalogue, 'chains', [models[0].id]).done;
     expect(h.get().chains).toHaveLength(3);
     expect(
-      h.get().runs.every((r) => r.status === 'succeeded' && r.promptTemplateVersion === 'quick-3')
+      h.get().runs.every((r) => r.status === 'succeeded' && r.promptTemplateVersion === 'quick-4')
     ).toBe(true);
     fetcher.mock.calls.forEach((call, i) => {
       const body = JSON.parse(call[1].body);
@@ -640,7 +636,7 @@ describe('chain construction batches', () => {
     });
   });
 
-  it('keeps valid main chains when a wildcard omits uncertainties, then retries only the wildcard', async () => {
+  it('keeps standard candidates when disruption exploration fails, then retries only that candidate', async () => {
     vi.stubGlobal('navigator', { onLine: true });
     const fetcher = vi.fn().mockImplementation((_url, options) => {
       const input = inputFor(options.body);
@@ -652,8 +648,20 @@ describe('chain construction batches', () => {
     vi.stubGlobal('fetch', fetcher);
     const h = harness(project());
     await launch(h.get, h.change, 'test-key', models, 'chains', [models[0].id]).done;
+    await launch(
+      h.get,
+      h.change,
+      'test-key',
+      models,
+      'chains',
+      [models[0].id],
+      undefined,
+      undefined,
+      undefined,
+      { mode: 'disruption', prompt: 'A prolonged energy supply interruption' }
+    ).done;
     const failed = h.get().runs.find((r) => r.status === 'failed')!;
-    expect(h.get().chains).toHaveLength(2);
+    expect(h.get().chains).toHaveLength(3);
     expect(failed.error).toContain('Chain “wildcard 1”');
     expect(failed.error).toContain('missing uncertainties:');
     expect(failed.error).toContain('Work & incomes');
@@ -662,6 +670,10 @@ describe('chain construction batches', () => {
     const originalIds = h.get().chains.map((c) => c.id);
     const retryPlan = planRequests(h.get(), models, 'chains', [models[1].id], undefined, failed.id);
     expect(retryPlan.requests).toHaveLength(1);
+    expect(retryPlan.requests[0].context.chainGeneration).toEqual({
+      mode: 'disruption',
+      prompt: 'A prolonged energy supply interruption'
+    });
     expect(retryPlan.requests[0].context.chainBatch).toEqual({
       kind: 'wildcard',
       start: 1,
@@ -679,11 +691,11 @@ describe('chain construction batches', () => {
       failed.id
     ).done;
     expect(fetcher).toHaveBeenCalledTimes(3);
-    expect(h.get().chains).toHaveLength(3);
+    expect(h.get().chains).toHaveLength(4);
     expect(
       h
         .get()
-        .chains.slice(0, 2)
+        .chains.slice(0, 3)
         .map((c) => c.id)
     ).toEqual(originalIds);
     expect(h.get().runs.at(-1)?.retryOf).toBe(failed.id);
@@ -701,9 +713,21 @@ describe('chain construction batches', () => {
     vi.stubGlobal('fetch', fetcher);
     const h = harness(project());
     await launch(h.get, h.change, 'test-key', models, 'chains', [models[0].id]).done;
+    await launch(
+      h.get,
+      h.change,
+      'test-key',
+      models,
+      'chains',
+      [models[0].id],
+      undefined,
+      undefined,
+      undefined,
+      { mode: 'disruption', prompt: 'A prolonged energy supply interruption' }
+    ).done;
     const failed = h.get().runs.find((r) => r.status === 'failed')!;
     expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(h.get().chains).toHaveLength(2);
+    expect(h.get().chains).toHaveLength(3);
     expect(failed.error).toContain('output limit');
     expect(failed.rawOutput).toContain('Ice-free corridor shock');
     expect(failed.confirmed).toBe(0.003);
@@ -725,7 +749,7 @@ describe('chain construction batches', () => {
       failed.id
     ).done;
     expect(h.get().runs.at(-1)?.maxOutputTokens).toBe(retryPlan.requests[0].maxOutputTokens);
-    expect(h.get().chains).toHaveLength(3);
+    expect(h.get().chains).toHaveLength(4);
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
@@ -762,10 +786,8 @@ describe('chain construction batches', () => {
       await launch(h.get, h.change, 'test-key', models, 'chains', [models[0].id]).done;
       expect(h.get().runs[0].status).toBe('failed');
       expect(h.get().runs[0].rawOutput).toBeDefined();
-      expect(h.get().runs[1].status).toBe('succeeded');
-      expect(h.get().chains).toHaveLength(1);
-      expect(h.get().chains[0].kind).toBe('wildcard');
-      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(h.get().chains).toHaveLength(0);
+      expect(fetcher).toHaveBeenCalledTimes(1);
     }
   );
 
@@ -797,7 +819,12 @@ describe('chain construction batches', () => {
     h.change((p) => {
       const run = p.runs[0];
       run.promptTemplateVersion = 'quick-1';
-      run.context = contextFor(p, 'chains');
+      const legacy = contextFor(p, 'chains');
+      delete legacy.chainGeneration;
+      delete legacy.existingCandidates;
+      legacy.mainCount = 2;
+      legacy.wildcardCount = 1;
+      run.context = legacy;
       delete run.maxOutputTokens;
       delete run.batchIndex;
       delete run.batchCount;
@@ -810,13 +837,147 @@ describe('chain construction batches', () => {
     ]);
   });
 
+  it.each([
+    { mode: 'standard' as const, prompt: undefined, count: 3 },
+    { mode: 'disruption' as const, prompt: 'A prolonged energy supply interruption', count: 1 },
+    { mode: 'disruption' as const, prompt: '', count: 1 }
+  ])(
+    'generates $count candidates per model in $mode mode and reviews additional drivers',
+    async ({ mode, prompt, count }) => {
+      vi.stubGlobal('navigator', { onLine: true });
+      const p = exampleProject();
+      const existing = p.chains.map((c) => ({ id: c.id, title: c.title, items: c.items }));
+      const received: ReturnType<typeof inputFor>[] = [];
+      const fetcher = vi.fn().mockImplementation((_url, options) => {
+        const input = inputFor(options.body);
+        received.push(input);
+        const output = chainsFor(input);
+        if (mode === 'disruption')
+          output.chains[0].novelDrivers = [
+            {
+              title: 'Energy supply interruption',
+              summary: 'A sustained interruption to household energy.',
+              assessment: 'Plausible disruption with effects on access and local response capacity.'
+            }
+          ];
+        return response(output);
+      });
+      vi.stubGlobal('fetch', fetcher);
+      const h = harness(p);
+      const options = { mode, prompt };
+      const plan = planRequests(
+        p,
+        models,
+        'chains',
+        models.map((m) => m.id),
+        undefined,
+        undefined,
+        undefined,
+        options
+      );
+      await launch(
+        h.get,
+        h.change,
+        'test-key',
+        models,
+        'chains',
+        models.map((m) => m.id),
+        undefined,
+        undefined,
+        undefined,
+        options
+      ).done;
+      expect(h.get().runs.every((r) => r.status === 'succeeded')).toBe(true);
+      expect(h.get().chains).toHaveLength(3 + count * 3);
+      expect(received).toHaveLength(3);
+      expect(
+        received.every(
+          (input) => JSON.stringify(input.existingCandidates) === JSON.stringify(existing)
+        )
+      ).toBe(true);
+      expect(received[0].chainGeneration).toEqual({ mode, ...(prompt ? { prompt } : {}) });
+      expect(received[0].chainBatch.count).toBe(count);
+      expect(plan.estimatedTotal).toBe(h.get().runs.reduce((total, r) => total + r.estimated, 0));
+      const nextPlan = planRequests(h.get(), models, 'chains', [models[0].id]);
+      expect(nextPlan.requests[0].context.existingCandidates).toHaveLength(3 + count * 3);
+      if (mode === 'disruption') {
+        h.get().chains.forEach((c) => (c.selected = false));
+        const chain = h.get().chains.at(-1)!;
+        chain.selected = true;
+        expect(chainReadiness(h.get()).canApprove).toBe(false);
+        const additional = h.get().drivers.find((d) => d.id === chain.wildcardDriverIds[0])!;
+        expect(additional.ratings).toEqual([]);
+        expect(additional.decision).toBeUndefined();
+        additional.approved = true;
+        expect(approveChainSet(h.get())).toBe(true);
+        expect(
+          (contextFor(h.get(), 'narrative', [chain.id]).chains as { novelDrivers: unknown[] }[])[0]
+            .novelDrivers
+        ).toHaveLength(1);
+      }
+    }
+  );
+
+  it('rejects additional drivers in ordinary generation without applying partial output', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const fetcher = vi.fn().mockImplementation((_url, options) => {
+      const output = chainsFor(inputFor(options.body));
+      output.chains[0].novelDrivers = [
+        {
+          title: 'Unexpected driver',
+          summary: 'A disruption',
+          assessment: 'Not requested for this run.'
+        }
+      ];
+      return response(output);
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness(project());
+    const originalDrivers = structuredClone(h.get().drivers);
+    await launch(h.get, h.change, 'test-key', models, 'chains', [models[0].id]).done;
+    expect(h.get().runs[0].status).toBe('failed');
+    expect(h.get().chains).toHaveLength(0);
+    expect(h.get().drivers).toEqual(originalDrivers);
+  });
+
+  it('rejects more than two additional disruption drivers with no partial changes', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const fetcher = vi.fn().mockImplementation((_url, options) => {
+      const output = chainsFor(inputFor(options.body));
+      output.chains[0].novelDrivers = Array.from({ length: 3 }, (_, i) => ({
+        title: `Driver ${i}`,
+        summary: 'A possible disruption.',
+        assessment: 'Requires review.'
+      }));
+      return response(output);
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness(project());
+    const originalDrivers = structuredClone(h.get().drivers);
+    await launch(
+      h.get,
+      h.change,
+      'test-key',
+      models,
+      'chains',
+      [models[0].id],
+      undefined,
+      undefined,
+      undefined,
+      { mode: 'disruption' }
+    ).done;
+    expect(h.get().runs[0].error).toContain('at most two');
+    expect(h.get().chains).toHaveLength(0);
+    expect(h.get().drivers).toEqual(originalDrivers);
+  });
+
   it('reserves the complete chain operation before dispatch', () => {
     vi.stubGlobal('navigator', { onLine: true });
     const fetcher = vi.fn();
     vi.stubGlobal('fetch', fetcher);
     const p = project();
     const plan = planRequests(p, models, 'chains', [models[0].id]);
-    p.budget = plan.requests[0].estimated!;
+    p.budget = plan.requests[0].estimated! / 2;
     const h = harness(p);
     expect(() => launch(h.get, h.change, 'test-key', models, 'chains', [models[0].id])).toThrow(
       'exceeds'
@@ -833,16 +994,23 @@ describe('chain construction batches', () => {
         new Promise<Response>((resolve) => pending.push({ input: inputFor(options.body), resolve }))
     );
     const h = harness(project());
-    const op = launch(h.get, h.change, 'test-key', models, 'chains', [models[0].id]);
+    const op = launch(
+      h.get,
+      h.change,
+      'test-key',
+      models,
+      'chains',
+      models.slice(0, 2).map((m) => m.id)
+    );
     pending[0].resolve(response(chainsFor(pending[0].input)));
-    await vi.waitFor(() => expect(h.get().chains).toHaveLength(2));
+    await vi.waitFor(() => expect(h.get().chains).toHaveLength(3));
     h.change((p) => {
       p.hypotheses[0].description = 'An updated state';
     });
     pending[1].resolve(response(chainsFor(pending[1].input)));
     await op.done;
     expect(h.get().runs[1].error).toContain('Inputs changed');
-    expect(h.get().chains).toHaveLength(2);
+    expect(h.get().chains).toHaveLength(3);
   });
 });
 
@@ -1174,7 +1342,7 @@ describe('independent OpenRouter orchestration', () => {
 });
 
 describe('structured analytical responses', () => {
-  const makeRun = (p: Project, task: Run['task'], modelId = 'one/a'): Run => ({
+  const makeRun = (p: Project, task: Task, modelId = 'one/a'): Run => ({
     id: 'run',
     operationId: 'op',
     exerciseId: p.id,
@@ -1608,5 +1776,129 @@ describe('optional narrative assistance', () => {
       baseText: '**My own scenario.**',
       status: 'pending'
     });
+  });
+});
+
+describe('retired coherence requests', () => {
+  it('preserves historical operations and reasoning while rejecting new requests and retries before dispatch', () => {
+    const p = exampleProject();
+    const c = p.chains[0];
+    const historical: Run = {
+      id: 'old-check',
+      operationId: 'old-operation',
+      exerciseId: p.id,
+      stage: 5,
+      task: 'coherence',
+      modelId: models[0].id,
+      promptTemplateVersion: 'quick-1',
+      inputRevision: p.revision,
+      status: 'failed',
+      at: p.updatedAt,
+      estimated: 0.1,
+      confirmed: 0.01,
+      unknownCharge: false,
+      context: { chains: [{ id: c.id, revision: c.revision }] },
+      targetIds: [c.id],
+      rawOutput: '{"checks":[]}'
+    };
+    p.runs = [historical];
+    const restored = parseProject(JSON.parse(JSON.stringify(p)));
+    expect(restored.runs).toEqual([historical]);
+    expect(restored.chains[0].notes).toEqual(c.notes);
+    const h = harness(restored);
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+    const retired = 'coherence' as Task;
+    expect(() => planRequests(restored, models, retired, [models[0].id])).toThrow(
+      'no longer available'
+    );
+    expect(() =>
+      planRequests(restored, models, retired, [models[0].id], undefined, historical.id)
+    ).toThrow('no longer available');
+    expect(() => launch(h.get, h.change, 'test-key', models, retired, [models[0].id])).toThrow(
+      'no longer available'
+    );
+    expect(() =>
+      launch(h.get, h.change, 'test-key', models, retired, [models[0].id], undefined, historical.id)
+    ).toThrow('no longer available');
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(h.get().runs).toEqual([historical]);
+    expect(h.get().chains[0].notes).toEqual(c.notes);
+  });
+});
+
+describe('editable chain reasoning and removed work', () => {
+  it('sends the current analyst explanation to writing while preserving original notes', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const p = exampleProject();
+    const c = p.chains[0];
+    const original = structuredClone(c.notes);
+    editChainExplanation(p, c.id, 'Local organisations bridge the gap in public support.');
+    c.approvedRevision = c.revision;
+    const h = harness(p);
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(response({ chainId: c.id, text: 'A proposed narrative.' }));
+    vi.stubGlobal('fetch', fetcher);
+    await launch(h.get, h.change, 'test-key', models, 'narrative', [models[0].id], [c.id]).done;
+    expect(h.get().runs[0].status).toBe('succeeded');
+    expect(h.get().chains[0].explanation).toBe(c.explanation);
+    expect(h.get().chains[0].notes.slice(0, original.length)).toEqual(original);
+    for (const task of ['narrative', 'narrative_edit'] as const) {
+      const context = contextFor(h.get(), task, [c.id]) as { chains: { explanation: string }[] };
+      expect(context.chains[0].explanation).toBe(c.explanation);
+    }
+    expect(JSON.parse(fetcher.mock.calls[0][1].body).messages[1].content).toContain(c.explanation);
+  });
+
+  it.each(['narrative'] as const)(
+    'retains a late %s response as a failed operation without restoring a removed chain',
+    async (task) => {
+      vi.stubGlobal('navigator', { onLine: true });
+      const p = exampleProject();
+      const c = p.chains[0];
+      c.approvedRevision = c.revision;
+      const h = harness(p);
+      let resolve!: (response: Response) => void;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockImplementation(
+          () =>
+            new Promise<Response>((r) => {
+              resolve = r;
+            })
+        )
+      );
+      const operation = launch(h.get, h.change, 'test-key', models, task, [models[0].id], [c.id]);
+      await vi.waitFor(() => expect(resolve).toBeTypeOf('function'));
+      h.change((p) => archiveChain(p, c.id));
+      const notes = structuredClone(h.get().chains[0].notes);
+      const drafts = structuredClone(h.get().narratives[0].drafts);
+      resolve(response({ chainId: c.id, text: 'A late story.' }));
+      await operation.done;
+      expect(h.get().chains[0].archived).toBe(true);
+      expect(h.get().chains[0].selected).toBe(false);
+      expect(h.get().chains[0].notes).toEqual(notes);
+      expect(h.get().narratives[0].drafts).toEqual(drafts);
+      expect(h.get().runs[0].status).toBe('failed');
+      expect(h.get().runs[0].rawOutput).toBeTruthy();
+    }
+  );
+
+  it('recalculates chain batches, candidates and cost when an optional second model is included', () => {
+    const p = exampleProject();
+    p.mainCount = 3;
+    p.wildcardCount = 1;
+    const one = planRequests(p, models, 'chains', [models[0].id]);
+    const two = planRequests(
+      p,
+      models,
+      'chains',
+      models.slice(0, 2).map((m) => m.id)
+    );
+    expect(one.requests).toHaveLength(1);
+    expect(two.requests).toHaveLength(2);
+    expect(two.estimatedTotal).toBeCloseTo(one.estimatedTotal! * 2);
+    expect(one.requests.every((r) => r.modelId === models[0].id)).toBe(true);
   });
 });

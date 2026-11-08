@@ -50,7 +50,7 @@ Use semantic tokens, not scattered hex values. The light palette below matches t
 | Control boundary | `#71877A` | Input and secondary-button boundaries |
 | Review surface / text | `#FCF5DF` / `#715B24` | Changes or assumptions needing attention |
 
-Scenario colours indicate identity, never optimism, severity, likelihood or quality. Assign a colour to a stable scenario ID and retain it when columns are reordered, renamed or exported in colour. Additional scenario colours are supplied, but colour is never the only identifier. Always show the scenario name; show `Wildcard` explicitly when applicable. More than six scenarios may reuse colours with distinct names.
+Scenario colours indicate identity, never optimism, severity, likelihood or quality. Assign a colour to a stable scenario ID and retain it when columns are reordered, renamed or exported in colour. Additional scenario colours are supplied, but colour is never the only identifier. Always show the scenario name. Disruption exploration adds candidates to the same list without a separate category badge. More than six scenarios may reuse colours with distinct names.
 
 Model identities use a separate small set of marks: circle, square, triangle, then additional distinguishable shapes. Pair every mark with the actual model name. Do not equate a scenario colour with the model that proposed it. PESTLE tags remain quiet text or neutral labels, and a driver may have several tags or none.
 
@@ -138,8 +138,8 @@ This is the approved visual anchor. Use it to calibrate the component library be
 - The uncertainty column is neutral. Scenario headers carry their stable soft colour, editable name, proposal/approval state and scenario-selection control.
 - Keep hypothesis cells on white/paper surfaces. A selected cell receives the soft selected fill plus a visible evergreen boundary. Display full text with wrapping rather than relying on truncated text or hover.
 - Put the reasoning/editor panel beneath the grid, as in Common Ground. It stays in context and has two columns at comfortable widths: reasoning on the left, hypothesis choice on the right. Stack it at narrower widths.
-- Support the analyst's chosen scenario count. The reference's three columns and five uncertainties are examples, not caps. For additional columns, use horizontal table scrolling with a sticky uncertainty column and headers where feasible. Do not compress all columns to fit.
-- Keep main-scenario and wildcard counts separate. Candidate selection, cell inspection, and analyst approval are three different states.
+- Support any user-selected set of at least one chain. The reference's three columns and five uncertainties are examples, not caps. For additional columns, use horizontal table scrolling with a sticky uncertainty column and headers where feasible. Do not compress all columns to fit.
+- Show the selected chain count without quotas or main/wildcard categories. Candidate selection, cell inspection, and analyst approval remain distinct. Optional Explore a disruption adds one candidate per model to the same list; standard generation adds three per model.
 
 ### Cell interaction contract
 
@@ -148,7 +148,7 @@ This is the approved visual anchor. Use it to calibrate the component library be
 3. The hypothesis selector lists states for that uncertainty only, plus `Unresolved`. The grid and inspector edit the same chain record.
 4. On change, save the edit, record its revision and label the affected chain `Analyst-edited`. Preserve earlier coherence notes with their checked revision/time; label them `Review suggested` if they precede the edit.
 5. Show which dependent narratives or chains are affected. Preserve their content and approval history. Do not equate review suggested with proven invalidity.
-6. Offer an explicit `Recheck coherence` action with model scope and an estimated cost. Opening the panel or changing a cell makes zero AI calls. Approving the chain does not silently run a recheck.
+6. Opening the panel, changing a cell and approving a chain make zero AI calls. There is no separate coherence recheck action. Preserve the model reasoning from generation and any historical checks, with their original revisions and attribution.
 7. Allow approval with an intentionally unresolved uncertainty. Keep that uncertainty visible downstream; it cannot be silently filled in by the writer.
 
 A model disagreement is a reason to inspect, not an automatic blocker. Initial generation includes coherence assessment; the reference's generic model text is not that implementation. Production needs the actual reinforcing relationships, tensions, assumptions, timestamps and model provenance.
@@ -167,7 +167,7 @@ The footer uses an accurate action such as `Approve 3 selected chains`, with the
 | Assess drivers | Impact × uncertainty plot beside a prioritised review queue, with a table alternative | Inspect per-model positions, edit final scores numerically, and explicitly approve remaining medians |
 | Select uncertainties | Reuse the approved matrix/table with selection controls and a selected-items summary | Recommend 4–6 without enforcing a cap; explain increasing combination complexity; no required causal map |
 | Develop hypotheses | One expandable uncertainty section with distinct future-state options and provenance | The number of alternatives varies; support add/edit/merge/split/remove and explicit approval; do not force three states |
-| Construct chains | Scenario columns, uncertainty rows, contextual reasoning/editor below | See the interaction contract above; explicit coherence rechecks and distinct wildcard handling |
+| Construct chains | Scenario columns, uncertainty rows, contextual reasoning/editor below | See the interaction contract above; analyst review and optional disruption exploration |
 | Write & review scenarios | One prose workspace with chain guidance, rich-text/Markdown editing, undo/redo, collapsed AI help and an optional review checklist in each editor | Write from approved chains; compare AI proposals before explicit application; require text for every selected scenario before saving the final set and continuing to export; preserve original/working/final snapshots; QA checkboxes never block completion |
 | Completion/export | Scenario list and straightforward export choices, with annotation options | Copy, Markdown, DOCX, PDF, full analytical record and project/analytical JSON; explain the difference between portable project and analytical data |
 
@@ -198,7 +198,7 @@ These are suggested component boundaries for SvelteKit, not mandatory filenames.
 | ModelAttribution / ModelRunList | Exact identities, contribution coverage, per-model progress | Model IDs, operation statuses, missing cells; retry/replace/skip intents |
 | DriverMatrix / AssessmentTable | The same scores in plot and accessible controls | Provisional median, individual ratings, analyst decision, missing values, approval type |
 | HypothesisCell / ChainGrid | Selected intersection and hypothesis value | Stable chain, uncertainty and hypothesis IDs; select/edit intents, including explicit unresolved |
-| ReasoningPanel | Attributed explanations, tensions and context editor | Current revision, checked revision, model contributions, dependencies; recheck intent |
+| ReasoningPanel | Attributed explanations, tensions and context editor | Current revision, checked revision, model contributions, dependencies; analyst review |
 | EvidenceInspector | Source metadata, claim support and verification state | Finding/source IDs and annotation type; exclude/flag/approve intents |
 | DependencyNotice | Affected saved work and the upstream change | Parent revision and affected records; inspect/retain/selectively-regenerate intents |
 | NarrativeEditor | Working prose, evidence display and manual editing | Selected draft/revision, working document, anchors, save state; edit/undo/finalise intents |
@@ -241,6 +241,6 @@ Do not say `Consensus`, `Validated`, `Safe`, or `Correct` merely because models 
 
 Start with the shell, tokens and core controls, then build the chain table and inspector using deterministic fixtures. Verify the approved composition and accessibility at laptop width before multiplying components. Add the matrix/table and driver/hypothesis workflows next, followed by the narrative editor, evidence checkpoint and remaining foundation/export screens. This is an implementation sequence; Research Mode remains required for public MVP release.
 
-The reference is intentionally a small demonstration. It does not implement real navigation, setup, research, matrix scoring, candidate selection, explicit paid rechecks, complete coherence reasoning, IndexedDB, model access, dependency tracking, exports or the full editor. Its model names, costs, stage completion markers and analysis are examples. Use the documented contracts above and the functional spec to build those behaviours.
+The reference is intentionally a small demonstration. It does not implement real navigation, setup, research, matrix scoring, candidate selection, complete coherence reasoning, IndexedDB, model access, dependency tracking, exports or the full editor. Its model names, costs, stage completion markers and analysis are examples. Use the documented contracts above and the functional spec to build those behaviours.
 
 Before calling the handoff implemented, run [design/ACCEPTANCE.md](design/ACCEPTANCE.md), including partial failure, upstream edits, unresolved uncertainties, budget admission, human-first writing and explicit AI proposal application. Remaining decisions to validate through the pilot include information density, the default disagreement threshold, long-grid navigation and the optional narrative typeface. None requires reopening the selected Common Ground direction.

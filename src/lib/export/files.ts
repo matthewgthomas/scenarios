@@ -1,6 +1,8 @@
 import { showModeLabels } from '$lib/config/presentation';
 import {
   parseProject,
+  activeChains,
+  chainExplanation,
   uncertainties,
   coordinates,
   spent,
@@ -36,9 +38,9 @@ export function analyticalJSON(p: Project) {
 }
 export function markdown(p: Project, annotations = false, full = false): string {
   let text = `# ${p.title}\n\n${p.question}\n\nTime horizon: ${p.horizon}\n\n${showModeLabels ? 'Quick Mode — hypothetical' : 'Hypothetical'} futures, not forecasts.${p.example ? ' This is an authored example exercise.' : ''}\n\n`;
-  for (const c of p.chains.filter((c) => c.selected)) {
+  for (const c of activeChains(p).filter((c) => c.selected)) {
     const n = p.narratives.find((n) => n.chainId === c.id);
-    text += `## ${c.title}${c.kind === 'wildcard' ? ' (Wildcard)' : ''}\n\n`;
+    text += `## ${c.title}\n\n`;
     text += `${n?.working.trim() ? n.working : '_No narrative written yet._'}\n\n`;
     if (n?.review || c.review) text += '_Review suggested after an upstream edit._\n\n';
     const unresolved = uncertainties(p).filter((d) => !c.items[d.id]);
@@ -58,7 +60,7 @@ export function markdown(p: Project, annotations = false, full = false): string 
     text += '## Analytical record\n\n### Drivers and decisions\n\n';
     for (const d of p.drivers.filter((d) => !d.archived)) {
       const scores = coordinates(d);
-      text += `#### ${d.title}\n\n${d.summary}\n\nOrigin: ${d.origin}. Revision: ${d.revision}. ${d.origin === 'wildcard' ? `Unscored. ${d.assessment ?? ''}` : `Humanitarian impact: ${scores.impact ?? 'Missing'}; uncertainty: ${scores.uncertainty ?? 'Missing'}. Decision: ${d.decision?.type ?? 'Not approved'}.`}\n\n`;
+      text += `#### ${d.title}\n\n${d.summary}\n\nOrigin: ${d.origin === 'wildcard' ? 'additional disruption driver' : d.origin}. Revision: ${d.revision}. ${d.origin === 'wildcard' ? `Unscored. ${d.assessment ?? ''}` : `Humanitarian impact: ${scores.impact ?? 'Missing'}; uncertainty: ${scores.uncertainty ?? 'Missing'}. Decision: ${d.decision?.type ?? 'Not approved'}.`}\n\n`;
       for (const r of d.ratings)
         text += `- ${r.modelId}: impact ${r.impact}, uncertainty ${r.uncertainty}. ${r.rationale}\n`;
       for (const o of d.origins) text += `- Original proposal (${o.modelId}): ${o.text}\n`;
@@ -67,8 +69,10 @@ export function markdown(p: Project, annotations = false, full = false): string 
       text += '\n';
     }
     text += '### Chain reasoning\n\n';
-    for (const c of p.chains) {
+    for (const c of activeChains(p)) {
       text += `#### ${c.title}\n\nRevision ${c.revision}; approved revision ${c.approvedRevision ?? 'none'}. ${c.distinctiveness}\n\n`;
+      if (chainExplanation(c))
+        text += `What connects these choices${c.explanation == null ? ' (original model explanation)' : ' (analyst explanation)'}: ${chainExplanation(c)}\n\n`;
       for (const [driverId, hId] of Object.entries(c.items))
         text += `- ${p.drivers.find((d) => d.id === driverId)?.title ?? driverId}: ${p.hypotheses.find((h) => h.id === hId)?.title ?? 'Unresolved'}\n`;
       for (const note of c.notes)

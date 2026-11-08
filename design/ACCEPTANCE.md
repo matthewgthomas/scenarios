@@ -21,9 +21,9 @@ Use with [DESIGN.md](../DESIGN.md) and [spec.md](../spec.md). These checks descr
 - [ ] Each chain has one hypothesis per selected uncertainty unless explicitly `Unresolved`. An unresolved option remains visible in drafting and export. (FR-13, FR-19)
 - [ ] Editing a hypothesis preserves earlier content and reasoning, identifies affected downstream work and makes **zero model calls**. Record a network trace for this test. (FR-15, FR-28)
 - [ ] Old coherence notes show their revision/time and `Review suggested` after an applicable edit. They do not appear freshly checked. (FR-15)
-- [ ] Rechecks run only through an explicit action showing selected chains, models and cost estimate. (FR-15, FR-30)
-- [ ] Main scenario count and wildcard count are separate and analyst-controlled; 3 + 1 produces three main scenarios and one labelled wildcard. (FR-16)
-- [ ] A novel wildcard driver is explicitly accepted and remains visibly unscored unless actually scored. (FR-17)
+- [ ] No coherence recheck action or historical-run retry is offered. Earlier reasoning stays readable, and editing and approval make zero model calls. (FR-15, FR-30)
+- [ ] Any valid selection of one or more chains can proceed to writing, without scenario targets or main/wildcard categories. Empty selections explain the minimum requirement. Standard generation offers three candidates per model; optional disruption exploration offers one. (FR-16)
+- [ ] An additional disruption driver is explicitly accepted or removed and remains visibly unscored unless actually scored. (FR-17)
 - [ ] Approval applies to the intended selected chains, records the correct revision and remains reversible. Approval does not initiate drafting or rechecking. (FR-13, FR-15, FR-28)
 - [ ] Model names/IDs and genuine reasoning replace all example A/B/C labels and generic text. The interface never describes agreement as proof. (FR-04, FR-13)
 

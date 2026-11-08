@@ -90,6 +90,8 @@ const chain = z.object({
   items: z.record(z.string(), z.string().nullable()),
   revision: z.number(),
   selected: z.boolean(),
+  archived: z.boolean().default(false),
+  explanation: z.string().nullable().default(null),
   approvedRevision: z.number().nullable(),
   review: z.boolean(),
   notes: z.array(note),
@@ -102,6 +104,7 @@ const chain = z.object({
         revision: z.number(),
         at: z.string(),
         title: z.string(),
+        explanation: z.string().nullable().default(null),
         items: z.record(z.string(), z.string().nullable()),
         states: z.array(
           z.object({
@@ -168,7 +171,7 @@ export const runSchema = z.object({
     'consolidate'
   ]),
   modelId: z.string(),
-  promptTemplateVersion: z.enum(['quick-1', 'quick-2', 'quick-3']),
+  promptTemplateVersion: z.enum(['quick-1', 'quick-2', 'quick-3', 'quick-4']),
   inputRevision: z.number(),
   status: z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled', 'skipped']),
   at: z.string(),
@@ -206,6 +209,7 @@ export const projectSchema = z.object({
   models: z.array(z.string()).min(1),
   overrides: z.record(z.string(), z.array(z.string()).min(1)),
   writer: z.string(),
+  // Legacy generation targets: retained for version 1.0 backup compatibility only.
   mainCount: z.number().int().min(1).max(12),
   wildcardCount: z.number().int().min(0).max(6),
   completed: z.array(z.number()),
@@ -242,7 +246,9 @@ export type Driver = Omit<z.infer<typeof driver>, 'history'> & {
 export type Hypothesis = Omit<z.infer<typeof hypothesis>, 'history'> & {
   history?: z.infer<typeof hypothesis>['history'];
 };
-export type Chain = Omit<z.infer<typeof chain>, 'snapshots'> & {
+export type Chain = Omit<z.infer<typeof chain>, 'snapshots' | 'archived' | 'explanation'> & {
+  archived?: boolean;
+  explanation?: string | null;
   snapshots?: z.infer<typeof chain>['snapshots'];
 };
 export type Narrative = z.infer<typeof narrative>;
@@ -258,6 +264,53 @@ export const defaultModels = [
 export const modelName = (model: string) => model.split('/').slice(1).join('/').replace(/-/g, ' ');
 export const activeDrivers = (p: Project) =>
   p.drivers.filter((d) => !d.archived && d.origin !== 'wildcard');
+export const activeChains = (p: Project) => p.chains.filter((c) => !c.archived);
+export const chainExplanation = (c: Chain) => c.explanation ?? c.notes[0]?.reasoning ?? '';
+export function approvedChainSet(p: Project): boolean {
+  const selected = activeChains(p).filter((c) => c.selected);
+  return (
+    p.completed.includes(5) &&
+    !p.stale.includes(5) &&
+    selected.length > 0 &&
+    selected.every((c) => c.approvedRevision === c.revision && !c.review)
+  );
+}
+
+/** Local set decisions never discard writing or initiate model work. */
+export function invalidateChainSet(p: Project, affectedIds: string[] = []) {
+  p.completed = p.completed.filter((s) => s !== 5);
+  flagDownstream(
+    p,
+    5,
+    'Scenario set changed. Review and approve your set before continuing.',
+    affectedIds
+  );
+}
+export function includeChain(p: Project, chainId: string, selected: boolean) {
+  const c = activeChains(p).find((c) => c.id === chainId);
+  if (!c || c.selected === selected) return;
+  c.selected = selected;
+  invalidateChainSet(p);
+}
+export function editChainExplanation(p: Project, chainId: string, explanation: string) {
+  const c = activeChains(p).find((c) => c.id === chainId);
+  if (!c) return;
+  // Saving a blank manual explanation must opt out of future model starting text.
+  if (explanation === chainExplanation(c) && (explanation !== '' || c.explanation === '')) return;
+  snapshotChain(p, c);
+  c.explanation = explanation;
+  c.revision++;
+  invalidateChainSet(p, [c.id]);
+}
+export function archiveChain(p: Project, chainId: string, archived = true) {
+  const c = p.chains.find((c) => c.id === chainId);
+  if (!c || !!c.archived === archived) return;
+  snapshotChain(p, c);
+  c.archived = archived;
+  c.selected = false;
+  c.revision++;
+  invalidateChainSet(p, [c.id]);
+}
 export const uncertainties = (p: Project) => activeDrivers(p).filter((d) => d.selected);
 export const statesFor = (p: Project, driverId: string) =>
   p.hypotheses.filter((h) => h.driverId === driverId && !h.archived);
@@ -389,11 +442,13 @@ export function setChainItem(
   driverId: string,
   hypothesisId: string | null
 ) {
-  const c = p.chains.find((c) => c.id === chainId)!;
+  const c = activeChains(p).find((c) => c.id === chainId);
+  if (!c || c.items[driverId] === hypothesisId) return;
   snapshotChain(p, c);
   c.items[driverId] = hypothesisId;
   c.revision++;
   c.review = true;
+  p.completed = p.completed.filter((s) => s !== 5);
   flagDownstream(
     p,
     5,
@@ -425,7 +480,7 @@ export function prerequisite(p: Project, stage: number): string | null {
     stage === 6 &&
     p.narratives.some(
       (n) =>
-        p.chains.some((c) => c.selected && c.id === n.chainId) &&
+        activeChains(p).some((c) => c.selected && c.id === n.chainId) &&
         (n.chainRevision !== undefined || n.original || n.chosenId || n.working.trim())
     )
   )
@@ -440,8 +495,7 @@ export function prerequisite(p: Project, stage: number): string | null {
     return 'Select and approve your critical uncertainties.';
   if (stage >= 5 && !uncertainties(p).every((d) => statesFor(p, d.id).some((h) => h.approved)))
     return 'Approve at least one hypothesis for each uncertainty.';
-  if (stage >= 6 && !p.chains.some((c) => c.selected && c.approvedRevision === c.revision))
-    return 'Approve selected chains in Construct chains.';
+  if (stage >= 6 && !approvedChainSet(p)) return 'Approve selected chains in Construct chains.';
   return null;
 }
 export function parseProject(value: unknown): Project {
@@ -506,14 +560,14 @@ export function narrativeFor(p: Project, chainId: string): Narrative {
   return n;
 }
 export function allNarrativesWritten(p: Project): boolean {
-  const chains = p.chains.filter((c) => c.selected);
+  const chains = activeChains(p).filter((c) => c.selected);
   return (
     chains.length > 0 &&
     chains.every((c) => p.narratives.some((n) => n.chainId === c.id && n.working.trim().length > 0))
   );
 }
 export function canWriteNarrative(p: Project, chainId: string): boolean {
-  const chain = p.chains.find((c) => c.id === chainId);
+  const chain = activeChains(p).find((c) => c.id === chainId);
   const n = p.narratives.find((n) => n.chainId === chainId);
   return (
     !!chain &&
@@ -562,13 +616,15 @@ export function snapshotNarrative(p: Project, chainId: string) {
 }
 export function prepareNarrativeReview(p: Project) {
   if (!allNarrativesWritten(p)) return;
-  p.chains.filter((c) => c.selected).forEach((c) => snapshotNarrative(p, c.id));
+  activeChains(p)
+    .filter((c) => c.selected)
+    .forEach((c) => snapshotNarrative(p, c.id));
   complete(p, 6);
 }
 export function proposalIsCurrent(p: Project, chainId: string, draftId: string): boolean {
   const n = p.narratives.find((n) => n.chainId === chainId);
   const d = n?.drafts.find((d) => d.id === draftId);
-  const c = p.chains.find((c) => c.id === chainId);
+  const c = activeChains(p).find((c) => c.id === chainId);
   return (
     !!d &&
     !!c &&
@@ -606,6 +662,7 @@ export function snapshotChain(p: Project, c: Chain) {
     revision: c.revision,
     at: now(),
     title: c.title,
+    explanation: chainExplanation(c),
     items: { ...c.items },
     states: p.hypotheses
       .filter((h) => Object.values(c.items).includes(h.id))

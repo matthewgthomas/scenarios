@@ -28,6 +28,7 @@ describe('actionable workflow readiness', () => {
     prepareNarrativeReview(p);
     expect(stageIsComplete(p, 6)).toBe(false);
     expect(completedStageCount(p)).toBe(6);
+    approveChainSet(p);
     completeScenarioSet(p);
     expect(stageIsComplete(p, 6)).toBe(true);
     expect(completedStageCount(p)).toBe(7);
@@ -72,6 +73,7 @@ describe('actionable workflow readiness', () => {
   });
   it('preserves completed legacy sets, export routes and writing model choices', () => {
     const p = exampleProject();
+    approveChainSet(p);
     completeScenarioSet(p);
     p.stage = 7;
     p.overrides = { '6': ['test/writer'], '7': ['test/reviewer'] };
@@ -86,8 +88,9 @@ describe('actionable workflow readiness', () => {
     const p = exampleProject();
     p.chains.forEach((c) => (c.review = true));
     p.chains[0].selected = false;
-    expect(approveChainSet(p)).toBe(false);
-    expect(p.chains.every((c) => c.review)).toBe(true);
+    expect(approveChainSet(p)).toBe(true);
+    expect(p.chains[0].review).toBe(true);
+    expect(p.chains.slice(1).every((c) => !c.review)).toBe(true);
     p.chains[0].selected = true;
     expect(approveChainSet(p)).toBe(true);
     expect(p.chains.every((c) => !c.review && c.approvedRevision === c.revision)).toBe(true);
@@ -98,6 +101,7 @@ describe('actionable workflow readiness', () => {
     p.narratives[0].working = 'An updated story after review.';
     p.narratives[0].review = true;
     p.chains[0].revision++;
+    approveChainSet(p);
     expect(completeScenarioSet(p)).toBe(true);
     expect(p.narratives[0].review).toBe(false);
     expect(p.narratives[0].chainRevision).toBe(p.chains[0].revision);
@@ -112,14 +116,11 @@ describe('actionable workflow readiness', () => {
     expect(p.narratives.every((n) => n.final === null)).toBe(true);
     expect(p.completed).not.toContain(7);
   });
-  it('exposes portfolio mismatch before approval', () => {
+  it('accepts a subset without enforcing historical targets', () => {
     const p = exampleProject();
     p.chains[0].selected = false;
     expect(chainReadiness(p)).toMatchObject({
-      main: 2,
-      wildcard: 0,
-      targetsMet: false,
-      canApprove: false
+      canApprove: true
     });
   });
   it('identifies the exact chain and uncertainty with a removed or unapproved state', () => {
