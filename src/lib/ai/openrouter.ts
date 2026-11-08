@@ -149,7 +149,7 @@ export interface NarrativeOptions {
 }
 const instructions: Record<Task, string> = {
   consolidate:
-    'Review the independent contributions for semantic overlap. Propose merges ONLY for genuinely duplicate drivers or equivalent future states. For hypotheses, merge ONLY states belonging to the same driver. Preserve unusual and single-model contributions and meaningful variants. Return groups using supplied entity IDs, a concise suggested canonical title and a clear reason. Do not merge automatically. Return an empty groups array if nothing should merge.',
+    'Review the supplied records for semantic overlap in the context of the analyst question and horizon. Follow context.kind. For drivers, propose advisory merges for semantic duplicates and redundant broader/narrower variants of the same underlying driver when combining them would not lose a meaningful distinction for this exercise. Differences in wording or specificity alone do not require separate drivers. Use the titles and descriptions to judge whether the records need separate assessment; when descriptions are sparse, do not invent unmentioned differences to reject an otherwise redundant pair. Keep drivers separate when the supplied content identifies meaningfully different mechanisms, impacts or future trajectories; a shared theme alone is not enough to merge. For hypotheses, propose merges ONLY for equivalent future states belonging to the same driver; preserve distinct alternatives. Preserve unusual and single-model contributions and meaningful variants. Return groups using supplied entity IDs, a concise suggested canonical title covering the combined scope and a clear reason explaining why no meaningful distinction would be lost. These are suggestions for analyst review, not automatic changes. Return an empty groups array if nothing should merge.',
   drivers:
     'Independently explore 12–20 distinct drivers relevant to this question and horizon. Use PESTLE as a prompt, not a constraint. Include unusual contributions and keep titles concise. Do not assess them yet.',
   ratings:
@@ -940,6 +940,7 @@ export function launch(
           p.hypotheses = candidate.hypotheses;
           p.chains = candidate.chains;
           p.narratives = candidate.narratives;
+          p.mergeSuggestions = candidate.mergeSuggestions;
         });
         mutateRun(next.id, (r) => {
           r.status = partial ? 'failed' : 'succeeded';

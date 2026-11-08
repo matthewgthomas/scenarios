@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { exampleProject } from '$lib/domain/example';
 import { newProject, reserved, type Project, type Run } from '$lib/domain/project';
+import { mergeResults } from '$lib/domain/task-results';
 import {
   launch,
   applyOutput,
@@ -1265,6 +1266,104 @@ describe('structured analytical responses', () => {
     expect(d.approved).toBe(false);
     expect(d.ratings).toEqual([]);
     expect(d.decision).toBeUndefined();
+  });
+  it.each([true, false])(
+    'reviews newly added broad/narrow chocolate drivers and preserves the model decision (suggested: %s)',
+    async (suggested) => {
+      vi.stubGlobal('navigator', { onLine: true });
+      const p = newProject();
+      p.stage = 1;
+      const template = exampleProject().drivers[0];
+      p.drivers = ['price of chocolate', 'price of white chocolate'].map((title, i) => ({
+        ...structuredClone(template),
+        id: `chocolate-${i}`,
+        title,
+        summary: '',
+        origin: 'user',
+        origins: [],
+        ratings: [],
+        decision: undefined,
+        approved: false,
+        selected: false
+      }));
+      p.drivers.push({ ...structuredClone(p.drivers[0]), id: 'archived', archived: true });
+      const before = JSON.stringify(p.drivers);
+      const fetcher = vi.fn().mockImplementation((_url, options) => {
+        const body = JSON.parse(options.body);
+        const instruction = body.messages[1].content;
+        const context = JSON.parse(instruction.split('\nANALYST CONTEXT:\n')[1]);
+        expect(body.model).toBe(models[0].id);
+        expect(context.kind).toBe('driver');
+        expect(context.records).toEqual(
+          p.drivers.slice(0, 2).map((driver) => ({
+            id: driver.id,
+            title: driver.title,
+            description: '',
+            revision: driver.revision
+          }))
+        );
+        expect(instruction).toContain('redundant broader/narrower variants');
+        expect(instruction).toContain('a shared theme alone is not enough to merge');
+        expect(instruction).toContain(
+          'For hypotheses, propose merges ONLY for equivalent future states belonging to the same driver'
+        );
+        return response({
+          groups: suggested
+            ? [
+                {
+                  entityIds: ['chocolate-0', 'chocolate-1'],
+                  title: 'Chocolate prices',
+                  reason:
+                    'The narrower price driver is covered by the broader driver in this exercise.'
+                }
+              ]
+            : []
+        });
+      });
+      vi.stubGlobal('fetch', fetcher);
+      const h = harness(p);
+      await launch(h.get, h.change, 'test-key', models, 'consolidate', [models[0].id]).done;
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(h.get().runs.at(-1)?.status).toBe('succeeded');
+      const results = mergeResults(h.get(), 'driver');
+      expect(results.state).toBe('complete');
+      expect(results.proposed).toBe(suggested ? 1 : 0);
+      expect(results.pending).toHaveLength(suggested ? 1 : 0);
+      if (suggested)
+        expect(results.pending[0]).toMatchObject({
+          kind: 'driver',
+          title: 'Chocolate prices',
+          entityIds: ['chocolate-0', 'chocolate-1']
+        });
+      expect(JSON.stringify(h.get().drivers)).toBe(before);
+    }
+  );
+  it('persists generated merge suggestions through the launch flow', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const p = exampleProject();
+    p.stage = 4;
+    const before = JSON.stringify(p.hypotheses);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        response({
+          groups: [
+            {
+              entityIds: p.hypotheses.slice(0, 2).map((h) => h.id),
+              title: 'Combined future',
+              reason: 'Equivalent states'
+            }
+          ]
+        })
+      )
+    );
+    const h = harness(p);
+    await launch(h.get, h.change, 'test-key', models, 'consolidate', [models[0].id]).done;
+    expect(h.get().runs.at(-1)?.status).toBe('succeeded');
+    expect(h.get().mergeSuggestions).toHaveLength(1);
+    expect(h.get().mergeSuggestions[0].title).toBe('Combined future');
+    expect(h.get().mergeSuggestions[0].runId).toBe(h.get().runs.at(-1)?.id);
+    expect(JSON.stringify(h.get().hypotheses)).toBe(before);
   });
   it('keeps semantic consolidation advisory and preserves independent contributions', () => {
     const p = exampleProject();

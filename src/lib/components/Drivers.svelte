@@ -258,8 +258,9 @@
     </table>
   </div>
   <p class="small muted">
-    Exact title matches are grouped automatically. Select related drivers to merge them yourself.
-    Unique contributions stay visible.
+    Exact title matches are grouped automatically. Suggest merges reviews duplicates and redundant
+    broader/narrower drivers. You decide which suggestions to accept, or select drivers to merge
+    them yourself. Unique contributions stay visible.
   </p>{:else}<div class="empty-state">
     <Sprout size={34} />
     <h2>Start by exploring possible drivers.</h2>

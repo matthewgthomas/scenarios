@@ -1366,32 +1366,93 @@ table {
   background: transparent;
   width: 200px;
 }
-.merge-suggestions {
+.task-results {
   margin: 24px 0;
   padding: 22px;
   background: var(--cg-paper);
   border: 1px solid var(--cg-border);
   border-radius: 13px;
 }
-.merge-suggestions h2 {
+.task-results h2 {
   font-size: 1rem;
 }
 .merge-suggestion {
-  display: flex;
-  gap: 20px;
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
   padding-top: 16px;
   margin-top: 16px;
   border-top: 1px solid var(--cg-border);
 }
-.merge-suggestion > div:first-child {
-  flex: 1;
-  min-width: 200px;
-}
 .merge-suggestion p {
   margin-bottom: 8px;
+}
+.merge-comparison {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  margin-bottom: 16px;
+}
+.merge-comparison h3 {
+  font-size: 0.875rem;
+  color: var(--cg-text-muted);
+  margin-bottom: 10px;
+}
+.merge-sources ul {
+  padding-left: 20px;
+  margin: 0;
+}
+.merge-sources li + li {
+  margin-top: 12px;
+}
+.merge-proposal {
+  border-left: 3px solid var(--cg-selection-border);
+  padding-left: 18px;
+}
+.merge-description {
+  white-space: pre-wrap;
+}
+.merge-effect {
+  background: var(--cg-selection);
+  padding: 12px;
+  border-radius: var(--cg-radius-cell);
+}
+.merge-decisions {
+  margin-top: 16px;
+  border-top: 1px solid var(--cg-border);
+  padding-top: 12px;
+}
+.merge-receipt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.merge-receipt svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--cg-status-approved-text);
+}
+.task-results {
+  overflow-wrap: anywhere;
+}
+.assessment-result-details {
+  margin-top: 16px;
+}
+.assessment-result-details summary {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.assessment-result-details .table-scroll {
+  margin-top: 12px;
+}
+.assessment-result-details .data-table {
+  min-width: 760px;
+}
+@media (max-width: 640px) {
+  .merge-comparison {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .task-results {
+    padding: 16px;
+  }
 }
 .selection-bar {
   display: flex;

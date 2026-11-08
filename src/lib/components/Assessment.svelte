@@ -12,6 +12,7 @@
   import Modal from './Modal.svelte';
   import ScoreStrip from './ScoreStrip.svelte';
   import ModelScoreComparison from './ModelScoreComparison.svelte';
+  import AssessmentResults from './AssessmentResults.svelte';
   import { comparisonModelIds, scoreComparison } from '$lib/domain/score-comparison';
   import {
     activeDrivers,
@@ -254,6 +255,7 @@
       >{selectedCount} selected · at least {combinations.toLocaleString()} combinations</span
     >{/if}
 </div>
+{#if !selection}<AssessmentResults {p} expectedModels={comparisonModels} {inspect} />{/if}
 {#if view === 'plot'}
   <div class="assessment-layout">
     <section class="matrix-panel" aria-label="Humanitarian impact by uncertainty">

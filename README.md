@@ -20,7 +20,7 @@ To work on your own question, create an exercise and open **Models & budget**. P
 ## Workflow
 
 1. Frame an analytical question and horizon; optionally add preliminary drivers.
-2. Generate drivers independently. Exact-title duplicates are grouped with attribution; request semantic merge suggestions or add, edit, merge, split and remove drivers yourself. Proposed semantic merges require acceptance.
+2. Generate drivers independently. Exact-title duplicates are grouped with attribution; request semantic merge suggestions for duplicates and redundant broader/narrower drivers, or add, edit, merge, split and remove drivers yourself. Proposed semantic merges require acceptance and preserve meaningful distinctions for the exercise.
 3. Generate independent humanitarian-impact and uncertainty scores. Inspect all model positions, adjust scores numerically, or explicitly accept the remaining per-axis medians. Missing ratings remain missing; even-sized medians retain fractional values.
 4. Select critical uncertainties. Four to six is recommended, with no enforced selection count.
 5. Generate variable numbers of future-state hypotheses, inspect contributions, consolidate and approve them.
@@ -29,6 +29,8 @@ To work on your own question, create an exercise and open **Models & budget**. P
 8. Complete with an optional advisory checklist. Copy or export Markdown, Word, PDF, full analytical reports, analytical JSON and resumable project JSON.
 
 Approvals and generation are separate actions. Editing never runs models. Upstream changes flag downstream work without deleting it. General exercise undo/redo covers local decisions; it resets at model-operation boundaries and never reverses recorded spending. Narrative editing has its own text history.
+
+Merge reviews show the proposed combined record alongside its sources, with an explicit account of which record will be updated and which others will leave the active list on acceptance. Accepted and dismissed decisions remain visible, including after reload. Driver assessments show an inline result summary with returned driver/model counts, missing coverage and outstanding approvals; expand it to inspect current AI medians and open a driver's assessment. Partial results remain available, and neither operation approves records automatically.
 
 ## Storage and privacy
 
