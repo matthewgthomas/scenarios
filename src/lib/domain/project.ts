@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { defaultModels, modelModeSchema, effortSchema } from './model-settings';
+export { defaultModels, modelName } from './model-settings';
 
 export const stages = [
   'Setup',
@@ -172,6 +174,10 @@ export const runSchema = z.object({
   ]),
   modelId: z.string(),
   promptTemplateVersion: z.enum(['quick-1', 'quick-2', 'quick-3', 'quick-4']),
+  reasoningEffort: effortSchema.optional(),
+  resolvedModelId: z.string().optional(),
+  fusionInvoked: z.boolean().optional(),
+  costBasis: z.enum(['estimate', 'allowance']).optional(),
   inputRevision: z.number(),
   status: z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled', 'skipped']),
   at: z.string(),
@@ -209,6 +215,9 @@ export const projectSchema = z.object({
   models: z.array(z.string()).min(1),
   overrides: z.record(z.string(), z.array(z.string()).min(1)),
   writer: z.string(),
+  modelMode: modelModeSchema.default('individual'),
+  modelModeOverrides: z.record(z.string(), modelModeSchema).default({}),
+  reasoningEfforts: z.record(z.string(), effortSchema).default({}),
   // Legacy generation targets: retained for version 1.0 backup compatibility only.
   mainCount: z.number().int().min(1).max(12),
   wildcardCount: z.number().int().min(0).max(6),
@@ -256,12 +265,6 @@ export type Run = z.infer<typeof runSchema>;
 export type Change = (fn: (project: Project) => void, message?: string) => void;
 export const id = (prefix: string) => `${prefix}_${crypto.randomUUID()}`;
 export const now = () => new Date().toISOString();
-export const defaultModels = [
-  'anthropic/claude-sonnet-4.5',
-  'openai/gpt-5-mini',
-  'google/gemini-2.5-flash'
-];
-export const modelName = (model: string) => model.split('/').slice(1).join('/').replace(/-/g, ' ');
 export const activeDrivers = (p: Project) =>
   p.drivers.filter((d) => !d.archived && d.origin !== 'wildcard');
 export const activeChains = (p: Project) => p.chains.filter((c) => !c.archived);
@@ -360,6 +363,9 @@ export function newProject(): Project {
     models: [...defaultModels],
     overrides: {},
     writer: defaultModels[0],
+    modelMode: 'individual',
+    modelModeOverrides: {},
+    reasoningEfforts: {},
     mainCount: 3,
     wildcardCount: 0,
     completed: [],
@@ -470,6 +476,7 @@ export function uncertainSpend(p: Project) {
     .reduce((s, r) => s + r.estimated, 0);
 }
 export function canSpend(p: Project, estimate: number) {
+  if (estimate === 0) return true;
   return p.budget === null || spent(p) + reserved(p) + uncertainSpend(p) + estimate <= p.budget;
 }
 export function prerequisite(p: Project, stage: number): string | null {

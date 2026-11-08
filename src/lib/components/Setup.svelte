@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { selectionMode } from '$lib/domain/model-settings';
   import { showModeLabels } from '$lib/config/presentation';
   import { ArrowRight, Zap, LockKeyhole, Settings2 } from '@lucide/svelte';
   import { complete, id, flagDownstream, type Project, type Change } from '$lib/domain/project';
@@ -63,7 +64,9 @@
   </div>
 </div>
 <StageGuide
-  title={ready ? 'You are ready to explore drivers of change' : `${detailsReady} of 2 essential details added`}
+  title={ready
+    ? 'You are ready to explore drivers of change'
+    : `${detailsReady} of 2 essential details added`}
   description="Add a guiding analytical question, a time horizon and geography. Everything else can take shape as you explore."
   {ready}
 >
@@ -106,7 +109,9 @@
           bind:value={preliminary}
           placeholder="Energy costs&#10;Government support"></textarea></label
       >
-      <p class="small muted">Your own drivers of change are preserved alongside those contributed by AI models.</p>
+      <p class="small muted">
+        Your own drivers of change are preserved alongside those contributed by AI models.
+      </p>
     </details>
   </section>
   <aside class="setup-aside">
@@ -114,8 +119,9 @@
         <Zap size={24} />
         <h2>Quick Mode</h2>
         <p>
-          Explore futures using the AI models’ existing knowledge. No external searches or invented
-          citations.
+          {selectionMode(p) === 'fusion'
+            ? 'Fusion combines a model panel and may research the web. Review every suggestion before keeping it.'
+            : 'Explore futures using the AI models’ existing knowledge. No external searches or invented citations.'}
         </p>
         <span class="badge">Designed for a faster, focused working session</span>
       </div>
@@ -123,14 +129,19 @@
     <div class="setup-note">
       <h3>AI help, when you want it.</h3>
       <p>
-        You choose when to involve AI models in the scenario design process, if at all. 
-        You can complete the entire process without any AI input if you prefer.
+        You choose when to involve AI models in the scenario design process, if at all. You can
+        complete the entire process without any AI input if you prefer.
       </p>
       <p>
-        Models propose ideas independently. You review their reasoning and decide what to keep at every stage.
-        Click the button below to configure AI models and budget. Model setup can wait until you want AI help.
+        {selectionMode(p) === 'fusion'
+          ? 'Fusion combines several model perspectives into one response.'
+          : 'Models propose ideas independently.'} You review their reasoning and decide what to keep
+        at every stage. Click the button below to configure AI models and budget. Model setup can wait
+        until you want AI help.
       </p>
-      <button class="secondary" onclick={settings}><Settings2 size={16} /> AI models & budget</button>
+      <button class="secondary" onclick={settings}
+        ><Settings2 size={16} /> AI models & budget</button
+      >
     </div>
   </aside>
 </div>
@@ -147,7 +158,11 @@
 </div>
 <footer class="stage-footer">
   <div>
-    <strong>{ready ? 'Analytical framing complete.' : 'Start by articulating your overall question'}</strong><small
+    <strong
+      >{ready
+        ? 'Analytical framing complete.'
+        : 'Start by articulating your overall question'}</strong
+    ><small
       >{ready
         ? 'Next, explore the forces that could shape this future.'
         : !p.question.trim()

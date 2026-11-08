@@ -42,6 +42,7 @@
     spent,
     reserved,
     uncertainSpend,
+    canSpend,
     prerequisite,
     modelName,
     workflowStages,
@@ -85,6 +86,15 @@
   import Exports from '$lib/components/Exports.svelte';
   import Modal from '$lib/components/Modal.svelte';
   import ModelActivity from '$lib/components/ModelActivity.svelte';
+  import ModelPicker from '$lib/components/ModelPicker.svelte';
+  import StageModelSettings from '$lib/components/StageModelSettings.svelte';
+  import {
+    FUSION_MODEL,
+    requestModels,
+    selectionMode,
+    type ModelMode,
+    type ReasoningEffort
+  } from '$lib/domain/model-settings';
   import { prerequisiteStage } from '$lib/domain/workflow';
 
   let project = $state<Project | null>(null);
@@ -103,8 +113,13 @@
   let catalogue = $state<Model[]>([]);
   let catalogueStatus = $state('Not loaded');
   let catalogueLoading = $state(false);
-  let modelSearch = $state('');
-  let modelScope = $state('default');
+  let settingsTab = $state<'models' | 'connection' | 'budget'>('models');
+  let catalogueForKey = $state<string | null>(null);
+  let catalogueLoaded = $state(false);
+  let catalogueGeneration = 0;
+  let paidMode = $state<ModelMode>('individual');
+  let paidEfforts = $state<Record<string, ReasoningEffort>>({});
+  let fusionAllowance = $state<number | undefined>(1);
   let paidTask = $state<Task>('drivers');
   let paidTargets = $state<string[] | undefined>();
   let paidContributors = $state<{ modelId: string; included: boolean }[]>([]);
@@ -122,14 +137,6 @@
   let redoStack = $state<Project[]>([]);
   let lastUndoAt = 0;
   const p = $derived(project);
-  const configuredModels = $derived(
-    p ? (modelScope === 'default' ? p.models : (p.overrides[modelScope] ?? p.models)) : []
-  );
-  const filteredModels = $derived(
-    catalogue
-      .filter((m) => `${m.name} ${m.id}`.toLowerCase().includes(modelSearch.toLowerCase()))
-      .slice(0, 40)
-  );
   const stageRuns = $derived(
     p?.runs.filter((r) => canonicalStage(r.stage) === canonicalStage(p.stage)) ?? []
   );
@@ -137,7 +144,14 @@
     stageRuns.filter((r) => r.operationId === stageRuns.at(-1)?.operationId)
   );
   const blocked = $derived(p ? prerequisite(p, p.stage) : null);
-  const paidModels = $derived(paidContributors.filter((c) => c.included).map((c) => c.modelId));
+  const paidModels = $derived(
+    paidMode === 'fusion'
+      ? [FUSION_MODEL]
+      : paidContributors.filter((c) => c.included).map((c) => c.modelId)
+  );
+  const singleContributor = $derived(
+    ['narrative', 'narrative_edit', 'consolidate'].includes(paidTask)
+  );
   const paidPlan = $derived(
     p && dialog === 'paid'
       ? planRequests(
@@ -148,7 +162,8 @@
           paidTargets,
           retryId,
           paidNarrativeOptions,
-          paidChainOptions
+          paidChainOptions,
+          { reasoningEfforts: paidEfforts, fusionAllowance }
         )
       : null
   );
@@ -291,34 +306,46 @@
     row.focus({ preventScroll: true });
   }
   async function loadCatalogue() {
+    const sessionKey = key.trim();
+    const generation = ++catalogueGeneration;
     catalogueLoading = true;
-    catalogueStatus = 'Loading catalogue…';
+    catalogueStatus = 'Finding available models…';
     try {
-      catalogue = await getModels();
-      catalogueStatus = `${catalogue.length} models · live OpenRouter prices`;
+      const models = await getModels(sessionKey);
+      if (generation !== catalogueGeneration || sessionKey !== key.trim()) return;
+      catalogue = models;
+      catalogueForKey = sessionKey;
+      catalogueLoaded = true;
+      catalogueStatus = sessionKey
+        ? 'Available for your OpenRouter connection.'
+        : 'Connect your key to check account availability.';
     } catch (e) {
-      catalogueStatus =
-        e instanceof Error ? e.message : 'Catalogue unavailable. Try again when connected.';
+      if (generation !== catalogueGeneration) return;
+      catalogueForKey = null;
+      catalogueStatus = e instanceof Error ? e.message : 'Could not load models. Try again.';
     } finally {
-      catalogueLoading = false;
+      if (generation === catalogueGeneration) catalogueLoading = false;
     }
   }
-  function settings() {
-    modelScope = 'default';
-    dialog = 'settings';
-    if (!catalogue.length && !catalogueLoading) void loadCatalogue();
+  function keyChanged() {
+    keyStatus = '';
+    catalogueForKey = null;
+    catalogueLoaded = false;
+    catalogueGeneration++;
+    catalogueLoading = false;
   }
-  function toggleModel(modelId: string) {
-    const updated = configuredModels.includes(modelId)
-      ? configuredModels.filter((m) => m !== modelId)
-      : [...configuredModels, modelId];
-    if (!updated.length) return;
-    change((p) => {
-      if (modelScope === 'default') {
-        p.models = updated;
-        if (!updated.includes(p.writer)) p.writer = updated[0];
-      } else p.overrides[modelScope] = updated;
-    });
+  function settings() {
+    settingsTab = 'models';
+    dialog = 'settings';
+    if (catalogueForKey !== key.trim() && !catalogueLoading) void loadCatalogue();
+  }
+  function remainingAllowance() {
+    return !p || p.budget === null
+      ? 1
+      : Math.max(
+          0,
+          Math.floor((p.budget - spent(p) - reserved(p) - uncertainSpend(p)) * 100) / 100
+        );
   }
   function request(
     task: Task,
@@ -336,7 +363,19 @@
       chainOptions ?? {
         mode: savedGeneration?.chainBatch?.kind === 'wildcard' ? 'disruption' : 'standard'
       };
-    if (task === 'chains') modelSearch = '';
+    paidMode = retry
+      ? retry.modelId === FUSION_MODEL
+        ? 'fusion'
+        : 'individual'
+      : selectionMode(p, String(p.stage));
+    paidEfforts = {
+      ...p.reasoningEfforts,
+      ...(retry?.reasoningEffort ? { [retry.modelId]: retry.reasoningEffort } : {})
+    };
+    fusionAllowance =
+      retry?.costBasis === 'allowance'
+        ? Math.min(retry.estimated, remainingAllowance())
+        : Math.min(1, remainingAllowance());
     paidTargets = targets;
     retryId = retry?.id;
     paidNarrativeOptions =
@@ -344,27 +383,25 @@
       (retry?.context as { narrative?: NarrativeOptions } | undefined)?.narrative;
     const models = retry
       ? [retry.modelId]
-      : task === 'narrative' || task === 'narrative_edit' || task === 'consolidate'
-        ? [writer || p.writer]
-        : [...(p.overrides[String(p.stage)] ?? p.models)];
-    paidContributors = models.map((modelId, i) => ({
-      modelId,
-      included: task !== 'chains' || !!retry || i === 0
-    }));
+      : writer && paidMode === 'individual'
+        ? [writer]
+        : requestModels(p, p.stage, ['narrative', 'narrative_edit', 'consolidate'].includes(task));
+    paidContributors = (models.includes(FUSION_MODEL) ? p.models.slice(0, 1) : models).map(
+      (modelId, i) => ({
+        modelId,
+        included: task !== 'chains' || !!retry || i === 0
+      })
+    );
     paidError = '';
     dialog = 'paid';
-    if (!catalogue.length && !catalogueLoading) void loadCatalogue();
-  }
-  function addChainContributor() {
-    const unused = paidContributors.find((c) => !c.included);
-    if (unused) unused.included = true;
-    else {
-      const model = catalogue.find((m) => !paidModels.includes(m.id));
-      if (model) paidContributors.push({ modelId: model.id, included: true });
-    }
+    if (catalogueForKey !== key.trim() && !catalogueLoading) void loadCatalogue();
   }
   async function run() {
     if (!project) return;
+    if (catalogueForKey !== key.trim()) {
+      paidError = 'Refresh available models for this connection before running.';
+      return;
+    }
     let started = false;
     try {
       operation = launch(
@@ -377,9 +414,12 @@
         paidTargets,
         retryId,
         paidNarrativeOptions,
-        paidChainOptions
+        paidChainOptions,
+        { reasoningEfforts: paidEfforts, fusionAllowance }
       );
       started = true;
+      if (singleContributor && paidMode === 'individual' && !p?.overrides[String(p?.stage)])
+        change((p) => (p.writer = paidModels[0]));
       dialog = '';
       undoStack = [];
       redoStack = [];
@@ -536,12 +576,22 @@
       {#if p}<button class="sidebar-models" onclick={settings}
           ><span>AI models</span>
           <div>
-            {#each p.models as model, i}<span class="sidebar-model" title={model}
-                >{['●', '■', '▲', '◆'][i % 4]}</span
+            {#each p.modelMode === 'fusion' ? [FUSION_MODEL] : p.models as model, i}<span
+                class="sidebar-model"
+                title={model}>{['●', '■', '▲', '◆'][i % 4]}</span
               >{/each}<Settings2 size={16} />
           </div>
-          <small>{p.models.length} models · manage ensemble</small></button
-        ><button class="sidebar-spend" onclick={settings}
+          <small
+            >{p.modelMode === 'fusion'
+              ? 'Fusion · combined perspectives'
+              : `${p.models.length} models · manage selection`}</small
+          ></button
+        ><button
+          class="sidebar-spend"
+          onclick={() => {
+            settings();
+            settingsTab = 'budget';
+          }}
           ><span>Budget</span><strong
             >${spent(p).toFixed(3)} confirmed{p.budget !== null ? ` / $${p.budget}` : ''}</strong
           >{#if reserved(p)}<small>${reserved(p).toFixed(3)} reserved</small
@@ -733,10 +783,22 @@
                         {r.id} · input revision {r.inputRevision} · {r.at}<br />Prompt version {r.promptTemplateVersion}<br
                         />{r.confirmed === null
                           ? 'Confirmed cost unavailable'
-                          : `Confirmed cost $${r.confirmed.toFixed(5)}`} · estimate ${r.estimated.toFixed(
-                          5
-                        )}
+                          : `Confirmed cost $${r.confirmed.toFixed(5)}`} · {r.costBasis ===
+                        'allowance'
+                          ? 'planning allowance'
+                          : 'estimate'} ${r.estimated.toFixed(5)}
                       </p>
+                      {#if r.reasoningEffort || r.resolvedModelId || r.fusionInvoked !== undefined}<p
+                          class="small"
+                        >
+                          {#if r.resolvedModelId}Answered by {r.resolvedModelId}.
+                          {/if}{#if r.reasoningEffort}{r.modelId === FUSION_MODEL
+                              ? 'Panel thinking'
+                              : 'Thinking effort'}: {r.reasoningEffort}.
+                          {/if}{#if r.fusionInvoked !== undefined}Fusion panel {r.fusionInvoked
+                              ? 'consulted'
+                              : 'not completed'}.{/if}
+                        </p>{/if}
                       {#if r.finishReason || r.nativeFinishReason || r.inputTokens !== undefined || r.outputTokens !== undefined}<p
                           class="small"
                         >
@@ -860,8 +922,7 @@
               </div>{/if}
           </section>
           <div class="home-footnote">
-            {#if showModeLabels}<span><Zap size={17} /> Quick Mode · no external research</span
-              >{/if}
+            {#if showModeLabels}<span><Zap size={17} /> Individual models or Fusion</span>{/if}
             <button class="text-button" onclick={() => (dialog = 'help')}
               >How it works <ArrowUpRight size={15} /></button
             >
@@ -877,9 +938,38 @@
 </div>
 <div class="sr-only" role="status" aria-live="polite">{announcement}</div>
 
-{#if dialog === 'settings' && p}<Modal title="Models & spending" close={() => (dialog = '')} wide
-    ><div class="settings-columns">
-      <section>
+{#if dialog === 'settings' && p}<Modal
+    title="AI models & spending"
+    close={() => (dialog = '')}
+    wide
+  >
+    <div class="settings-tabs" role="group" aria-label="AI settings">
+      {#each [['models', 'Models'], ['connection', 'Connection'], ['budget', 'Budget']] as [value, label]}<button
+          class:active={settingsTab === value}
+          aria-pressed={settingsTab === value}
+          onclick={() => (settingsTab = value as typeof settingsTab)}
+          >{label}{#if value === 'connection'}<span class="small"
+              >{key.trim() ? 'Key added' : 'Not connected'}</span
+            >{/if}</button
+        >{/each}
+    </div>
+    {#if settingsTab === 'models'}
+      <StageModelSettings
+        {p}
+        {change}
+        {catalogue}
+        loading={catalogueLoading}
+        loaded={catalogueLoaded}
+        status={catalogueStatus}
+        refresh={loadCatalogue}
+      />
+      {#if !key.trim()}<div class="picker-connect-prompt">
+          <span>Connect OpenRouter when you’re ready to run.</span><button
+            class="secondary small"
+            onclick={() => (settingsTab = 'connection')}>Connect your key</button
+          >
+        </div>{/if}
+    {:else if settingsTab === 'connection'}<section class="settings-form">
         <h3>Connect OpenRouter</h3>
         <p class="small muted">
           Your key stays in memory for this page session. It is never saved with your project, so
@@ -892,7 +982,10 @@
             autocomplete="off"
             spellcheck="false"
             placeholder="Paste your OpenRouter key"
-            oninput={() => (keyStatus = '')}
+            oninput={keyChanged}
+            onblur={() => {
+              if (catalogueForKey !== key.trim()) void loadCatalogue();
+            }}
           /></label
         >
         <div class="toolbar-group spaced">
@@ -902,11 +995,17 @@
             onclick={async () => {
               testing = true;
               keyStatus = '';
+              const sessionKey = key.trim();
               try {
-                await testKey(key);
-                keyStatus = 'Connected. Check your account has credits before running models.';
+                const result = await testKey(sessionKey);
+                if (sessionKey !== key.trim()) return;
+                keyStatus = result.paidAllowanceAvailable
+                  ? 'Connected. You’re ready to choose models.'
+                  : 'Connected. Free models are available; paid models may need more allowance.';
+                await loadCatalogue();
               } catch (e) {
-                keyStatus = e instanceof Error ? e.message : 'Connection failed.';
+                if (sessionKey === key.trim())
+                  keyStatus = e instanceof Error ? e.message : 'Connection failed.';
               } finally {
                 testing = false;
               }
@@ -915,7 +1014,9 @@
             class="text-button"
             onclick={() => {
               key = '';
+              keyChanged();
               keyStatus = 'Key removed from this session.';
+              void loadCatalogue();
             }}>Forget key</button
           >
         </div>
@@ -929,7 +1030,8 @@
             >Setup guide <ExternalLink size={12} /></a
           >
         </p>
-        <hr />
+      </section>
+    {:else}<section class="settings-form">
         <h3>Exercise budget</h3>
         <label
           >USD allowance (optional)<input
@@ -952,7 +1054,7 @@
             <dd>${spent(p).toFixed(4)}</dd>
           </div>
           <div>
-            <dt>Reserved estimates</dt>
+            <dt>Reserved estimates & allowances</dt>
             <dd>${reserved(p).toFixed(4)}</dd>
           </div>
           <div>
@@ -964,77 +1066,15 @@
           The app blocks operations that exceed the estimated allowance. This is not a hard external
           spending cap. Use a spending-limited OpenRouter key too.
         </p>
-      </section>
-      <section>
-        <h3>Choose AI models</h3>
-        <p class="small muted">
-          Choose one or more models. Three models from different developers are a useful starting
-          point. Exact identifiers and current catalogue prices are shown below.
-        </p>
-        <label
-          >Model scope<select bind:value={modelScope}
-            ><option value="default">Whole exercise</option
-            >{#each workflowStages.filter((s) => s.id > 0 && s.id < 8) as { id, title }}<option
-                value={String(id)}>{title}</option
-              >{/each}</select
-          ></label
-        >{#if modelScope !== 'default'}<button
-            class="text-button small"
-            onclick={() => change((p) => delete p.overrides[modelScope])}
-            >Use whole-exercise ensemble</button
-          >{/if}
-        <div class="selected-models">
-          {#each configuredModels as model, i}{@const info = catalogue.find((m) => m.id === model)}
-            <div class="selected-model-row">
-              <span class="model-mark">{['●', '■', '▲', '◆'][i % 4]}</span>
-              <div>
-                <strong>{info?.name ?? modelName(model)}</strong><small>{model}</small><small
-                  >{info
-                    ? `$${(Number(info.pricing.prompt) * 1e6).toFixed(2)} input / $${(Number(info.pricing.completion) * 1e6).toFixed(2)} output per million tokens`
-                    : 'Availability and prices need catalogue verification'}</small
-                >
-              </div>
-              <button
-                class="icon-button"
-                disabled={configuredModels.length === 1}
-                aria-label={`Remove ${model}`}
-                onclick={() => toggleModel(model)}><X size={16} /></button
-              >
-            </div>{/each}
-        </div>
-        <div class="section-line">
-          <span class="small muted">{catalogueStatus}</span><button
-            class="icon-button"
-            aria-label="Refresh model catalogue"
-            disabled={catalogueLoading}
-            onclick={loadCatalogue}><RefreshCw size={16} /></button
-          >
-        </div>
-        <label class="spaced"
-          >Find a model<input
-            bind:value={modelSearch}
-            placeholder="Search name or developer…"
-          /></label
-        >
-        <div class="model-catalogue">
-          {#each filteredModels as model}<button
-              class="catalogue-model"
-              onclick={() => toggleModel(model.id)}
-              ><span>{configuredModels.includes(model.id) ? '✓' : '+'}</span><span
-                ><strong>{model.name}</strong><small
-                  >{model.id} · {model.context_length.toLocaleString()} token context</small
-                ></span
-              ></button
-            >{/each}
-        </div>
-      </section>
+      </section>{/if}
+    <p class="small muted settings-privacy">
+      Only use publicly shareable, non-sensitive analysis. Model requests leave your browser through
+      OpenRouter.
+    </p>
+    <div class="dialog-actions">
+      <button class="primary" onclick={() => (dialog = '')}>Done</button>
     </div>
-    <div class="notice review small">
-      Only use non-sensitive, publicly shareable information. Your analysis leaves this browser when
-      you run models. Local project storage is not confidential storage.
-    </div>
-    <button class="primary" onclick={() => (dialog = '')}>Done</button></Modal
-  >
+  </Modal>
 {:else if dialog === 'paid' && p}<Modal
     title={retryId
       ? 'Retry or replace this contribution'
@@ -1046,7 +1086,8 @@
             ? 'Generate a draft with AI'
             : paidTask === 'consolidate'
               ? 'Spot overlapping contributions'
-              : `Generate ${paidTask === 'ratings' ? 'independent scores' : paidTask}`}
+              : `Generate ${paidTask === 'ratings' ? (paidMode === 'fusion' ? 'combined scores' : 'independent scores') : paidTask}`}
+    wide
     close={() => (dialog = '')}
     ><p>Review the models and estimated cost before sending this analysis to OpenRouter.</p>
     {#if paidTask === 'narrative_edit'}<p class="small">
@@ -1065,9 +1106,7 @@
           )
           .join(', ')}
       </p>{/if}
-    {#if paidContributors.length > 1}<p class="small muted">
-        Choose which contributors to include in this run. Select at least one model.
-      </p>{/if}
+
     {#if paidTask === 'chains' && paidChainOptions.mode === 'disruption'}
       {#if retryId}<p>
           <strong>What if…?</strong>
@@ -1084,61 +1123,32 @@
           candidate. Any additional drivers will need your review.
         </p>{/if}
     {/if}
-    {#if paidTask === 'chains'}<label class="spaced"
-        >Find a model<input
-          type="search"
-          bind:value={modelSearch}
-          placeholder="Search model names or IDs"
+    <ModelPicker
+      {catalogue}
+      selected={paidContributors.filter((c) => c.included).map((c) => c.modelId)}
+      mode={paidMode}
+      efforts={paidEfforts}
+      multiple={!singleContributor}
+      loading={catalogueLoading}
+      loaded={catalogueLoaded}
+      status={catalogueStatus}
+      refresh={loadCatalogue}
+      onmodels={(ids) => (paidContributors = ids.map((modelId) => ({ modelId, included: true })))}
+      onmode={(mode) => (paidMode = mode)}
+      oneffort={(id, effort) => (paidEfforts = { ...paidEfforts, [id]: effort })}
+    />
+    {#if paidMode === 'fusion'}<label class="spaced"
+        >Planning allowance for this run (USD)<input
+          type="number"
+          min="0.01"
+          step="0.01"
+          bind:value={fusionAllowance}
         /></label
-      >{/if}
-    <div class="paid-models">
-      {#each paidContributors as contributor, i}
-        {@const model = contributor.modelId}
-        {@const modelRequests = paidPlan?.requests.filter((r) => r.modelId === model) ?? []}
-        {@const driverCount = modelRequests.reduce((sum, r) => sum + r.targetIds.length, 0)}
-        <div class="paid-contributor">
-          <label class="check-label" for={`paid-contributor-${i}`}
-            >{#if paidContributors.length > 1}<input
-                id={`paid-contributor-${i}`}
-                type="checkbox"
-                bind:checked={contributor.included}
-              />{/if}Contributor {i + 1}</label
-          >
-          <select
-            id={paidContributors.length === 1 ? `paid-contributor-${i}` : undefined}
-            aria-label={`Model for contributor ${i + 1}`}
-            bind:value={contributor.modelId}
-            disabled={!contributor.included}
-            ><option value={model}>{catalogue.find((c) => c.id === model)?.name ?? model}</option
-            >{#each catalogue
-              .filter((c) => c.id !== model && (paidTask === 'chains' ? !modelSearch || `${c.name} ${c.id}`
-                        .toLowerCase()
-                        .includes(modelSearch.toLowerCase()) : p.models.includes(c.id) || (modelSearch && c.name
-                          .toLowerCase()
-                          .includes(modelSearch.toLowerCase()))))
-              .slice(0, 40) as m}<option value={m.id}>{m.name}</option>{/each}</select
-          ><small>{model}</small>{#if !contributor.included}<small>Not included in this run.</small
-            >{:else if paidTask === 'ratings'}<small>
-              {modelRequests.length}
-              {modelRequests.length === 1 ? 'batch' : 'batches'} ·
-              {driverCount}
-              {driverCount === 1 ? 'driver' : 'drivers'}
-            </small>{/if}
-        </div>{/each}
-    </div>
-    {#if paidTask === 'chains' && !retryId}
-      <button
-        class="secondary"
-        onclick={addChainContributor}
-        disabled={!paidContributors.some((c) => !c.included) &&
-          !catalogue.some((m) => !paidModels.includes(m.id))}
-        ><Plus size={16} /> Add another model</button
       >
       <p class="small muted">
-        Start with one perspective, or add more to explore different combinations. Each model offers
-        new candidates for you to choose from.
-      </p>
-    {/if}
+        This reserves money in your exercise budget for the whole run. It is not an OpenRouter
+        spending cap; actual charges may be higher. Use a spending-limited key for an external cap.
+      </p>{/if}
     {#if paidTask === 'chains'}
       <p class="chain-generation-summary" role="status">
         <strong
@@ -1147,27 +1157,44 @@
             : 'chains'}</strong
         >
         from {paidModels.length}
-        {paidModels.length === 1 ? 'model' : 'models'}. Choose any one or more chains to take into
-        writing.
+        {paidMode === 'fusion'
+          ? 'combined contributor'
+          : paidModels.length === 1
+            ? 'model'
+            : 'models'}. Choose any one or more chains to take into writing.
       </p>
     {/if}
     <div class="estimate-box">
-      <span>Estimated maximum allowance</span><strong
-        >{paidEstimate === null ? 'Price unavailable' : `$${paidEstimate.toFixed(4)} USD`}</strong
+      <span>{paidMode === 'fusion' ? 'Planning allowance' : 'Estimated maximum allowance'}</span
+      ><strong
+        >{paidEstimate === null
+          ? paidMode === 'fusion'
+            ? 'Enter an available allowance'
+            : 'Price unavailable'
+          : `$${paidEstimate.toFixed(4)} USD`}</strong
       ><small
         >{paidPlan?.requests.length ?? 0}
         {paidPlan?.requests.length === 1 ? 'request' : 'requests'} across {paidModels.length}
-        {paidModels.length === 1 ? 'model' : 'models'}. Based on current catalogue prices, input
-        allowance and up to {Math.max(
-          0,
-          ...(paidPlan?.requests.map((r) => r.maxOutputTokens) ?? [])
-        ).toLocaleString()} output tokens per request. Actual charges can vary.</small
+        {paidMode === 'fusion'
+          ? 'combined contributor'
+          : paidModels.length === 1
+            ? 'model'
+            : 'models'}. {#if paidMode === 'fusion'}Final charges depend on Fusion’s work.{:else}Based
+          on current prices and up to {Math.max(
+            0,
+            ...(paidPlan?.requests.map((r) => r.maxOutputTokens) ?? [])
+          ).toLocaleString()} output tokens per request, including thinking. Actual charges can vary.{/if}</small
       >
     </div>
     {#if paidTask === 'chains'}<p class="small muted">
         {#if retryId}The saved request scope is retained for this retry.{:else}Generate chains
           requests three candidates per model; Explore a disruption requests one per model.{/if} Every
         chain includes all selected uncertainties. Retry / replace repeats only the failed batch.
+      </p>{/if}
+    {#if paidEstimate !== null && !canSpend(p, paidEstimate)}<p class="notice review" role="status">
+        This run exceeds your remaining exercise allowance. {paidMode === 'fusion'
+          ? 'Lower the planning allowance or adjust your budget.'
+          : 'Choose fewer models, try a free option or adjust your budget.'}
       </p>{/if}
     {#if new Set(paidModels).size !== paidModels.length}<p class="notice review" role="status">
         Choose a different model for each contributor.
@@ -1179,35 +1206,43 @@
           ? 'No missing ratings remain for the selected model in this scope. Choose a replacement model with missing ratings or close this dialog.'
           : 'No approved drivers are available to assess.'}
       </p>{/if}
-    {#if !key.trim()}<p class="notice review">
-        Connect your OpenRouter key in Model settings first.
-      </p>
-      <button class="secondary" onclick={settings}>Open model settings</button
-      >{/if}{#if !catalogue.length}<p class="small muted">{catalogueStatus}</p>
+    {#if !key.trim()}<p class="notice review">Connect your OpenRouter key before running.</p>
+      <button
+        class="secondary"
+        onclick={() => {
+          settings();
+          settingsTab = 'connection';
+        }}>Connect OpenRouter</button
+      >{/if}{#if catalogueForKey !== key.trim()}<p class="small muted">{catalogueStatus}</p>
       <button class="secondary" disabled={catalogueLoading} onclick={loadCatalogue}
         >Refresh catalogue</button
       >{/if}{#if paidError}<p class="notice error" role="alert">{paidError}</p>
       <button class="text-button" onclick={settings}>Adjust models & budget</button>{/if}
     <p class="small muted">
-      {paidTask === 'narrative' || paidTask === 'narrative_edit'
-        ? 'This creates a proposal for you to review. Your working text changes only when you apply it.'
-        : paidTask === 'consolidate'
-          ? 'This model reviews the independent contributions for overlap. Every proposed merge requires your acceptance.'
-          : 'Models work independently from the same analyst context. No searches or web tools are used.'}
+      {paidMode === 'fusion'
+        ? 'Fusion combines its panel’s perspectives into one contribution and may research the web. You review the result before approving it.'
+        : paidTask === 'narrative' || paidTask === 'narrative_edit'
+          ? 'This creates a proposal for you to review. Your working text changes only when you apply it.'
+          : paidTask === 'consolidate'
+            ? 'This model reviews the independent contributions for overlap. Every proposed merge requires your acceptance.'
+            : 'Models work independently from the same analyst context. No searches or web tools are used.'}
       Successful existing contributions are preserved.
     </p>
     <div class="dialog-actions">
       <button class="secondary" onclick={() => (dialog = '')}>Cancel</button><button
         class="primary"
         disabled={!key.trim() ||
+          catalogueForKey !== key.trim() ||
           !paidModels.length ||
           paidEstimate === null ||
+          (paidEstimate !== null && !canSpend(p, paidEstimate)) ||
           !paidPlan?.requests.length ||
           new Set(paidModels).size !== paidModels.length ||
           offline}
         onclick={run}
-        >Run {paidModels.length}
-        {paidModels.length === 1 ? 'model' : 'models'}
+        >{paidMode === 'fusion'
+          ? 'Run Fusion'
+          : `Run ${paidModels.length} ${paidModels.length === 1 ? 'model' : 'models'}`}
         <ArrowRight size={16} /></button
       >
     </div></Modal
@@ -1241,7 +1276,7 @@
     </p>
     <ol class="how-it-works">
       <li>Frame your question and time horizon.</li>
-      <li>Explore drivers with independent model perspectives.</li>
+      <li>Explore drivers with individual models or Fusion.</li>
       <li>Compare humanitarian impact and uncertainty scores.</li>
       <li>Choose critical uncertainties and develop future states.</li>
       <li>Combine hypotheses into coherent, contrasting chains.</li>

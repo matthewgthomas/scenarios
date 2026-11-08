@@ -80,7 +80,7 @@ export function markdown(p: Project, annotations = false, full = false): string 
     }
     text += `\n### Operation record\n\nConfirmed spending: $${spent(p).toFixed(4)} USD.\n\n`;
     for (const r of p.runs)
-      text += `- ${r.task}: ${r.modelId}, ${r.status}, input revision ${r.inputRevision}, ${r.at}. Cost: ${r.confirmed === null ? `unknown (estimate $${r.estimated.toFixed(4)})` : `$${r.confirmed.toFixed(4)}`}. ${r.error ?? ''}\n`;
+      text += `- ${r.task}: ${r.modelId}, ${r.status}, input revision ${r.inputRevision}, ${r.at}. Cost: ${r.confirmed === null ? `unknown (${r.costBasis === 'allowance' ? 'planning allowance' : 'estimate'} $${r.estimated.toFixed(4)})` : `$${r.confirmed.toFixed(4)}`}. ${r.resolvedModelId ? `Answered by ${r.resolvedModelId}. ` : ''}${r.reasoningEffort ? `Thinking effort: ${r.reasoningEffort}. ` : ''}${r.modelId === 'openrouter/fusion' ? `Fusion panel ${r.fusionInvoked ? 'consulted' : 'not completed'}. ` : ''}${r.error ?? ''}\n`;
     text += '\n### Revision log\n\n';
     for (const e of p.events) text += `- ${e.at}, revision ${e.revision}: ${e.message}\n`;
   }

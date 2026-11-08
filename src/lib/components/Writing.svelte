@@ -479,17 +479,7 @@
           Ask AI to edit your draft or, if you prefer, request an AI-generated draft. You review
           every proposal before applying it.
         </p>
-        <label class="inline-label"
-          >Model<select
-            value={p.writer}
-            onchange={(e) => {
-              const value = e.currentTarget.value;
-              change((p) => (p.writer = value));
-            }}
-            >{#each p.models as model}<option value={model}>{modelName(model)}</option
-              >{/each}</select
-          ></label
-        >
+        <p class="small muted">Choose your model or Fusion and review the cost before sending.</p>
         <label class="spaced"
           >Editing instructions (optional)<textarea
             rows="2"

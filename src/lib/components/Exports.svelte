@@ -153,8 +153,9 @@
     </ul>
   </div>
   <p class="small muted">
-    {showModeLabels ? 'Quick Mode has no historical source citations. ' : ''}Included annotations
-    describe hypotheses and assumptions, not verified evidence.
+    {showModeLabels && !p.runs.some((r) => r.modelId === 'openrouter/fusion')
+      ? 'Individual models use existing knowledge. '
+      : ''}Included annotations describe hypotheses and assumptions, not verified evidence.
   </p>
   <p role="status" aria-live="polite">{busy ? 'Preparing your download…' : status}</p>
 </section>

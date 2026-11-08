@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { selectionMode } from '$lib/domain/model-settings';
   import { Search, ArrowRight, Check, Merge, Scissors, Trash2, Sprout } from '@lucide/svelte';
   import {
     activeDrivers,
@@ -197,7 +198,11 @@
 <div class="stage-heading">
   <div>
     <h1>Explore what could shape the future.</h1>
-    <p>Bring independent perspectives together. Keep the drivers that matter to your question.</p>
+    <p>
+      {selectionMode(p, '1') === 'fusion'
+        ? 'Explore combined model perspectives. Keep the drivers that matter to your question.'
+        : 'Bring independent perspectives together. Keep the drivers that matter to your question.'}
+    </p>
   </div>
 </div>
 <StageGuide
@@ -348,7 +353,9 @@
     <Sprout size={34} />
     <h2>Start by exploring possible drivers of change.</h2>
     <p>
-      Your chosen AI models will independently consider political, economic, social, technological,
+      {selectionMode(p, '1') === 'fusion'
+        ? 'Fusion’s panel will consider'
+        : 'Your chosen AI models will independently consider'} political, economic, social, technological,
       legal and environmental change, as well as looking beyond these categories.
     </p>
     <p class="small muted">
