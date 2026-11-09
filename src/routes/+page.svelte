@@ -127,6 +127,7 @@
   let paidChainOptions = $state<ChainGenerationOptions>({ mode: 'standard' });
   let paidNarrativeOptions = $state<NarrativeOptions | undefined>();
   let paidError = $state('');
+  let paidConnectionOpen = $state(false);
   let busy = $state(false);
   let operation: Operation | null = null;
   let offline = $state(false);
@@ -393,6 +394,7 @@
       })
     );
     paidError = '';
+    paidConnectionOpen = !key.trim();
     dialog = 'paid';
     if (catalogueForKey !== key.trim() && !catalogueLoading) void loadCatalogue();
   }
@@ -501,6 +503,69 @@
     };
   });
 </script>
+
+{#snippet openRouterConnection()}
+  <h3>Connect OpenRouter</h3>
+  <p class="small muted">
+    Your key stays in memory for this page session. It is never saved with your project, so you
+    might need to re-enter it here if you reload the page.
+  </p>
+  <label
+    >API key<input
+      type="password"
+      bind:value={key}
+      autocomplete="off"
+      spellcheck="false"
+      placeholder="Paste your OpenRouter key"
+      oninput={keyChanged}
+      onblur={() => {
+        if (catalogueForKey !== key.trim()) void loadCatalogue();
+      }}
+    /></label
+  >
+  <div class="toolbar-group spaced">
+    <button
+      class="secondary"
+      disabled={!key.trim() || testing}
+      onclick={async () => {
+        testing = true;
+        keyStatus = '';
+        const sessionKey = key.trim();
+        try {
+          const result = await testKey(sessionKey);
+          if (sessionKey !== key.trim()) return;
+          keyStatus = result.paidAllowanceAvailable
+            ? 'Connected. You’re ready to choose models.'
+            : 'Connected. Free models are available; paid models may need more allowance.';
+          await loadCatalogue();
+        } catch (e) {
+          if (sessionKey === key.trim())
+            keyStatus = e instanceof Error ? e.message : 'Connection failed.';
+        } finally {
+          testing = false;
+        }
+      }}>{testing ? 'Testing…' : 'Test connection'}</button
+    ><button
+      class="text-button"
+      onclick={() => {
+        key = '';
+        keyChanged();
+        keyStatus = 'Key removed from this session.';
+        void loadCatalogue();
+      }}>Forget key</button
+    >
+  </div>
+  {#if keyStatus}<p role="status" class="small">{keyStatus}</p>{/if}
+  <p class="small external-links">
+    <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer"
+      >Create a key <ExternalLink size={12} /></a
+    ><a href="https://openrouter.ai/settings/credits" target="_blank" rel="noreferrer"
+      >Add credits <ExternalLink size={12} /></a
+    ><a href="https://openrouter.ai/docs/quickstart" target="_blank" rel="noreferrer"
+      >Setup guide <ExternalLink size={12} /></a
+    >
+  </p>
+{/snippet}
 
 <svelte:head
   ><title
@@ -970,66 +1035,7 @@
           >
         </div>{/if}
     {:else if settingsTab === 'connection'}<section class="settings-form">
-        <h3>Connect OpenRouter</h3>
-        <p class="small muted">
-          Your key stays in memory for this page session. It is never saved with your project, so
-          you might need to re-enter it here if you reload the page.
-        </p>
-        <label
-          >API key<input
-            type="password"
-            bind:value={key}
-            autocomplete="off"
-            spellcheck="false"
-            placeholder="Paste your OpenRouter key"
-            oninput={keyChanged}
-            onblur={() => {
-              if (catalogueForKey !== key.trim()) void loadCatalogue();
-            }}
-          /></label
-        >
-        <div class="toolbar-group spaced">
-          <button
-            class="secondary"
-            disabled={!key.trim() || testing}
-            onclick={async () => {
-              testing = true;
-              keyStatus = '';
-              const sessionKey = key.trim();
-              try {
-                const result = await testKey(sessionKey);
-                if (sessionKey !== key.trim()) return;
-                keyStatus = result.paidAllowanceAvailable
-                  ? 'Connected. You’re ready to choose models.'
-                  : 'Connected. Free models are available; paid models may need more allowance.';
-                await loadCatalogue();
-              } catch (e) {
-                if (sessionKey === key.trim())
-                  keyStatus = e instanceof Error ? e.message : 'Connection failed.';
-              } finally {
-                testing = false;
-              }
-            }}>{testing ? 'Testing…' : 'Test connection'}</button
-          ><button
-            class="text-button"
-            onclick={() => {
-              key = '';
-              keyChanged();
-              keyStatus = 'Key removed from this session.';
-              void loadCatalogue();
-            }}>Forget key</button
-          >
-        </div>
-        {#if keyStatus}<p role="status" class="small">{keyStatus}</p>{/if}
-        <p class="small external-links">
-          <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer"
-            >Create a key <ExternalLink size={12} /></a
-          ><a href="https://openrouter.ai/settings/credits" target="_blank" rel="noreferrer"
-            >Add credits <ExternalLink size={12} /></a
-          ><a href="https://openrouter.ai/docs/quickstart" target="_blank" rel="noreferrer"
-            >Setup guide <ExternalLink size={12} /></a
-          >
-        </p>
+        {@render openRouterConnection()}
       </section>
     {:else}<section class="settings-form">
         <h3>Exercise budget</h3>
@@ -1123,6 +1129,10 @@
           candidate. Any additional drivers will need your review.
         </p>{/if}
     {/if}
+    <details class="generation-connection" bind:open={paidConnectionOpen}>
+      <summary>{key.trim() ? 'OpenRouter connection · Change key' : 'Connect OpenRouter'}</summary>
+      {@render openRouterConnection()}
+    </details>
     <ModelPicker
       {catalogue}
       selected={paidContributors.filter((c) => c.included).map((c) => c.modelId)}
@@ -1206,14 +1216,7 @@
           ? 'No missing ratings remain for the selected model in this scope. Choose a replacement model with missing ratings or close this dialog.'
           : 'No approved drivers are available to assess.'}
       </p>{/if}
-    {#if !key.trim()}<p class="notice review">Connect your OpenRouter key before running.</p>
-      <button
-        class="secondary"
-        onclick={() => {
-          settings();
-          settingsTab = 'connection';
-        }}>Connect OpenRouter</button
-      >{/if}{#if catalogueForKey !== key.trim()}<p class="small muted">{catalogueStatus}</p>
+    {#if catalogueForKey !== key.trim()}<p class="small muted">{catalogueStatus}</p>
       <button class="secondary" disabled={catalogueLoading} onclick={loadCatalogue}
         >Refresh catalogue</button
       >{/if}{#if paidError}<p class="notice error" role="alert">{paidError}</p>

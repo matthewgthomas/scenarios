@@ -198,3 +198,8 @@ The GitHub Pages workflow is prepared but no remote commit, repository settings 
 ## Model selection toggle — 8 November 2026
 
 - Catalogue Selected buttons now remove their model and revert to Add (or Use in single-model pickers). Added pressed-state semantics and retained the requirement to keep one model. Chromium verified removal, re-adding, immediate label updates and the last-model guard using mock catalogue data; screenshot: ignored `output/playwright/model-toggle-removed.png`. Type checking is clean and all 216 tests pass.
+
+## Inline OpenRouter connection — 8 November 2026
+
+- All AI generation and retry confirmations now include the shared OpenRouter connection form. It starts expanded when the session has no key; existing connections expose Change key. Adding, testing, replacing or forgetting a key stays in the generation dialog and preserves its model selections. The key remains in session memory, shared with model settings.
+- Type checking passes with zero errors or warnings, all 216 tests pass, and the production build succeeds. Chromium checks with mocked OpenRouter responses verified missing-key blocking, uninterrupted typing, connection testing, replacement, forgetting, shared settings state and 390px dialog reflow. Desktop and narrow screenshots were visually reviewed. No paid inference calls were made. QA script/screenshots are ignored under `output/playwright/verify-inline-key.js` and `output/playwright/inline-key-*`.
