@@ -89,6 +89,7 @@
   import ExerciseBudget from '$lib/components/ExerciseBudget.svelte';
   import Exports from '$lib/components/Exports.svelte';
   import Modal from '$lib/components/Modal.svelte';
+  import HelpDialog from '$lib/components/HelpDialog.svelte';
   import ModelActivity from '$lib/components/ModelActivity.svelte';
   import ModelPicker from '$lib/components/ModelPicker.svelte';
   import StageModelSettings from '$lib/components/StageModelSettings.svelte';
@@ -1251,25 +1252,4 @@
       >
     </div></Modal
   >
-{:else if dialog === 'help'}<Modal title="A guided process, led by you" close={() => (dialog = '')}
-    ><p>
-      Scenario Designer helps you construct different plausible futures for a humanitarian question.
-      These are explorations, not forecasts.
-    </p>
-    <ol class="how-it-works">
-      <li>Frame your question and time horizon.</li>
-      <li>Explore drivers with individual models or Fusion.</li>
-      <li>Compare humanitarian impact and uncertainty scores.</li>
-      <li>Choose critical uncertainties and develop future states.</li>
-      <li>Combine hypotheses into coherent, contrasting chains.</li>
-      <li>
-        Write your scenarios, optionally ask AI for editing help, then review and export your work.
-      </li>
-    </ol>
-    <p>
-      This app will tell you whenever an action costs money. AI models do not run when you edit,
-      approve decisions or navigate. Your projects stay in this browser; use project backups to move
-      or keep them.
-    </p>
-    <button class="primary" onclick={() => (dialog = '')}>Back to the workspace</button></Modal
-  >{/if}
+{:else if dialog === 'help'}<HelpDialog close={() => (dialog = '')} />{/if}

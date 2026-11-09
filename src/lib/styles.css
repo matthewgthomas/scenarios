@@ -2324,6 +2324,20 @@ dialog::backdrop {
 .how-it-works li {
   padding: 7px 0;
 }
+.help-tabs > button {
+  flex: 1 1 auto;
+}
+.help-panel {
+  line-height: 1.7;
+}
+.help-panel > p:first-child {
+  margin-top: 0;
+}
+.help-disclaimer {
+  border-top: 1px solid var(--cg-border);
+  padding-top: 20px;
+  margin-top: 24px;
+}
 .loading-state {
   padding: 100px 20px;
   text-align: center;

@@ -89,6 +89,12 @@ The included GitHub Actions workflow checks, tests, builds and deploys pushes to
 
 ## Code map
 
+### Updating the roadmap
+
+Edit [ROADMAP.md](ROADMAP.md) to update both the repository roadmap and the app's **How it works → Roadmap** tab. Vite imports the Markdown file directly, so development updates appear through hot reload and production updates are included in the next build. The existing GitHub Pages workflow rebuilds and deploys on pushes to `main`; no separate copy of the tab content needs editing. The bundled roadmap also remains available offline with the app.
+
+### Application modules
+
 | Location                | Responsibility                                                                            |
 | ----------------------- | ----------------------------------------------------------------------------------------- |
 | `src/lib/domain/`       | Versioned schema, judgements, revisions, dependencies, consolidation and authored example |
