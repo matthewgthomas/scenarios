@@ -1,6 +1,15 @@
 # Quick Mode implementation verification
 
-Latest review: 8 November 2026. Earlier sections record their original checks. This records checks actually performed; it is not a certification or a completed analyst pilot. Research requirements in the original acceptance checklist are intentionally outside this implementation's scope.
+Latest review: 9 November 2026. Earlier sections record their original checks. This records checks actually performed; it is not a certification or a completed analyst pilot. Research requirements in the original acceptance checklist are intentionally outside this implementation's scope.
+
+## Guided model setup — 9 November 2026
+
+- Setup now leads to a separate Models and budget stage: check an OpenRouter key, choose models, then set an exercise budget. The collapsible first-time guide covers creating an account, creating a limited key and buying credits, with links checked against OpenRouter’s official documentation. Model and budget steps explain chatbot subscriptions, tokens, thinking effort, separate model contributions, Fusion and estimated costs in plain English.
+- Historical analytical stage IDs, model overrides and run records are preserved. Existing exercises can continue from their saved stage. New wizard progress persists, while keys and connection verification remain in page-session memory. Analytical edits do not invalidate the connection setup.
+- `npm run check` reports zero errors or warnings; all 221 tests across 14 files pass; the static production build succeeds. Five new regression tests cover setup prerequisites, partial-wizard backups, legacy migration, untouched legacy exercises and downstream review flags.
+- Desktop Chromium checks used mocked OpenRouter account and catalogue responses. Verified missing and rejected keys, valid connections, unavailable-model blocking, switching to a free model, and empty, zero, negative, fractional and valid budgets. Valid budget entry enables progression immediately. No paid inference requests were made.
+- The production build passed the complete Setup → connection → models → budget → drivers flow. Verified saved wizard position after reload, session-only keys before and after completion, shared edits between the wizard and top-bar modal, Escape/focus return, and returning to the top when changing steps.
+- Visually reviewed 1440px light and 1024px dark screens and the settings modal at 390px. Checked document/modal widths for horizontal overflow. Screenshots are under `output/playwright/model-wizard-*`. The production console contained only browser password-field advice; the development error-path check also recorded the deliberately mocked 401 rejection.
 
 ## Automated checks
 
@@ -176,7 +185,6 @@ Artifacts generated during QA are ignored under `output/playwright/`; the applic
 
 The GitHub Pages workflow is prepared but no remote commit, repository settings change or deployment was performed. Git status/diff commands were unavailable in this host because its Apple command-line tools require Xcode licence acceptance; application builds and browser checks were unaffected.
 
-
 ## Guided AI model picker — 8 November 2026
 
 - Replaced the catalogue-first settings with Models, Connection and Budget tabs, a visible individual/Fusion choice, selected model cards, supported thinking controls and Suggested / Free / Browse all discovery. Search and Show more expose results beyond the former forty-model limit. Generation and writing confirmations share the picker; chains still start with one model. Stage overrides sit under Advanced settings, and existing exercises retain their saved choices.
@@ -186,14 +194,12 @@ The GitHub Pages workflow is prepared but no remote commit, repository settings 
 - Chromium browser checks verified defaults, all five suggestions, free options, search and pagination beyond forty results, stage inheritance/reset, mode switching, a key without paid allowance, single-model chain defaults and adding a second contributor. A production preview completed two mocked inference requests (one direct, one Fusion), checked temporary effort, over-budget blocking, preserved defaults and actual IndexedDB run metadata without the session key. Writing assistance verified replacement of its single contributor and switching to/from Fusion.
 - Visually reviewed light/dark settings and Fusion confirmation, including 390px reflow and 200% text with a reduced viewport. Keyboard checks covered dialog focus containment, Escape and focus restoration. No paid inference calls were made. Screenshots and repeatable QA scripts are ignored under `output/playwright/model-picker-*` and `output/playwright/verify-model-*`. These are Chromium/mock integration checks; live OpenRouter inference, a full screen-reader audit and cross-browser release checks remain separate validation.
 
-
 ## Optional stage model choices — 8 November 2026
 
 - Kept whole-exercise models as the primary setup path. Stage-specific choices are collapsed under an optional advanced disclosure near the top. Its stage list shows effective model names, inherited/custom status and a custom-stage count; only stages with AI actions are included. Each stage has a focused editor with explicit Use exercise defaults / Choose different models choices. Browsing creates no override; custom selections preserve independent models and routing modes, and resetting resumes inheritance. Keyboard focus moves to the editor heading and returns to the originating stage button.
 - Centralized stage selection helpers and fixed writing/merge request preparation to use saved stage models. Writing has one contributor; its stage selection no longer changes the shared writer when run. Existing partial overrides are preserved and completed on explicit edits. No project-schema migration is required.
 - All 216 tests pass, type checking reports zero errors or warnings, and the production build succeeds. Six new tests cover default inheritance, explicit snapshots, resetting one stage, preservation of other stages and legacy partial choices, writing-stage dispatch and Fusion/single-model selection.
 - Chromium verified the optional collapsed state, ready-to-use whole-exercise selection, five stage summaries, explicit customization/reset, independence from later default changes, custom Fusion/writing choices, keyboard focus, light/dark views, 390px reflow and 200% text. One mocked draft request confirmed the actual model ID, saved override/proposal and unchanged shared writer in IndexedDB; the session key was absent from saved data. No paid requests were made. QA scripts and screenshots are ignored under `output/playwright/verify-optional-stage-models.js`, `output/playwright/verify-stage-writer-request.js` and `output/playwright/stage-models-*`.
-
 
 ## Model selection toggle — 8 November 2026
 

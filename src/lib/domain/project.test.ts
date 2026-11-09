@@ -13,6 +13,7 @@ import {
   reserved,
   uncertainSpend,
   newProject,
+  MODEL_SETUP_STAGE,
   prerequisite,
   type Run
 } from './project';
@@ -41,7 +42,7 @@ const run = (overrides: Partial<Run> = {}): Run => ({
 describe('analyst decisions and provenance', () => {
   it('completes assessment when every driver has manually approved scores without AI ratings', () => {
     const p = exampleProject();
-    p.completed = [0, 1];
+    p.completed = [0, MODEL_SETUP_STAGE, 1];
     p.stale = [2];
     p.drivers.forEach((d) => {
       d.ratings = [];

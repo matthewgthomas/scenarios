@@ -1,4 +1,4 @@
-import { newProject, now, type Project } from './project';
+import { newProject, now, MODEL_SETUP_STAGE, type Project } from './project';
 
 const driverData = [
   [
@@ -75,7 +75,8 @@ export function exampleProject(): Project {
   p.horizon = 'United Kingdom, 2026–2029';
   p.stage = 5;
   p.example = true;
-  p.completed = [0, 1, 2, 3, 4];
+  p.completed = [0, MODEL_SETUP_STAGE, 1, 2, 3, 4];
+  p.modelSetupStep = 'budget';
   p.drivers = driverData.map((d, i) => ({
     id: `example_driver_${i}`,
     title: d[0],

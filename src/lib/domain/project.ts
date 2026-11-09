@@ -3,7 +3,7 @@ import { defaultModels, modelModeSchema, effortSchema } from './model-settings';
 export { defaultModels, modelName } from './model-settings';
 
 export const stages = [
-  'Setup',
+  'Define analysis',
   'Explore drivers',
   'Assess drivers',
   'Select uncertainties',
@@ -11,12 +11,19 @@ export const stages = [
   'Construct chains',
   'Write & review scenarios',
   'Write & review scenarios',
-  'Export'
+  'Export',
+  'Models and budget'
 ] as const;
+export const MODEL_SETUP_STAGE = 9;
+export const modelSetupSteps = ['connection', 'models', 'budget'] as const;
 // Keep persisted stage IDs and historical run records compatible with version 1.0.
 // Stage 7 is the former review stage; it now opens the unified writing workspace.
 export const canonicalStage = (stage: number) => (stage === 7 ? 6 : stage);
-export const workflowStages = [0, 1, 2, 3, 4, 5, 6, 8].map((id) => ({ id, title: stages[id] }));
+// The new setup stage follows Define analysis without renumbering saved analytical stages or runs.
+export const workflowStages = [0, MODEL_SETUP_STAGE, 1, 2, 3, 4, 5, 6, 8].map((id) => ({
+  id,
+  title: stages[id]
+}));
 export const coreStageCount = workflowStages.length - 1;
 export const stageIsComplete = (p: Project, stage: number) =>
   p.completed.includes(canonicalStage(stage) === 6 ? 7 : stage);
@@ -209,7 +216,8 @@ export const projectSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   revision: z.number(),
-  stage: z.number().int().min(0).max(8),
+  stage: z.number().int().min(0).max(MODEL_SETUP_STAGE),
+  modelSetupStep: z.enum(modelSetupSteps).default('connection'),
   example: z.boolean(),
   budget: z.number().positive().nullable(),
   models: z.array(z.string()).min(1),
@@ -358,6 +366,7 @@ export function newProject(): Project {
     updatedAt: now(),
     revision: 1,
     stage: 0,
+    modelSetupStep: 'connection',
     example: false,
     budget: 5,
     models: [...defaultModels],
@@ -410,7 +419,7 @@ export function flagDownstream(
   message: string,
   affectedChainIds?: string[]
 ) {
-  for (const stage of p.completed.filter((s) => s > from))
+  for (const stage of p.completed.filter((s) => s > from && s !== MODEL_SETUP_STAGE))
     if (!p.stale.includes(stage)) p.stale.push(stage);
   p.chains.forEach((c) => {
     if (!affectedChainIds || affectedChainIds.includes(c.id)) c.review = true;
@@ -493,7 +502,10 @@ export function prerequisite(p: Project, stage: number): string | null {
   )
     return null;
   if (!p.question.trim() || !p.horizon.trim())
-    return 'Add an analytical question and time horizon in Setup.';
+    return 'Add an analytical question and time horizon in Define analysis.';
+  if (stage === MODEL_SETUP_STAGE) return null;
+  if (!p.completed.includes(MODEL_SETUP_STAGE))
+    return 'Connect OpenRouter, choose your models and set a budget in Models and budget.';
   if (stage >= 2 && !activeDrivers(p).some((d) => d.approved))
     return 'Approve the driver list in Explore drivers.';
   if (stage >= 3 && !activeDrivers(p).every((d) => d.decision?.revision === d.revision))
@@ -508,6 +520,16 @@ export function prerequisite(p: Project, stage: number): string | null {
 export function parseProject(value: unknown): Project {
   const p = projectSchema.parse(value);
   p.stage = canonicalStage(p.stage);
+  // Existing exercises can continue where they left off, with their model choices intact.
+  if (
+    value &&
+    typeof value === 'object' &&
+    !Object.hasOwn(value, 'modelSetupStep') &&
+    (p.completed.includes(0) || (p.stage > 0 && p.stage !== MODEL_SETUP_STAGE))
+  ) {
+    complete(p, MODEL_SETUP_STAGE);
+    p.modelSetupStep = 'budget';
+  }
   if (!p.overrides['6'] && p.overrides['7']) p.overrides['6'] = [...p.overrides['7']];
   if (
     new Set(p.drivers.map((d) => d.id)).size !== p.drivers.length ||

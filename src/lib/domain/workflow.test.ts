@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { exampleProject } from './example';
 import {
   canonicalStage,
+  MODEL_SETUP_STAGE,
   completedStageCount,
   coreStageCount,
   editNarrative,
@@ -22,19 +23,19 @@ import {
 describe('actionable workflow readiness', () => {
   it('shows one combined writing/review stage and counts final approval rather than draft readiness', () => {
     const p = exampleProject();
-    p.completed = [0, 1, 2, 3, 4, 5];
-    expect(workflowStages.map((s) => s.id)).toEqual([0, 1, 2, 3, 4, 5, 6, 8]);
-    expect(coreStageCount).toBe(7);
+    p.completed = [0, MODEL_SETUP_STAGE, 1, 2, 3, 4, 5];
+    expect(workflowStages.map((s) => s.id)).toEqual([0, MODEL_SETUP_STAGE, 1, 2, 3, 4, 5, 6, 8]);
+    expect(coreStageCount).toBe(8);
     prepareNarrativeReview(p);
     expect(stageIsComplete(p, 6)).toBe(false);
-    expect(completedStageCount(p)).toBe(6);
+    expect(completedStageCount(p)).toBe(7);
     approveChainSet(p);
     completeScenarioSet(p);
     expect(stageIsComplete(p, 6)).toBe(true);
-    expect(completedStageCount(p)).toBe(7);
+    expect(completedStageCount(p)).toBe(8);
     editNarrative(p, p.chains[0].id, 'A revision after completion.');
     expect(stageIsComplete(p, 6)).toBe(false);
-    expect(completedStageCount(p)).toBe(6);
+    expect(completedStageCount(p)).toBe(7);
   });
   it('reopens legacy review-stage backups in the unified workspace without changing saved work or run history', () => {
     const p = exampleProject();

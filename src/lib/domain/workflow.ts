@@ -3,6 +3,7 @@ import {
   activeChains,
   approvedChainSet,
   canonicalStage,
+  MODEL_SETUP_STAGE,
   uncertainties,
   snapshotChain,
   complete,
@@ -78,6 +79,8 @@ export function completeScenarioSet(p: Project): boolean {
 export function prerequisiteStage(p: Project, stage: number): number {
   stage = canonicalStage(stage);
   if (!p.question.trim() || !p.horizon.trim()) return 0;
+  if (stage === MODEL_SETUP_STAGE) return 0;
+  if (!p.completed.includes(MODEL_SETUP_STAGE)) return MODEL_SETUP_STAGE;
   if (!activeDrivers(p).some((d) => d.approved)) return 1;
   if (stage >= 3 && activeDrivers(p).some((d) => d.decision?.revision !== d.revision)) return 2;
   if (stage >= 4 && (!p.completed.includes(3) || !uncertainties(p).length)) return 3;

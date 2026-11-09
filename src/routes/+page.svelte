@@ -51,6 +51,7 @@
     stageNeedsReview,
     completedStageCount,
     coreStageCount,
+    MODEL_SETUP_STAGE,
     type Project,
     type Change,
     type Run
@@ -83,6 +84,9 @@
   import Hypotheses from '$lib/components/Hypotheses.svelte';
   import Writing from '$lib/components/Writing.svelte';
   import Setup from '$lib/components/Setup.svelte';
+  import ModelSetup from '$lib/components/ModelSetup.svelte';
+  import OpenRouterConnection from '$lib/components/OpenRouterConnection.svelte';
+  import ExerciseBudget from '$lib/components/ExerciseBudget.svelte';
   import Exports from '$lib/components/Exports.svelte';
   import Modal from '$lib/components/Modal.svelte';
   import ModelActivity from '$lib/components/ModelActivity.svelte';
@@ -110,6 +114,8 @@
   let key = $state('');
   let keyStatus = $state('');
   let testing = $state(false);
+  let verifiedKey = $state<string | null>(null);
+  const connected = $derived(Boolean(key.trim() && verifiedKey === key.trim()));
   let catalogue = $state<Model[]>([]);
   let catalogueStatus = $state('Not loaded');
   let catalogueLoading = $state(false);
@@ -330,10 +336,41 @@
   }
   function keyChanged() {
     keyStatus = '';
+    verifiedKey = null;
     catalogueForKey = null;
     catalogueLoaded = false;
     catalogueGeneration++;
     catalogueLoading = false;
+  }
+  async function checkConnection() {
+    if (testing || !key.trim()) return;
+    testing = true;
+    verifiedKey = null;
+    keyStatus = '';
+    const sessionKey = key.trim();
+    try {
+      const result = await testKey(sessionKey);
+      if (sessionKey !== key.trim()) return;
+      verifiedKey = sessionKey;
+      keyStatus = result.paidAllowanceAvailable
+        ? 'Connected. Your key is accepted. Paid models also need credit in your OpenRouter account.'
+        : 'Connected. Your key is accepted, but its spending allowance is used up. Review its limit on OpenRouter before making paid requests.';
+      await loadCatalogue();
+    } catch (e) {
+      if (sessionKey === key.trim())
+        keyStatus =
+          e instanceof Error
+            ? e.message
+            : 'Connection failed. Check your internet connection and try again.';
+    } finally {
+      testing = false;
+    }
+  }
+  function forgetKey() {
+    key = '';
+    keyChanged();
+    keyStatus = 'Key removed from this session.';
+    void loadCatalogue();
   }
   function settings() {
     settingsTab = 'models';
@@ -505,66 +542,15 @@
 </script>
 
 {#snippet openRouterConnection()}
-  <h3>Connect OpenRouter</h3>
-  <p class="small muted">
-    Your key stays in memory for this page session. It is never saved with your project, so you
-    might need to re-enter it here if you reload the page.
-  </p>
-  <label
-    >API key<input
-      type="password"
-      bind:value={key}
-      autocomplete="off"
-      spellcheck="false"
-      placeholder="Paste your OpenRouter key"
-      oninput={keyChanged}
-      onblur={() => {
-        if (catalogueForKey !== key.trim()) void loadCatalogue();
-      }}
-    /></label
-  >
-  <div class="toolbar-group spaced">
-    <button
-      class="secondary"
-      disabled={!key.trim() || testing}
-      onclick={async () => {
-        testing = true;
-        keyStatus = '';
-        const sessionKey = key.trim();
-        try {
-          const result = await testKey(sessionKey);
-          if (sessionKey !== key.trim()) return;
-          keyStatus = result.paidAllowanceAvailable
-            ? 'Connected. You’re ready to choose models.'
-            : 'Connected. Free models are available; paid models may need more allowance.';
-          await loadCatalogue();
-        } catch (e) {
-          if (sessionKey === key.trim())
-            keyStatus = e instanceof Error ? e.message : 'Connection failed.';
-        } finally {
-          testing = false;
-        }
-      }}>{testing ? 'Testing…' : 'Test connection'}</button
-    ><button
-      class="text-button"
-      onclick={() => {
-        key = '';
-        keyChanged();
-        keyStatus = 'Key removed from this session.';
-        void loadCatalogue();
-      }}>Forget key</button
-    >
-  </div>
-  {#if keyStatus}<p role="status" class="small">{keyStatus}</p>{/if}
-  <p class="small external-links">
-    <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer"
-      >Create a key <ExternalLink size={12} /></a
-    ><a href="https://openrouter.ai/settings/credits" target="_blank" rel="noreferrer"
-      >Add credits <ExternalLink size={12} /></a
-    ><a href="https://openrouter.ai/docs/quickstart" target="_blank" rel="noreferrer"
-      >Setup guide <ExternalLink size={12} /></a
-    >
-  </p>
+  <OpenRouterConnection
+    bind:connectionKey={key}
+    {connected}
+    {testing}
+    status={keyStatus}
+    onkeychange={keyChanged}
+    ontest={checkConnection}
+    onforget={forgetKey}
+  />
 {/snippet}
 
 <svelte:head
@@ -610,7 +596,7 @@
                 ? '◒'
                 : stageIsComplete(p, i)
                   ? '✓'
-                  : i === 0
+                  : i === 0 || i === MODEL_SETUP_STAGE
                     ? '◇'
                     : i === 8
                       ? '↗'
@@ -700,10 +686,10 @@
               download(projectJSON(p), `${filename(p)}.scenario.json`, 'application/json')}
             ><Download size={19} /></button
           ><button
-            class="icon-button"
+            class="secondary topbar-model-settings"
             title="Models and budget"
             aria-label="Models and budget"
-            onclick={settings}><Settings2 size={19} /></button
+            onclick={settings}><Settings2 size={19} /><span>Models and budget</span></button
           ><button
             class="icon-button"
             aria-label="Undo exercise change"
@@ -768,7 +754,19 @@
               >
             </div>
           {:else}{#key `${p.id}:${p.stage}`}
-              {#if p.stage === 0}<Setup {p} {change} {settings} next={() => navigate(1)} />
+              {#if p.stage === 0}<Setup {p} {change} />
+              {:else if p.stage === MODEL_SETUP_STAGE}<ModelSetup
+                  {p}
+                  {change}
+                  {connected}
+                  {catalogue}
+                  loading={catalogueLoading}
+                  loaded={catalogueLoaded && catalogueForKey === key.trim()}
+                  status={catalogueStatus}
+                  refresh={loadCatalogue}
+                >
+                  {#snippet connection()}{@render openRouterConnection()}{/snippet}
+                </ModelSetup>
               {:else if p.stage === 1}<Drivers
                   {p}
                   {change}
@@ -1003,11 +1001,7 @@
 </div>
 <div class="sr-only" role="status" aria-live="polite">{announcement}</div>
 
-{#if dialog === 'settings' && p}<Modal
-    title="AI models & spending"
-    close={() => (dialog = '')}
-    wide
-  >
+{#if dialog === 'settings' && p}<Modal title="Models and budget" close={() => (dialog = '')} wide>
     <div class="settings-tabs" role="group" aria-label="AI settings">
       {#each [['models', 'Models'], ['connection', 'Connection'], ['budget', 'Budget']] as [value, label]}<button
           class:active={settingsTab === value}
@@ -1038,40 +1032,7 @@
         {@render openRouterConnection()}
       </section>
     {:else}<section class="settings-form">
-        <h3>Exercise budget</h3>
-        <label
-          >USD allowance (optional)<input
-            type="number"
-            min="0.01"
-            step="0.5"
-            value={p.budget ?? ''}
-            placeholder="No budget"
-            onchange={(e) => {
-              const value = e.currentTarget.value;
-              const amount = Number(value);
-              if (value === '' || amount > 0)
-                change((p) => (p.budget = value === '' ? null : amount));
-            }}
-          /></label
-        >
-        <dl class="spend-detail">
-          <div>
-            <dt>Confirmed</dt>
-            <dd>${spent(p).toFixed(4)}</dd>
-          </div>
-          <div>
-            <dt>Reserved estimates & allowances</dt>
-            <dd>${reserved(p).toFixed(4)}</dd>
-          </div>
-          <div>
-            <dt>Unknown charges, estimated</dt>
-            <dd>${uncertainSpend(p).toFixed(4)}</dd>
-          </div>
-        </dl>
-        <p class="small muted">
-          The app blocks operations that exceed the estimated allowance. This is not a hard external
-          spending cap. Use a spending-limited OpenRouter key too.
-        </p>
+        <ExerciseBudget {p} {change} />
       </section>{/if}
     <p class="small muted settings-privacy">
       Only use publicly shareable, non-sensitive analysis. Model requests leave your browser through

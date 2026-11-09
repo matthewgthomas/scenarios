@@ -1,15 +1,17 @@
 <script lang="ts">
   import { selectionMode } from '$lib/domain/model-settings';
   import { showModeLabels } from '$lib/config/presentation';
-  import { ArrowRight, Zap, LockKeyhole, Settings2 } from '@lucide/svelte';
-  import { complete, id, flagDownstream, type Project, type Change } from '$lib/domain/project';
+  import { ArrowRight, Zap, LockKeyhole } from '@lucide/svelte';
+  import {
+    complete,
+    id,
+    flagDownstream,
+    MODEL_SETUP_STAGE,
+    type Project,
+    type Change
+  } from '$lib/domain/project';
   import StageGuide from './StageGuide.svelte';
-  let {
-    p,
-    change,
-    settings,
-    next
-  }: { p: Project; change: Change; settings: () => void; next: () => void } = $props();
+  let { p, change }: { p: Project; change: Change } = $props();
   let preliminary = $state('');
   const ready = $derived(Boolean(p.question.trim() && p.horizon.trim()));
   const detailsReady = $derived(
@@ -51,7 +53,7 @@
           })
         );
       complete(p, 0);
-      p.stage = 1;
+      p.stage = MODEL_SETUP_STAGE;
     }, 'Exercise configured.');
     preliminary = '';
   }
@@ -65,7 +67,7 @@
 </div>
 <StageGuide
   title={ready
-    ? 'You are ready to explore drivers of change'
+    ? 'You are ready to choose your AI help'
     : `${detailsReady} of 2 essential details added`}
   description="Add a guiding analytical question, a time horizon and geography. Everything else can take shape as you explore."
   {ready}
@@ -76,7 +78,7 @@
       plausible answers.
     </p>{/snippet}
 </StageGuide>
-<div class="setup-layout">
+<div class="setup-layout" class:setup-layout-single={!showModeLabels}>
   <section class="setup-form">
     <label
       >Analysis name<input
@@ -114,8 +116,8 @@
       </p>
     </details>
   </section>
-  <aside class="setup-aside">
-    {#if showModeLabels}<div class="mode-panel">
+  {#if showModeLabels}<aside class="setup-aside">
+      <div class="mode-panel">
         <Zap size={24} />
         <h2>Quick Mode</h2>
         <p>
@@ -125,25 +127,7 @@
         </p>
         <span class="badge">Designed for a faster, focused working session</span>
       </div>
-    {/if}
-    <div class="setup-note">
-      <h3>AI help, when you want it.</h3>
-      <p>
-        You choose when to involve AI models in the scenario design process, if at all. You can
-        complete the entire process without any AI input if you prefer.
-      </p>
-      <p>
-        {selectionMode(p) === 'fusion'
-          ? 'Fusion combines several model perspectives into one response.'
-          : 'Models propose ideas independently.'} You review their reasoning and decide what to keep
-        at every stage. Click the button below to configure AI models and budget. Model setup can wait
-        until you want AI help.
-      </p>
-      <button class="secondary" onclick={settings}
-        ><Settings2 size={16} /> AI models & budget</button
-      >
-    </div>
-  </aside>
+    </aside>{/if}
 </div>
 <div class="privacy-notice">
   <LockKeyhole size={20} />
@@ -164,7 +148,7 @@
         : 'Start by articulating your overall question'}</strong
     ><small
       >{ready
-        ? 'Next, explore the forces that could shape this future.'
+        ? 'Next, choose your AI models and set a budget for this analysis.'
         : !p.question.trim()
           ? 'Add your analytical question to get started.'
           : 'Add a time horizon and geography to give your analysis a boundary.'}</small
@@ -172,7 +156,7 @@
   </div>
   <button class="primary" onclick={ready ? start : fillNext}
     >{ready
-      ? 'Explore drivers of change'
+      ? 'Continue to models and budget'
       : !p.question.trim()
         ? 'Add your question'
         : 'Add time horizon & place'}
