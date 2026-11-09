@@ -672,12 +672,6 @@
             >{/if}{/if}
       </div>
       <div class="topbar-tools">
-        <PageWalkthrough
-          page={walkthroughId(p?.stage ?? null)}
-          pageKey={p ? `${p.id}:${canonicalStage(p.stage)}` : 'home'}
-          ready={loaded}
-          {blocked}
-        />
         {#if p}<span class:error-text={saveState === 'Changes not saved'} class="save-status"
             ><HardDrive size={16} />{saveState}</span
           >{#if saveState === 'Changes not saved'}<button
@@ -690,17 +684,17 @@
               onCancel={() => operation?.cancel()}
               onViewDetails={viewRunDetails}
             />{/key}<button
+            class="secondary topbar-model-settings"
+            title="Models and budget"
+            aria-label="Models and budget"
+            onclick={settings}><Settings2 size={19} /><span>Models and budget</span></button
+          ><button
             class="icon-button"
             title="Download project backup"
             aria-label="Download project backup"
             onclick={() =>
               download(projectJSON(p), `${filename(p)}.scenario.json`, 'application/json')}
             ><Download size={19} /></button
-          ><button
-            class="secondary topbar-model-settings"
-            title="Models and budget"
-            aria-label="Models and budget"
-            onclick={settings}><Settings2 size={19} /><span>Models and budget</span></button
           ><button
             class="icon-button"
             aria-label="Undo exercise change"
@@ -726,6 +720,12 @@
           }}
           >{#if theme === 'light'}<Moon size={18} />{:else}<Sun size={18} />{/if}</button
         >
+        <PageWalkthrough
+          page={walkthroughId(p?.stage ?? null)}
+          pageKey={p ? `${p.id}:${canonicalStage(p.stage)}` : 'home'}
+          ready={loaded}
+          {blocked}
+        />
       </div>
     </header>
     <main id="main" tabindex="-1">
