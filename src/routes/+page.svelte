@@ -14,6 +14,7 @@
     HardDrive,
     Download,
     Plus,
+    ArrowLeft,
     ArrowRight,
     ArrowUpRight,
     Sun,
@@ -138,6 +139,7 @@
   let paidError = $state('');
   let paidConnectionOpen = $state(false);
   let busy = $state(false);
+  let leaving = $state(false);
   let operation: Operation | null = null;
   let offline = $state(false);
   let importInput: HTMLInputElement;
@@ -189,12 +191,14 @@
   );
 
   async function persist(snapshot: Project) {
+    let saved = false;
     saveQueue = saveQueue
       .catch(() => {})
       .then(async () => {
         try {
           await saveProject(snapshot);
           projects = await listProjects();
+          saved = true;
           if (project?.id === snapshot.id && project.revision === snapshot.revision) {
             saveState = 'Saved on this device';
             if (
@@ -212,6 +216,7 @@
         }
       });
     await saveQueue;
+    return saved;
   }
   function updateProject(fn: Parameters<Change>[0], message?: string, recordUndo = true) {
     if (!project) return;
@@ -260,7 +265,7 @@
     lastUndoAt = 0;
   }
   async function openProject(value: Project) {
-    if (busy) return;
+    if (busy || leaving) return;
     if (project) {
       clearTimeout(saveTimer);
       await persist(structuredClone($state.snapshot(project)));
@@ -278,14 +283,32 @@
     await persist(structuredClone($state.snapshot(project)));
   }
   async function home() {
-    if (busy) return;
-    if (project) {
-      clearTimeout(saveTimer);
-      await persist(structuredClone($state.snapshot(project)));
+    if (busy || leaving) return;
+    leaving = true;
+    try {
+      while (true) {
+        clearTimeout(saveTimer);
+        const snapshot = project ? structuredClone($state.snapshot(project)) : null;
+        if (snapshot && !(await persist(snapshot))) return;
+        if (busy) return;
+        try {
+          await preference('last-project', '');
+        } catch {
+          error = 'Could not return to the start. Try Back to start again.';
+          return;
+        }
+        if (!project || (project.id === snapshot?.id && project.revision === snapshot.revision))
+          break;
+      }
+      if (busy) return;
+      project = null;
+      error = '';
+      await tick();
+      window.scrollTo(0, 0);
+      document.getElementById('main')?.focus();
+    } finally {
+      leaving = false;
     }
-    project = null;
-    await preference('last-project', '').catch(() => {});
-    error = '';
   }
   function navigate(stage: number) {
     stage = canonicalStage(stage);
@@ -580,7 +603,7 @@
 </div>
 <div class="app-shell">
   <aside class="sidebar" aria-label="Exercise navigation">
-    <button class="brand" onclick={home} disabled={busy}
+    <button class="brand" onclick={home} disabled={busy || leaving}
       ><GitBranch size={27} strokeWidth={1.5} /><span
         >Scenario<br />Designer<span class="brand-sub">A workspace for possible futures</span></span
       ></button
@@ -654,8 +677,6 @@
             >{/if}{#if uncertainSpend(p)}<small
               >Unknown charges · est. ${uncertainSpend(p).toFixed(3)}</small
             >{/if}</button
-        ><button class="sidebar-link" onclick={home} disabled={busy}
-          ><FolderOpen size={16} /> All exercises</button
         >{:else}<GitBranch size={25} />
         <p>Open source. Runs in your browser.</p>
       {/if}
@@ -664,7 +685,8 @@
   <div class="workspace" style:--workspace-topbar-height={`${topbarHeight}px`}>
     <header class="topbar" bind:offsetHeight={topbarHeight}>
       <div class="topbar-context">
-        {#if p}<button class="title-button" onclick={() => navigate(0)}>{p.title}</button
+        {#if p}<button class="secondary back-to-exercises" onclick={home} disabled={busy || leaving}
+            ><ArrowLeft size={17} /> Back to start</button
           >{#if showModeLabels}<span class="mode-badge">Quick mode</span>{/if}{#if p.example}<span
               class="example-label">Example</span
             >{/if}{:else}<span>Your exercises</span>{#if showModeLabels}<span class="mode-badge"
@@ -672,9 +694,7 @@
             >{/if}{/if}
       </div>
       <div class="topbar-tools">
-        {#if p}<span class:error-text={saveState === 'Changes not saved'} class="save-status"
-            ><HardDrive size={16} />{saveState}</span
-          >{#if saveState === 'Changes not saved'}<button
+        {#if p}{#if saveState === 'Changes not saved'}<button
               class="text-button"
               onclick={() => p && persist(structuredClone($state.snapshot(p)))}>Retry save</button
             >{/if}{#key p.id}<ModelActivity
@@ -749,6 +769,9 @@
               <BookOpen size={16} /><span
                 >Example exercise. Scores, reasoning and drafts are authored illustrations, not live
                 model results.</span
+              >
+              <button class="secondary" onclick={home} disabled={busy || leaving}
+                >Exit example <ArrowLeft size={16} /></button
               >
             </div>{/if}
           {#if stageNeedsReview(p, p.stage)}<div class="notice review">

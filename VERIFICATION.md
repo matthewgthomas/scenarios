@@ -2,6 +2,19 @@
 
 Latest review: 9 November 2026. Earlier sections record their original checks. This records checks actually performed; it is not a certification or a completed analyst pilot. Research requirements in the original acceptance checklist are intentionally outside this implementation's scope.
 
+## Simplified top bar — 9 November 2026
+
+- Removed the exercise name and save-status component from the workspace header and deleted their unused styles. The exercise name remains in the sidebar; save-failure alerts, Retry save, backup controls and save-before-exit behaviour remain available.
+- All 232 tests pass, type checking is clean, and the production build succeeds. Chromium verified the removed header content, retained sidebar name and working exit. Visually reviewed 1440px light and 390px dark layouts. Script and screenshots: ignored `output/playwright/verify-topbar-cleanup.js` and `output/playwright/topbar-cleanup-*.png`.
+
+## Leaving an exercise — 9 November 2026
+
+- Added a labelled Back to exercises button at the start of every exercise header and an Exit example action in the example notice. Removed the sidebar footer's duplicate All exercises link. Both actions return to the existing home screen and new-exercise action, preserving the current exercise.
+- Exit waits for queued and pending edits to save, including edits made while saving. Failed project saves keep the exercise open with Retry save and backup controls; failure to clear the last-opened preference also keeps the workspace open with a retry message. Successful exit moves keyboard focus to the home content. Repeated exits are guarded, and the existing model-operation restriction is retained.
+- All 232 unit tests pass; Svelte/TypeScript checking reports zero errors or warnings, formatting passes, and the production build succeeds. Chromium checks verified example and regular exits, keyboard activation/home focus, immediate edit persistence, reopening saved work, reload remaining on home, simulated project/preference write failures and recovery.
+- A mocked OpenRouter operation verified that both exits and the logo remain disabled while requests are active and become available when the operation finishes. All service requests were intercepted locally; no paid inference calls were made. Simulated service failures produced the expected browser network errors.
+- Visually reviewed light and dark layouts at 1440px, 1024px and 390px. Exit labels fit at 200% text with a 720px viewport. Existing chain content overflows in that enlarged-text combination; these checks do not constitute a full browser-zoom, screen-reader or cross-browser audit. Repeatable scripts and screenshots are under ignored `output/playwright/verify-exercise-exit*.js` and `output/playwright/exercise-exit-*.png`.
+
 ## Page walkthroughs — 9 November 2026
 
 - Added bundled Driver.js tours to home and all nine workflow stages, with plain-English task instructions, named completion actions, progress, Back/Next/Done, Skip and Escape. A visible Page walkthrough button replays the current page. Automatic display is once per browser across exercises, with a persistent global opt-out that can be reversed during replay. Historical writing/review stage IDs share one tour identity; project schemas and backups are unchanged.

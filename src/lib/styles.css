@@ -487,14 +487,6 @@ pre {
   display: block;
   font-weight: 400;
 }
-.sidebar-link {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 22px;
-  padding: 8px 0;
-  color: var(--cg-sidebar-muted);
-}
 .sidebar-intro {
   color: var(--cg-sidebar-muted);
   font-size: 0.875rem;
@@ -536,14 +528,12 @@ pre {
 .topbar-context {
   min-width: 0;
 }
+.back-to-exercises {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .topbar-context > span:first-child {
   font-size: 0.875rem;
-}
-.title-button {
-  padding: 0;
-  font-size: 0.875rem;
-  text-align: left;
-  overflow-wrap: anywhere;
 }
 .topbar-tools {
   gap: 5px;
@@ -838,15 +828,6 @@ pre {
     opacity: 1;
     transform: translateY(0);
   }
-}
-.save-status {
-  color: var(--cg-text-muted);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.75rem;
-  white-space: nowrap;
-  margin-right: 12px;
 }
 .example-label {
   color: var(--cg-text-muted);
@@ -1376,12 +1357,22 @@ table {
 .example-notice {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   color: var(--cg-text-muted);
   font-size: 0.75rem;
   margin: -10px 0 25px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--cg-border);
+}
+.example-notice > svg {
+  flex-shrink: 0;
+}
+.example-notice > span {
+  flex: 1 1 240px;
+}
+.example-notice > button {
+  white-space: nowrap;
 }
 .empty-state {
   text-align: center;
@@ -2627,9 +2618,6 @@ dialog::backdrop {
     gap: 20px;
     grid-template-columns: minmax(0, 1fr) minmax(255px, 0.9fr);
   }
-  .save-status {
-    margin-right: 2px;
-  }
   .topbar-tools {
     gap: 0;
   }
@@ -2650,10 +2638,6 @@ dialog::backdrop {
   }
   .home-hero h1 br {
     display: none;
-  }
-  .save-status {
-    max-width: 130px;
-    white-space: normal;
   }
   .assessment-layout {
     grid-template-columns: 1fr;
@@ -2771,15 +2755,8 @@ dialog::backdrop {
   .topbar-tools {
     margin-left: auto;
   }
-  .save-status {
-    font-size: 0.625rem;
-    max-width: 100px;
-  }
   .topbar-context {
     gap: 7px;
-  }
-  .topbar-context .title-button {
-    max-width: 150px;
   }
   .mode-badge {
     font-size: 0.625rem;
