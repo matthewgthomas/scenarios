@@ -50,6 +50,11 @@ export const walkthroughs: Record<WalkthroughId, WalkthroughStep[]> = {
       'Use “Import project” to open a project backup. Download backups regularly from an analysis: clearing browser storage can remove your saved work.'
     ),
     step(
+      'home-how-it-works',
+      'See how Scenario Designer works',
+      'Open “How it works” for an overview of the scenario design process, how optional AI help fits in, and the role of your judgement.'
+    ),
+    step(
       'walkthrough-launcher',
       'Help is always here',
       'Open “Page walkthrough” on any page to see its instructions again. Choose Done, then start an analysis or explore the example when you are ready.'

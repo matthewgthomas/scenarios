@@ -624,7 +624,9 @@
       </div>
       <nav aria-label="Main navigation">
         <button class="current" onclick={home}><FolderOpen size={18} /> Your exercises</button
-        ><button onclick={() => (dialog = 'help')}><HelpCircle size={18} /> How it works</button>
+        ><button data-walkthrough="home-how-it-works" onclick={() => (dialog = 'help')}
+          ><HelpCircle size={18} /> How it works</button
+        >
       </nav>{/if}
     <div class="sidebar-bottom">
       {#if p}<button class="sidebar-models" onclick={settings}
@@ -1005,8 +1007,10 @@
           </section>
           <div class="home-footnote">
             {#if showModeLabels}<span><Zap size={17} /> Individual models or Fusion</span>{/if}
-            <button class="text-button" onclick={() => (dialog = 'help')}
-              >How it works <ArrowUpRight size={15} /></button
+            <button
+              data-walkthrough="home-how-it-works"
+              class="text-button"
+              onclick={() => (dialog = 'help')}>How it works <ArrowUpRight size={15} /></button
             >
           </div>
           <p class="privacy-line">
