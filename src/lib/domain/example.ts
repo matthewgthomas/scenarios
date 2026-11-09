@@ -67,6 +67,13 @@ const driverData = [
   ]
 ] as const;
 
+// Browsing positions and save bookkeeping do not turn a preview into an exercise.
+export function hasExerciseEdits(before: Project, after: Project): boolean {
+  const content = ({ stage, modelSetupStep, revision, updatedAt, events, ...rest }: Project) =>
+    rest;
+  return JSON.stringify(content(before)) !== JSON.stringify(content(after));
+}
+
 export function exampleProject(): Project {
   const p = newProject();
   p.title = 'UK financial hardship';

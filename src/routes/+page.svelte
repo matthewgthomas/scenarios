@@ -57,7 +57,7 @@
     type Change,
     type Run
   } from '$lib/domain/project';
-  import { exampleProject } from '$lib/domain/example';
+  import { exampleProject, hasExerciseEdits } from '$lib/domain/example';
   import {
     listProjects,
     saveProject,
@@ -106,6 +106,7 @@
   import { walkthroughId } from '$lib/walkthroughs';
 
   let project = $state<Project | null>(null);
+  let examplePreview = $state(false);
   let projects = $state<Project[]>([]);
   let loaded = $state(false);
   let saveState = $state('');
@@ -191,6 +192,7 @@
   );
 
   async function persist(snapshot: Project) {
+    if (examplePreview && project?.id === snapshot.id) return true;
     let saved = false;
     saveQueue = saveQueue
       .catch(() => {})
@@ -230,6 +232,10 @@
     }
     const next = structuredClone($state.snapshot(project));
     fn(next);
+    if (examplePreview && hasExerciseEdits($state.snapshot(project), next)) {
+      examplePreview = false;
+      void preference('last-project', next.id).catch(() => {});
+    }
     next.revision++;
     next.updatedAt = now();
     if (message) {
@@ -237,6 +243,7 @@
       next.events.push({ at: now(), revision: next.revision, message });
     }
     project = next;
+    if (examplePreview) return;
     saveState = 'Saving…';
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => persist(structuredClone(next)), 250);
@@ -264,22 +271,23 @@
     );
     lastUndoAt = 0;
   }
-  async function openProject(value: Project) {
+  async function openProject(value: Project, preview = false) {
     if (busy || leaving) return;
     if (project) {
       clearTimeout(saveTimer);
       await persist(structuredClone($state.snapshot(project)));
     }
     project = structuredClone($state.snapshot(value));
+    examplePreview = preview;
     undoStack = [];
     redoStack = [];
     lastUndoAt = 0;
     error = '';
-    saveState = 'Saving…';
+    saveState = preview ? 'Example preview' : 'Saving…';
     const interrupted = recoverInterrupted(project);
     if (interrupted)
       announcement = `${interrupted} model request(s) were interrupted. Work is preserved; dispatched calls may have been billed.`;
-    await preference('last-project', project.id).catch(() => {});
+    await preference('last-project', preview ? '' : project.id).catch(() => {});
     await persist(structuredClone($state.snapshot(project)));
   }
   async function home() {
@@ -302,6 +310,7 @@
       }
       if (busy) return;
       project = null;
+      examplePreview = false;
       error = '';
       await tick();
       window.scrollTo(0, 0);
@@ -768,7 +777,8 @@
           {#if p.example}<div class="example-notice">
               <BookOpen size={16} /><span
                 >Example exercise. Scores, reasoning and drafts are authored illustrations, not live
-                model results.</span
+                model results.{#if examplePreview}{' '}
+                  Saved to Your exercises only when you make edits.{/if}</span
               >
               <button class="secondary" onclick={home} disabled={busy || leaving}
                 >Exit example <ArrowLeft size={16} /></button
@@ -943,7 +953,7 @@
                 ><button
                   data-walkthrough="home-example"
                   class="text-button"
-                  onclick={() => openProject(exampleProject())}
+                  onclick={() => openProject(exampleProject(), true)}
                   >Explore an example <ArrowRight size={17} /></button
                 >
               </div>
