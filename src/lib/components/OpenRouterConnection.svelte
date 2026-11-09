@@ -24,11 +24,11 @@
   <h3>Connect your OpenRouter account</h3>
   <p>
     OpenRouter is a service that lets this app use AI models from different companies through one
-    account. A model is the AI that reads your question and writes a response, like the one behind a
-    web chatbot.
+    account. A model is the AI that reads your question and writes a response, like the ones behind
+    ChatGPT or Claude.
   </p>
   <p>
-    Here, you ask for AI help from inside your exercise. The app sends the relevant analysis to
+    Here, you ask for AI help from inside your analysis. The app sends the relevant information to
     OpenRouter and your chosen model providers, then brings their suggestions back for you to
     review. You decide when to ask and what to keep.
   </p>
@@ -69,7 +69,7 @@
         </p>
         <p>
           Set a spending limit for this key on OpenRouter. Copy the key when it is shown, then paste
-          it into the field below. Treat it like a password: anyone with it could use your credits.
+          it into the box below. Treat it like a password: anyone with it could use your credits.
           Read <a
             href="https://openrouter.ai/docs/api/reference/authentication"
             target="_blank"
@@ -88,8 +88,8 @@
           here does not happen automatically when you set this app’s budget.
         </p>
         <p>
-          You can choose free models in the next step. They have usage limits and may be temporarily
-          unavailable. For billing details, see <a
+          You don't have to pay to use this app; OpenRouter also offers free AI models that you can choose in the next step. 
+          They have usage limits and may be temporarily unavailable. For billing details, see <a
             href="https://openrouter.ai/docs/faq"
             target="_blank"
             rel="noreferrer">OpenRouter’s frequently asked questions</a
@@ -100,7 +100,7 @@
         <h4>Come back and check your key</h4>
         <p>
           Paste your key below and choose “Check connection”. This checks access to your account; it
-          does not ask a model to generate anything. You’ll choose models and a budget next.
+          does not ask a model to generate anything nor does it cost any money. You’ll choose models and a budget next.
         </p>
       </li>
     </ol>
