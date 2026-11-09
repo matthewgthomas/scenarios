@@ -9,6 +9,7 @@
     type Change
   } from '$lib/domain/project';
   import { FUSION_MODEL } from '$lib/domain/model-settings';
+  import { skipModelSetup } from '$lib/domain/workflow';
   import type { Model } from '$lib/ai/models';
   import StageModelSettings from './StageModelSettings.svelte';
   import ExerciseBudget from './ExerciseBudget.svelte';
@@ -65,16 +66,37 @@
       p.stage = 1;
     }, 'Models and budget configured. Ready to explore drivers.');
   }
+  function continueManually() {
+    change(skipModelSetup, 'AI setup skipped. Continuing manually. You can add AI help later.');
+  }
 </script>
 
 <div class="stage-heading">
   <div>
     <h1 data-walkthrough="stage-heading">Set up AI assistance for your analysis.</h1>
     <p>
-      Connect your OpenRouter account, choose which AI models to use and decide how much to spend.
+      For optional AI help, connect your OpenRouter account, choose models and decide how much to
+      spend.
     </p>
   </div>
 </div>
+<section
+  class="model-setup-manual"
+  aria-labelledby="manual-heading"
+  data-walkthrough="model-manual"
+>
+  <div>
+    <h2 id="manual-heading">Prefer to work through the analysis yourself?</h2>
+    <p>
+      Add and assess drivers, develop hypotheses, build chains and write scenarios manually. No
+      OpenRouter account, model selection or budget is needed. You can add AI help later using
+      “Models and budget” in the top bar.
+    </p>
+  </div>
+  <button class="secondary" onclick={continueManually}>
+    Continue manually <ArrowRight size={16} />
+  </button>
+</section>
 <nav class="model-setup-steps" aria-label="AI setup steps">
   <ol>
     {#each modelSetupSteps as item, i}
@@ -192,3 +214,27 @@
     </button>
   </div>
 </footer>
+
+<style>
+  .model-setup-manual {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px 24px;
+    max-width: 1080px;
+    padding: 20px;
+    border: 1px solid var(--cg-border);
+    border-radius: 8px;
+    background: var(--cg-paper);
+  }
+  .model-setup-manual h2 {
+    font-size: 1rem;
+    margin: 0 0 8px;
+  }
+  .model-setup-manual p {
+    max-width: 65ch;
+    margin: 0;
+    color: var(--cg-text-muted);
+  }
+</style>

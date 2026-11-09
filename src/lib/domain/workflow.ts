@@ -7,11 +7,20 @@ import {
   uncertainties,
   snapshotChain,
   complete,
+  prerequisite,
   allNarrativesWritten,
   prepareNarrativeReview,
   now,
   type Project
 } from './project';
+
+/** Resolve optional AI setup while retaining model choices for any later AI requests. */
+export function skipModelSetup(p: Project): boolean {
+  if (prerequisite(p, MODEL_SETUP_STAGE)) return false;
+  complete(p, MODEL_SETUP_STAGE);
+  p.stage = 1;
+  return true;
+}
 
 export function chainReadiness(p: Project) {
   const selected = activeChains(p).filter((c) => c.selected);

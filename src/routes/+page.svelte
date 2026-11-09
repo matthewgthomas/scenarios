@@ -121,7 +121,7 @@
   let catalogue = $state<Model[]>([]);
   let catalogueStatus = $state('Not loaded');
   let catalogueLoading = $state(false);
-  let settingsTab = $state<'models' | 'connection' | 'budget'>('models');
+  let settingsTab = $state<'models' | 'connection' | 'budget'>('connection');
   let catalogueForKey = $state<string | null>(null);
   let catalogueLoaded = $state(false);
   let catalogueGeneration = 0;
@@ -375,7 +375,7 @@
     void loadCatalogue();
   }
   function settings() {
-    settingsTab = 'models';
+    settingsTab = 'connection';
     dialog = 'settings';
     if (catalogueForKey !== key.trim() && !catalogueLoading) void loadCatalogue();
   }
@@ -1021,7 +1021,7 @@
 
 {#if dialog === 'settings' && p}<Modal title="Models and budget" close={() => (dialog = '')} wide>
     <div class="settings-tabs" role="group" aria-label="AI settings">
-      {#each [['models', 'Models'], ['connection', 'Connection'], ['budget', 'Budget']] as [value, label]}<button
+      {#each [['connection', 'Connect'], ['models', 'AI models'], ['budget', 'Budget']] as [value, label]}<button
           class:active={settingsTab === value}
           aria-pressed={settingsTab === value}
           onclick={() => (settingsTab = value as typeof settingsTab)}

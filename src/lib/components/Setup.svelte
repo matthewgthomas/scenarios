@@ -10,6 +10,7 @@
     type Project,
     type Change
   } from '$lib/domain/project';
+  import { skipModelSetup } from '$lib/domain/workflow';
   import StageGuide from './StageGuide.svelte';
   let { p, change }: { p: Project; change: Change } = $props();
   let preliminary = $state('');
@@ -31,30 +32,35 @@
         );
     });
   }
-  function start() {
-    change((p) => {
-      preliminary
-        .split('\n')
-        .map((t) => t.trim())
-        .filter(Boolean)
-        .forEach((title) =>
-          p.drivers.push({
-            id: id('driver'),
-            title,
-            summary: '',
-            tags: [],
-            origin: 'user',
-            origins: [],
-            revision: 1,
-            approved: false,
-            selected: false,
-            archived: false,
-            ratings: []
-          })
-        );
-      complete(p, 0);
-      p.stage = MODEL_SETUP_STAGE;
-    }, 'Exercise configured.');
+  function start(manual = false) {
+    if (!ready) return;
+    change(
+      (p) => {
+        preliminary
+          .split('\n')
+          .map((t) => t.trim())
+          .filter(Boolean)
+          .forEach((title) =>
+            p.drivers.push({
+              id: id('driver'),
+              title,
+              summary: '',
+              tags: [],
+              origin: 'user',
+              origins: [],
+              revision: 1,
+              approved: false,
+              selected: false,
+              archived: false,
+              ratings: []
+            })
+          );
+        complete(p, 0);
+        if (manual) skipModelSetup(p);
+        else p.stage = MODEL_SETUP_STAGE;
+      },
+      manual ? 'Exercise configured. Continuing manually without AI setup.' : 'Exercise configured.'
+    );
     preliminary = '';
   }
 </script>
@@ -67,7 +73,7 @@
 </div>
 <StageGuide
   title={ready
-    ? 'You are ready to choose your AI help'
+    ? 'You are ready to continue manually or set up AI help'
     : `${detailsReady} of 2 essential details added`}
   description="Add a guiding analytical question, a time horizon and geography. Everything else can take shape as you explore."
   {ready}
@@ -153,18 +159,25 @@
         : 'Start by articulating your overall question'}</strong
     ><small
       >{ready
-        ? 'Next, choose your AI models and set a budget for this analysis.'
+        ? 'Continue manually without an account, models or budget, or set up optional AI help.'
         : !p.question.trim()
           ? 'Add your analytical question to get started.'
           : 'Add a time horizon and geography to give your analysis a boundary.'}</small
     >
   </div>
-  <button data-walkthrough="stage-complete" class="primary" onclick={ready ? start : fillNext}
-    >{ready
-      ? 'Continue to models and budget'
-      : !p.question.trim()
-        ? 'Add your question'
-        : 'Add time horizon & place'}
-    <ArrowRight size={16} /></button
-  >
+  <div class="toolbar-group">
+    {#if ready}<button
+        data-walkthrough="analysis-manual"
+        class="secondary"
+        onclick={() => start(true)}>Continue manually <ArrowRight size={16} /></button
+      >{/if}
+    <button class="primary" onclick={() => (ready ? start() : fillNext())}
+      >{ready
+        ? 'Continue to models and budget'
+        : !p.question.trim()
+          ? 'Add your question'
+          : 'Add time horizon & place'}
+      <ArrowRight size={16} /></button
+    >
+  </div>
 </footer>

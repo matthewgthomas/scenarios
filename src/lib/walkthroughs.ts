@@ -32,7 +32,7 @@ export const walkthroughs: Record<WalkthroughId, WalkthroughStep[]> = {
     step(
       'home-create',
       'Start with your own question',
-      'Choose “Design a new set of scenarios” to get started. You will build several possible futures, rather than predict a single outcome.'
+      'Choose “Design a new set of scenarios” to get started. You can complete the whole analysis manually without an OpenRouter account, model selection or budget, or use optional AI help. You will build several possible futures, rather than predict a single outcome.'
     ),
     step(
       'home-example',
@@ -78,15 +78,20 @@ export const walkthroughs: Record<WalkthroughId, WalkthroughStep[]> = {
     ),
     step(
       'stage-complete',
-      'Continue to AI setup',
-      'Once your question and time horizon are filled in, continue to the next stage where you choose whether to use AI. Your details save automatically as you work.'
+      'Continue manually or set up AI help',
+      'Once your question and time horizon are filled in, choose “Continue manually” to go straight to exploring drivers without connecting OpenRouter, choosing models or setting a budget. Choose “Continue to models and budget” for optional AI help. Your details save automatically as you work.'
     )
   ],
   models: [
     step(
+      'model-manual',
+      'AI setup is optional',
+      'Choose “Continue manually” to skip AI setup and design scenarios yourself. You can add drivers of change, enter impact/uncertainty scores, develop hypotheses, construct hypothesis chains, write scenarios and export your work without needing to use AI. You can add AI help later using the “Models and budget” button in the top bar.'
+    ),
+    step(
       'model-connection-step',
       'Connect your OpenRouter account',
-      'Start with “Connect OpenRouter”. Paste your API key and check the connection. The key lets this app send requests through your account; checking it does not generate a paid response. You will need to enter it again if you reload the page.'
+      'If you want AI help, start with “Connect OpenRouter”. Paste your API key and check the connection. The key lets this app send requests through your account; checking it does not generate a paid response. You will need to enter it again if you reload the page.'
     ),
     step(
       'model-models-step',
@@ -100,13 +105,13 @@ export const walkthroughs: Record<WalkthroughId, WalkthroughStep[]> = {
     ),
     step(
       'model-current-step',
-      'Work through these three steps',
-      'Complete the step shown here, then use Continue at the bottom. You will review the models and estimated cost before each AI request. You can change your choices later using “Models and budget” in the top bar.'
+      'Work through these steps for AI help',
+      'For AI help, complete the step shown here, then use Continue at the bottom. You will review the models and estimated cost before each AI request. “Continue manually” stays available at every setup step.'
     ),
     step(
       'stage-complete',
       'Finish setup and explore drivers',
-      'Continue becomes available when the current step is ready: a checked connection, available models, then a valid positive budget. On the last step, choose “Explore drivers of change”.'
+      'For AI setup, Continue becomes available when the current step is ready: a checked connection, available models, then a valid positive budget. On the last step, choose “Explore drivers of change”. To skip AI setup, choose “Continue manually” above at any time.'
     )
   ],
   drivers: [
@@ -221,7 +226,7 @@ export const walkthroughs: Record<WalkthroughId, WalkthroughStep[]> = {
     step(
       'stage-actions',
       'Create candidates',
-      'Generate three candidates per selected model or add your own chain. “Explore a disruptive wildcard” is an optional way to consider a surprising change. You review and confirm any AI request first.'
+      'Use “Add chain” to build a candidate yourself, choosing a hypothesis for each uncertainty. Optional AI help can generate three candidates per selected model or explore a disruptive wildcard. You review and confirm any AI request first.'
     ),
     step(
       'chain-comparison',

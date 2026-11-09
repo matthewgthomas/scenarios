@@ -505,7 +505,7 @@ export function prerequisite(p: Project, stage: number): string | null {
     return 'Add an analytical question and time horizon in Define analysis.';
   if (stage === MODEL_SETUP_STAGE) return null;
   if (!p.completed.includes(MODEL_SETUP_STAGE))
-    return 'Connect OpenRouter, choose your models and set a budget in Models and budget.';
+    return 'Choose “Continue manually” or set up optional AI help in Models and budget.';
   if (stage >= 2 && !activeDrivers(p).some((d) => d.approved))
     return 'Approve the driver list in Explore drivers.';
   if (stage >= 3 && !activeDrivers(p).every((d) => d.decision?.revision === d.revision))
