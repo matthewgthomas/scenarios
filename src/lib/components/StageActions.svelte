@@ -33,7 +33,7 @@
   bind:this={element}
   bind:offsetHeight={height}
 >
-  <div class="stage-action-buttons">
+  <div class="stage-action-buttons" data-walkthrough="stage-actions">
     <ActionButton kind="generate" {...generate} />
     {#if merge}<ActionButton kind="merge" {...merge} />{/if}
     {#if add}<ActionButton kind="add" {...add} />{/if}

@@ -69,8 +69,10 @@
 
 <div class="stage-heading">
   <div>
-    <h1>Set up AI assistance for your analysis.</h1>
-    <p>Connect your OpenRouter account, choose which AI models to use and decide how much to spend.</p>
+    <h1 data-walkthrough="stage-heading">Set up AI assistance for your analysis.</h1>
+    <p>
+      Connect your OpenRouter account, choose which AI models to use and decide how much to spend.
+    </p>
   </div>
 </div>
 <nav class="model-setup-steps" aria-label="AI setup steps">
@@ -78,6 +80,7 @@
     {#each modelSetupSteps as item, i}
       <li>
         <button
+          data-walkthrough={`model-${item}-step`}
           class:current={step === item}
           aria-current={step === item ? 'step' : undefined}
           disabled={i > 0 && (!connected || (i === 2 && (!modelsReady || index < 1)))}
@@ -101,7 +104,12 @@
   </ol>
 </nav>
 <section class="model-setup-content" aria-labelledby="model-setup-heading">
-  <h2 id="model-setup-heading" tabindex="-1" bind:this={heading}>
+  <h2
+    id="model-setup-heading"
+    data-walkthrough="model-current-step"
+    tabindex="-1"
+    bind:this={heading}
+  >
     Step {index + 1} of 3: {labels[index]}
   </h2>
   {#if step === 'connection'}
@@ -146,7 +154,7 @@
     <ExerciseBudget {p} {change} required bind:valid={budgetValid} />
   {/if}
 </section>
-<footer class="stage-footer">
+<footer class="stage-footer" data-walkthrough="stage-complete">
   <div>
     <strong
       >{step === 'connection'

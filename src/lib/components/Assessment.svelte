@@ -223,10 +223,8 @@
 
 <div class="stage-heading">
   <div>
-    <h1>
-      {selection
-        ? 'Choose critical uncertainties.'
-        : 'Assess potential impact and uncertainty.'}
+    <h1 data-walkthrough="stage-heading">
+      {selection ? 'Choose critical uncertainties.' : 'Assess potential impact and uncertainty.'}
     </h1>
     <p>
       {selection
@@ -360,7 +358,11 @@
 {#if !selection}<AssessmentResults {p} expectedModels={comparisonModels} {inspect} />{/if}
 {#if view === 'plot'}
   <div class="assessment-layout">
-    <section class="matrix-panel" aria-label="Humanitarian impact by uncertainty">
+    <section
+      class="matrix-panel"
+      data-walkthrough="assessment-workspace"
+      aria-label="Humanitarian impact by uncertainty"
+    >
       <div class="matrix-chart">
         <svg
           viewBox="0 0 560 370"
@@ -448,7 +450,7 @@
             </div>{/each}
         </div>{/if}
     </section>
-    <section class="review-queue">
+    <section class="review-queue" data-walkthrough="uncertainty-choices">
       <div class="queue-header">
         <h2>
           {selection
@@ -514,8 +516,9 @@
     </section>
   </div>
 {:else}<div class="table-scroll">
-    <table class="data-table">
+    <table data-walkthrough="assessment-workspace" class="data-table">
       <caption class="sr-only">Driver assessment. Inspect to edit numeric scores.</caption><thead
+        data-walkthrough="uncertainty-choices"
         ><tr
           >{#each tableColumns as column}<th
               scope="col"
@@ -689,7 +692,7 @@
   </Modal>{/if}
 
 {#if error}<p role="alert" class="notice error">{error}</p>{/if}
-<footer class="stage-footer">
+<footer class="stage-footer" data-walkthrough="stage-complete">
   <div>
     <strong
       >{selection

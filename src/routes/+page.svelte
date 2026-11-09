@@ -100,6 +100,8 @@
     type ReasoningEffort
   } from '$lib/domain/model-settings';
   import { prerequisiteStage } from '$lib/domain/workflow';
+  import PageWalkthrough from '$lib/components/PageWalkthrough.svelte';
+  import { walkthroughId } from '$lib/walkthroughs';
 
   let project = $state<Project | null>(null);
   let projects = $state<Project[]>([]);
@@ -667,6 +669,12 @@
             >{/if}{/if}
       </div>
       <div class="topbar-tools">
+        <PageWalkthrough
+          page={walkthroughId(p?.stage ?? null)}
+          pageKey={p ? `${p.id}:${canonicalStage(p.stage)}` : 'home'}
+          ready={loaded}
+          {blocked}
+        />
         {#if p}<span class:error-text={saveState === 'Changes not saved'} class="save-status"
             ><HardDrive size={16} />{saveState}</span
           >{#if saveState === 'Changes not saved'}<button
@@ -901,9 +909,15 @@
                 and augmented by AI.
               </p>
               <div class="toolbar-group">
-                <button class="primary large" onclick={() => openProject(newProject())}
+                <button
+                  data-walkthrough="home-create"
+                  class="primary large"
+                  onclick={() => openProject(newProject())}
                   ><Plus size={18} /> Design a new set of scenarios</button
-                ><button class="text-button" onclick={() => openProject(exampleProject())}
+                ><button
+                  data-walkthrough="home-example"
+                  class="text-button"
+                  onclick={() => openProject(exampleProject())}
                   >Explore an example <ArrowRight size={17} /></button
                 >
               </div>
@@ -937,9 +951,13 @@
           </section>
           <section class="projects-section">
             <div class="section-line">
-              <h2>Your exercises <span class="count">{projects.length}</span></h2>
-              <button class="secondary" onclick={() => importInput.click()}
-                ><Upload size={16} /> Import project</button
+              <h2 data-walkthrough="home-projects">
+                Your exercises <span class="count">{projects.length}</span>
+              </h2>
+              <button
+                data-walkthrough="home-import"
+                class="secondary"
+                onclick={() => importInput.click()}><Upload size={16} /> Import project</button
               >
             </div>
             {#if projects.length}<div class="project-list">

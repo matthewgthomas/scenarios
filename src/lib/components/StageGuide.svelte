@@ -19,7 +19,7 @@
 </script>
 
 <details class="stage-guide" class:ready aria-label="Stage progress and next steps" open>
-  <summary class="stage-guide-main">
+  <summary class="stage-guide-main" data-walkthrough="stage-guide">
     <span class="stage-guide-icon" aria-hidden="true"
       >{#if ready}<CheckCircle2 size={22} />{:else}<CircleArrowRight size={22} />{/if}</span
     >

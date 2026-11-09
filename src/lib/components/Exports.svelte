@@ -60,7 +60,7 @@
 
 <div class="stage-heading">
   <div>
-    <h1>Take these futures into other conversations.</h1>
+    <h1 data-walkthrough="stage-heading">Take these futures into other conversations.</h1>
     <p>
       Use your scenarios and supporting materials for further analysis and decisions: Bring the
       scenarios to a workshop; explore humanitarian consequences; identify early-warning indicators;
@@ -121,14 +121,14 @@
     Download narratives only or include the drivers, scores, hypotheses, hypothesis chains and
     operation record.
   </p>
-  <div class="export-options">
+  <div class="export-options" data-walkthrough="export-options">
     <label class="check-label"
       ><input type="checkbox" bind:checked={full} /> Include full analytical record</label
     ><label class="check-label"
       ><input type="checkbox" bind:checked={annotations} /> Include chain hypotheses and assumptions</label
     >
   </div>
-  <div class="export-buttons">
+  <div class="export-buttons" data-walkthrough="export-download">
     <button class="secondary" disabled={busy} onclick={() => output('copy')}
       ><Copy size={16} /> Copy text</button
     ><button class="secondary" disabled={busy} onclick={() => output('md')}
@@ -162,7 +162,7 @@
 <div class="backup-options">
   <section>
     <Archive size={24} />
-    <h2>A portable project</h2>
+    <h2 data-walkthrough="export-backup">A portable project</h2>
     <p>
       Resume this exercise in another browser, with edits, approvals, model contributions and
       snapshots.
@@ -175,7 +175,7 @@
   </section>
   <section>
     <Braces size={24} />
-    <h2>Machine-readable analysis</h2>
+    <h2 data-walkthrough="export-analysis">Machine-readable analysis</h2>
     <p>
       Stable IDs, provenance and structured analytical objects for downstream tools and further
       work.

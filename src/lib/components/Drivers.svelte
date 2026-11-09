@@ -197,7 +197,7 @@
 
 <div class="stage-heading">
   <div>
-    <h1>Explore what could shape the future.</h1>
+    <h1 data-walkthrough="stage-heading">Explore what could shape the future.</h1>
     <p>
       {selectionMode(p, '1') === 'fusion'
         ? 'Explore combined model perspectives. Keep the drivers that matter to your question.'
@@ -274,6 +274,7 @@
 {#if drivers.length}<div class="table-scroll">
     <table class="data-table">
       <caption class="sr-only">Drivers, perspectives and approval states</caption><thead
+        data-walkthrough="driver-list"
         ><tr
           >{#if organising}<th scope="col" class="checkbox-col"
               ><span class="sr-only">Select to organise</span></th
@@ -425,7 +426,7 @@
       </div>
     </form>
   </Modal>{/if}
-{#if drivers.length}<footer class="stage-footer">
+{#if drivers.length}<footer class="stage-footer" data-walkthrough="stage-complete">
     <div>
       <strong
         >{drivers.length

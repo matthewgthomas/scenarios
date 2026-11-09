@@ -61,7 +61,7 @@
 
 <div class="stage-heading">
   <div>
-    <h1>Start with a question worth exploring.</h1>
+    <h1 data-walkthrough="stage-heading">Start with a question worth exploring.</h1>
     <p>You’ll shape the drivers of change, hypotheses and scenarios as you go.</p>
   </div>
 </div>
@@ -82,6 +82,7 @@
   <section class="setup-form">
     <label
       >Analysis name<input
+        data-walkthrough="analysis-name"
         value={p.title}
         oninput={(e) => field('title', e.currentTarget.value || 'Untitled analysis')}
         placeholder="Give this analysis a short name"
@@ -89,6 +90,7 @@
     ><label
       >Your analytical question <small class="muted">Required</small><textarea
         id="setup-question"
+        data-walkthrough="analysis-question"
         rows="4"
         value={p.question}
         oninput={(e) => field('question', e.currentTarget.value)}
@@ -99,13 +101,16 @@
     ><label
       >Time horizon and geography <small class="muted">Required</small><input
         id="setup-horizon"
+        data-walkthrough="analysis-horizon"
         value={p.horizon}
         oninput={(e) => field('horizon', e.currentTarget.value)}
         placeholder="For example, United Kingdom, 2026–2029"
       /></label
     >
     <details>
-      <summary>Add preliminary drivers of change (optional)</summary><label class="spaced"
+      <summary data-walkthrough="analysis-drivers"
+        >Add preliminary drivers of change (optional)</summary
+      ><label class="spaced"
         >One driver per line<textarea
           rows="4"
           bind:value={preliminary}
@@ -140,7 +145,7 @@
     </p>
   </div>
 </div>
-<footer class="stage-footer">
+<footer class="stage-footer" data-walkthrough="stage-complete">
   <div>
     <strong
       >{ready
@@ -154,7 +159,7 @@
           : 'Add a time horizon and geography to give your analysis a boundary.'}</small
     >
   </div>
-  <button class="primary" onclick={ready ? start : fillNext}
+  <button data-walkthrough="stage-complete" class="primary" onclick={ready ? start : fillNext}
     >{ready
       ? 'Continue to models and budget'
       : !p.question.trim()

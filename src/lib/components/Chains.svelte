@@ -267,7 +267,7 @@
 
 <div class="stage-heading">
   <div>
-    <h1>Construct hypothesis chains.</h1>
+    <h1 data-walkthrough="stage-heading">Construct hypothesis chains.</h1>
     <p>
       Each hypothesis chain combines one hypothesis per critical uncertainty into a possible
       scenario.
@@ -327,7 +327,7 @@
 {/if}
 <div class="comparison-toolbar">
   <div>
-    <h2 tabindex="-1" bind:this={comparisonHeading}>
+    <h2 data-walkthrough="chain-comparison" tabindex="-1" bind:this={comparisonHeading}>
       {candidates.length
         ? `${candidates.length} candidate ${candidates.length === 1 ? 'chain' : 'chains'} to explore`
         : 'Your possible futures start here'}
@@ -338,7 +338,10 @@
         : 'Generate a starting set from your approved hypotheses, or add a chain yourself.'}
     </p>
   </div>
-  {#if candidates.length}<button class="secondary" onclick={chooseScenarios}
+  {#if candidates.length}<button
+      data-walkthrough="chain-chooser"
+      class="secondary"
+      onclick={chooseScenarios}
       >View {candidates.length === 1 ? '' : 'all'}
       {candidates.length}
       {candidates.length === 1 ? 'chain' : 'chains'}
@@ -494,7 +497,7 @@
       </div>{/each}
   </details>{/if}
 
-{#if candidates.length}<footer class="stage-footer">
+{#if candidates.length}<footer class="stage-footer" data-walkthrough="stage-complete">
     <div class="footer-description">
       <Layers size={20} />
       <div>

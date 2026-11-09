@@ -3656,3 +3656,156 @@ dialog::backdrop {
   font-size: 0.8125rem;
   margin-top: 20px;
 }
+/* Page tours use the same Common Ground surfaces and controls as the workspace. */
+.walkthrough-launcher {
+  gap: 7px;
+  font-size: 0.8125rem;
+}
+body .driver-popover.page-walkthrough {
+  --driver-popover-font-family: 'Nunito Sans Variable', 'Nunito Sans', sans-serif;
+  width: min(380px, calc(100vw - 24px));
+  min-width: 0;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  padding: 20px;
+  border: 1px solid var(--cg-border);
+  border-radius: 13px;
+  background: var(--cg-paper);
+  color: var(--cg-text);
+  box-shadow: 0 8px 32px #0003;
+  font-family: var(--driver-popover-font-family);
+  line-height: 1.5;
+}
+.walkthrough-content {
+  max-height: calc(100dvh - 66px);
+  overflow: auto;
+  padding: 4px;
+  margin: -4px;
+}
+.page-walkthrough .driver-popover-title {
+  padding-right: 28px;
+  font-size: 1.125rem;
+  line-height: 1.35;
+}
+.page-walkthrough .driver-popover-description {
+  margin-top: 10px;
+  color: var(--cg-text-muted);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+.page-walkthrough .driver-popover-close-btn {
+  width: 40px;
+  height: 40px;
+  color: var(--cg-text-muted);
+  border-radius: 8px;
+}
+.page-walkthrough .driver-popover-close-btn:hover,
+.page-walkthrough .driver-popover-close-btn:focus-visible {
+  color: var(--cg-text);
+}
+.walkthrough-options {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--cg-border);
+}
+.walkthrough-options label {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.walkthrough-options input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin: 1px 0 0;
+  accent-color: var(--cg-action);
+}
+.walkthrough-storage-warning {
+  margin: 10px 0 0;
+  color: var(--cg-status-review-text);
+  font-size: 0.8125rem;
+}
+.page-walkthrough .driver-popover-footer {
+  /* Driver sets display:flex inline when it renders the navigation. */
+  display: grid !important;
+  grid-template-columns: 1fr auto;
+  gap: 8px 12px;
+}
+.page-walkthrough .driver-popover-progress-text {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  text-align: left;
+  color: var(--cg-text-muted);
+  font-size: 0.8125rem;
+}
+.page-walkthrough .walkthrough-skip {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: start;
+  padding: 4px 0;
+  min-height: 40px;
+  background: transparent;
+  color: var(--cg-text-muted);
+  font: inherit;
+  font-size: 0.875rem;
+}
+.page-walkthrough .driver-popover-navigation-btns {
+  grid-column: 2;
+  grid-row: 2;
+  gap: 8px;
+}
+.page-walkthrough .driver-popover-footer-btn {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--cg-control-border);
+  border-radius: 8px;
+  background: var(--cg-paper);
+  color: var(--cg-text);
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  text-align: center;
+  text-shadow: none;
+}
+.page-walkthrough .driver-popover-next-btn,
+.page-walkthrough .driver-popover-next-btn:hover,
+.page-walkthrough .driver-popover-next-btn:focus {
+  background: var(--cg-action);
+  border-color: var(--cg-action);
+  color: var(--cg-on-action, #fff);
+}
+.page-walkthrough button:focus-visible,
+.page-walkthrough input:focus-visible {
+  outline: 2px solid var(--cg-action);
+  outline-offset: 3px;
+}
+.page-walkthrough .driver-popover-arrow-side-left {
+  border-left-color: var(--cg-paper);
+}
+.page-walkthrough .driver-popover-arrow-side-right {
+  border-right-color: var(--cg-paper);
+}
+.page-walkthrough .driver-popover-arrow-side-top {
+  border-top-color: var(--cg-paper);
+}
+.page-walkthrough .driver-popover-arrow-side-bottom {
+  border-bottom-color: var(--cg-paper);
+}
+@media (pointer: coarse) {
+  .page-walkthrough .driver-popover-footer-btn,
+  .page-walkthrough .driver-popover-close-btn,
+  .page-walkthrough .walkthrough-skip {
+    min-height: 44px;
+  }
+}
+@media print {
+  .walkthrough-launcher,
+  .driver-layer {
+    display: none !important;
+  }
+}

@@ -9,6 +9,8 @@
   }: { title: string; close: () => void; children: Snippet; wide?: boolean } = $props();
   let dialog: HTMLDialogElement;
   onMount(() => {
+    // End any spotlight before the native modal owns focus and the top layer.
+    document.dispatchEvent(new Event('walkthrough:before-dialog'));
     const trigger = document.activeElement as HTMLElement | null;
     dialog.showModal();
     return () => {

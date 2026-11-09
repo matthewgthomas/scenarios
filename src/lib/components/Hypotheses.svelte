@@ -215,7 +215,7 @@
 
 <div class="stage-heading hypothesis-heading">
   <div>
-    <h1>Develop hypotheses</h1>
+    <h1 data-walkthrough="stage-heading">Develop hypotheses</h1>
     <p>
       How could each critical uncertainty unfold? Develop plausible alternatives for {p.horizon}.
       You’ll combine them into scenarios next.
@@ -252,6 +252,7 @@
 
 <section
   class="hypothesis-coverage"
+  data-walkthrough="hypothesis-coverage"
   class:has-gaps={review.missing.length > 0}
   aria-label="Hypothesis coverage"
 >
@@ -308,7 +309,7 @@
 <div class="hypothesis-workspace">
   <aside class="uncertainty-index" aria-label="Critical uncertainties">
     <div class="uncertainty-index-heading">
-      <h2>Critical uncertainties</h2>
+      <h2 data-walkthrough="hypothesis-index">Critical uncertainties</h2>
       <span>{review.groups.length}</span>
     </div>
     <div class="uncertainty-filter" aria-label="Filter uncertainties">
@@ -550,7 +551,7 @@
   {/if}
 </div>
 
-<footer class="hypothesis-completion">
+<footer class="hypothesis-completion" data-walkthrough="stage-complete">
   <div aria-live="polite" aria-atomic="true">
     {#if review.missing.length}<strong
         >{review.missing.length}

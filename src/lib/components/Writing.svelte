@@ -162,7 +162,7 @@
 
 <div class="stage-heading">
   <div>
-    <h1>Write & review scenarios</h1>
+    <h1 data-walkthrough="stage-heading">Write & review scenarios</h1>
     <p>
       Shape each story, review it alongside its hypothesis chains, then save your final set of
       scenarios.
@@ -286,6 +286,7 @@
     ).length}{@const story = p.narratives.find((n) => n.chainId === c.id)}<button
       class:active={editorOpen && chain?.id === c.id}
       class="scenario-tab scenario-{c.colour}"
+      data-walkthrough="writing-scenarios"
       aria-label={`Write and review scenario: ${c.title}. ${story?.working.trim() ? 'Draft written' : 'Not started'}${pendingCount ? `. ${pendingCount} AI proposals to review` : ''}`}
       aria-haspopup="dialog"
       onclick={() => {
@@ -579,7 +580,7 @@
     </div>
   </Modal>
 {/if}
-<footer class="stage-footer">
+<footer class="stage-footer" data-walkthrough="stage-complete">
   <div>
     <strong
       >{!chainsApproved
