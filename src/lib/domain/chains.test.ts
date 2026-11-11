@@ -18,7 +18,7 @@ import {
 } from './workflow';
 import { markdown, projectJSON, analyticalJSON } from '$lib/export/files';
 
-describe('guided chain decisions', () => {
+describe('guided combination decisions', () => {
   it('keeps an explicitly blank manual explanation empty when its first model check arrives', () => {
     const p = exampleProject();
     const c = p.chains[0];
@@ -72,7 +72,7 @@ describe('guided chain decisions', () => {
     expect(markdown(p, false, true)).toContain('(analyst explanation): Mutual aid grows');
   });
 
-  it('removes chains recoverably and excludes them even when an imported archive is marked selected', () => {
+  it('removes combinations recoverably and excludes them even when an imported archive is marked selected', () => {
     const p = exampleProject();
     approveChainSet(p);
     const c = p.chains[0];
@@ -96,7 +96,7 @@ describe('guided chain decisions', () => {
     expect(restored.chains[0].approvedRevision).not.toBe(restored.chains[0].revision);
   });
 
-  it.each([1, 2, 7, 20])('approves %i chains regardless of legacy targets or types', (count) => {
+  it.each([1, 2, 7, 20])('approves %i combinations regardless of legacy targets or types', (count) => {
     const p = exampleProject();
     const template = structuredClone(p.chains[0]);
     p.chains = Array.from({ length: count }, (_, i) => ({
@@ -148,7 +148,7 @@ describe('guided chain decisions', () => {
     expect(p).toEqual(original);
   });
 
-  it('exports formerly labelled chains without category headings and preserves their historical kind', () => {
+  it('exports formerly labelled combinations without category headings and preserves their historical kind', () => {
     const p = exampleProject();
     p.chains.forEach((c) => (c.kind = 'wildcard'));
     expect(approveChainSet(p)).toBe(true);
@@ -159,7 +159,7 @@ describe('guided chain decisions', () => {
     expect(completeScenarioSet(restored)).toBe(true);
   });
 
-  it('requires renewed chain approval before finalizing preserved narratives', () => {
+  it('requires renewed combination approval before finalizing preserved narratives', () => {
     const p = exampleProject();
     approveChainSet(p);
     expect(completeScenarioSet(p)).toBe(true);

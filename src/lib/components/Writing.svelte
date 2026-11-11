@@ -164,7 +164,7 @@
   <div>
     <h1 data-walkthrough="stage-heading">Write & review scenarios</h1>
     <p>
-      Shape each story, review it alongside its hypothesis chains, then save your final set of
+      Shape each story, review it alongside its scenario combinations, then save your final set of
       scenarios.
     </p>
   </div>
@@ -183,7 +183,7 @@
 >
   {#snippet children()}
     {#if !chainsApproved}<button class="workflow-link" onclick={reviewChains}
-        >Review & approve your chains <ArrowRight size={14} /></button
+        >Review & approve your combinations <ArrowRight size={14} /></button
       >{/if}
     {#each missingDrafts as c}<button class="workflow-link" onclick={() => openScenario(c.id)}
         >Write {c.title}<ArrowRight size={14} /></button
@@ -203,7 +203,7 @@
   {#snippet help()}<ol>
       <li>Set the scene: what does this future look and feel like?</li>
       <li>
-        Trace the path: how do the choices in the hypothesis chain reinforce or challenge each
+        Trace the path: how do the choices in the scenario combination reinforce or challenge each
         other?
       </li>
       <li>Make it human: who is affected, in what ways, and what remains uncertain?</li>
@@ -251,7 +251,7 @@
           {#if !canPerform(choosing, c.id)}<p class="small muted">
               {choosing === 'generate' && busy
                 ? 'Wait for the current model operation to finish.'
-                : 'Approve this chain in Build scenario combinations first.'}
+                : 'Approve this combination in Build scenario combinations first.'}
             </p>{/if}
         </li>
       {/each}
@@ -322,11 +322,11 @@
 {#if editorOpen && chain}
   <Modal title={`Write & review scenario: ${chain.title}`} close={() => (editorOpen = false)} wide>
     {#if chain.review || narrative?.review}<p class="notice review">
-        Review suggested: the chain or an upstream hypothesis changed. Your narrative and original
+        Review suggested: the combination or an upstream hypothesis changed. Your narrative and original
         snapshots are preserved.
       </p>{/if}
     {#if chain.approvedRevision !== chain.revision}<p class="notice review">
-        Approve this chain’s current revision in Build scenario combinations before starting a new
+        Approve this combination’s current revision in Build scenario combinations before starting a new
         draft or requesting AI help. You can keep editing an existing narrative.
       </p>{/if}
     {#if uncertainties(p).some((d) => !chain.items[d.id])}<p class="notice review">
@@ -382,7 +382,7 @@
         <div class="narrative-meta">
           <span
             >{narrative?.original
-              ? `Original: ${narrative.original.source === 'user' ? 'Your writing' : narrative.original.source === 'example' ? 'Authored example' : modelName(narrative.original.modelId ?? '')} · chain revision ${narrative.original.chainRevision}`
+              ? `Original: ${narrative.original.source === 'user' ? 'Your writing' : narrative.original.source === 'example' ? 'Authored example' : modelName(narrative.original.modelId ?? '')} · combination revision ${narrative.original.chainRevision}`
               : 'Your working draft · saved as you write'}</span
           >
           <span
@@ -395,7 +395,7 @@
         </div>
       </section>
       <aside class="writing-aside">
-        <h2>Your hypothesis chain</h2>
+        <h2>Your scenario combination</h2>
         <p class="small muted">
           Describe the future, its causal pathway and humanitarian implications. Around 400–600
           words is a guide, not a limit.
@@ -524,7 +524,7 @@
                     : 'Generated draft'}
               </h3>
               <span class="small muted"
-                >{modelName(d.modelId)} · chain revision {d.chainRevision}</span
+                >{modelName(d.modelId)} · combination revision {d.chainRevision}</span
               >
             </div>
             {#if d.instructions}<p class="small">
@@ -542,7 +542,7 @@
               </div>
             </div>
             {#if !current}<p class="notice review small">
-                Your text or chain has changed since this proposal. Request a fresh proposal to
+                Your text or combination has changed since this proposal. Request a fresh proposal to
                 apply AI changes to your current draft.
               </p>{/if}
             <div class="toolbar-group">
@@ -593,7 +593,7 @@
     >
     <small
       >{!chainsApproved
-        ? 'Your writing is kept. Review and approve the updated chains before saving a final set.'
+        ? 'Your writing is kept. Review and approve the updated combinations before saving a final set.'
         : missingDrafts.length
           ? 'Write a draft for every selected scenario. AI help is optional.'
           : allFinal
@@ -602,7 +602,7 @@
     >
   </div>
   {#if !chainsApproved}<button class="primary" onclick={reviewChains}
-      >Review & approve your chains <ArrowRight size={16} /></button
+      >Review & approve your combinations <ArrowRight size={16} /></button
     >
   {:else if missingDrafts.length}<button
       class="primary"

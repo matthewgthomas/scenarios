@@ -125,7 +125,7 @@
     <label class="check-label"
       ><input type="checkbox" bind:checked={full} /> Include full analytical record</label
     ><label class="check-label"
-      ><input type="checkbox" bind:checked={annotations} /> Include chain hypotheses and assumptions</label
+      ><input type="checkbox" bind:checked={annotations} /> Include combination hypotheses and assumptions</label
     >
   </div>
   <div class="export-buttons" data-walkthrough="export-download">
@@ -150,7 +150,7 @@
       {#if full}<li>
           Research notes, source links, analyst rationale, background assumptions, drivers, scores,
           hypotheses, scenario combinations and the operation record
-        </li>{/if}{#if annotations}<li>Chain hypotheses and assumptions</li>{/if}
+        </li>{/if}{#if annotations}<li>Combination hypotheses and assumptions</li>{/if}
     </ul>
   </div>
   <p class="small muted">

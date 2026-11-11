@@ -10,7 +10,7 @@ import {
   type Run
 } from '$lib/domain/project';
 import { chainReadiness, approveChainSet } from '$lib/domain/workflow';
-import { mergeResults } from '$lib/domain/task-results';
+import { assessmentResults, mergeResults } from '$lib/domain/task-results';
 import {
   launch,
   applyOutput,
@@ -165,7 +165,7 @@ describe('batched driver assessments', () => {
       true
     );
     expect(
-      h.get().runs.every((r) => r.status === 'succeeded' && r.promptTemplateVersion === 'quick-2')
+      h.get().runs.every((r) => r.status === 'succeeded' && r.promptTemplateVersion === 'quick-3')
     ).toBe(true);
     expect(h.get().runs.reduce((sum, r) => sum + r.estimated, 0)).toBe(plan.estimatedTotal);
     for (const d of h.get().drivers) {
@@ -420,17 +420,132 @@ describe('response diagnostics and structured output', () => {
     }
   );
 
-  it('does not apply a duplicate or unexpected driver even after a valid rating', async () => {
-    vi.stubGlobal('navigator', { onLine: true });
-    for (const driverId of ['driver_0', 'unexpected']) {
-      const output = scores(['driver_0', driverId]);
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(output)));
+  it.each([
+    { ids: ['unexpected', 'driver_1'], kept: ['driver_1'], missing: ['driver_0'] },
+    { ids: ['driver_0', 'unexpected'], kept: ['driver_0'], missing: ['driver_1'] },
+    { ids: ['driver_0', 'driver_1', 'driver_0'], kept: ['driver_1'], missing: ['driver_0'] },
+    { ids: ['unexpected', 'driver_0', 'unexpected'], kept: ['driver_0'], missing: ['driver_1'] },
+    { ids: ['driver_0', 'driver_0'], kept: [], missing: ['driver_0', 'driver_1'] },
+    { ids: ['unexpected'], kept: [], missing: ['driver_0', 'driver_1'] },
+    { ids: ['driver_0', 'driver_1', 'unexpected'], kept: ['driver_0', 'driver_1'], missing: [] }
+  ])(
+    'keeps only unambiguous ratings for $ids and retries missing cells',
+    async ({ ids, kept, missing }) => {
+      vi.stubGlobal('navigator', { onLine: true });
+      const output = scores(ids);
+      // Conflicting duplicates must not silently select the first or last score.
+      output.ratings[0].impact = 1;
+      const fetcher = vi.fn().mockResolvedValue(response(output));
+      vi.stubGlobal('fetch', fetcher);
       const h = harness(ratingProject(2));
       await launch(h.get, h.change, 'test-key', models, 'ratings', [models[0].id]).done;
-      expect(h.get().runs[0].error).toContain('Unexpected or duplicate');
-      expect(h.get().drivers.every((d) => !d.ratings.length)).toBe(true);
+      const p = h.get();
+      const run = p.runs[0];
+      expect(run.status).toBe('failed');
+      if (ids.includes('unexpected'))
+        expect(run.error).toContain('IDs not supplied for this assessment batch: unexpected.');
+      if (ids.filter((id) => id === 'driver_0').length > 1)
+        expect(run.error).toContain(
+          'Duplicate driver IDs (all scores for these IDs were ignored): driver_0.'
+        );
+      expect(run.error).toContain(
+        `${kept.length} valid ${kept.length === 1 ? 'score was' : 'scores were'} kept`
+      );
+      expect(p.drivers.filter((d) => d.ratings.length).map((d) => d.id)).toEqual(kept);
+      for (const d of p.drivers.filter((d) => d.ratings.length))
+        expect(d.ratings[0]).toMatchObject({
+          runId: run.id,
+          modelId: models[0].id,
+          driverRevision: d.revision
+        });
+      expect(run.output).toEqual(output);
+      expect(JSON.parse(run.rawOutput!)).toEqual(output);
+      expect(run.confirmed).toBe(0.002);
+      expect(run.unknownCharge).toBe(false);
+      expect(assessmentResults(p, [models[0].id]).state).toBe(kept.length ? 'partial' : 'failed');
+      expect(
+        planRequests(p, models, 'ratings', [models[0].id], undefined, run.id).requests.flatMap(
+          (r) => r.targetIds
+        )
+      ).toEqual(missing);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      if (missing.length) {
+        fetcher.mockImplementation((_url, options) => response(scores(requestIds(options.body))));
+        await launch(
+          h.get,
+          h.change,
+          'test-key',
+          models,
+          'ratings',
+          [models[0].id],
+          undefined,
+          run.id
+        ).done;
+        expect(requestIds(fetcher.mock.calls.at(-1)![1].body)).toEqual(missing);
+        expect(h.get().drivers.every((d) => d.ratings.length === 1)).toBe(true);
+      } else {
+        expect(run.error).toContain('No missing scores remain');
+      }
     }
+  );
+
+  it('retains nine valid scores when a UUID is altered, without guessing or accepting another batch ID', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const p = ratingProject(11);
+    p.drivers[6].id = 'driver_e102f00c-ee1b-4567-89ab-0123456789ab';
+    const alteredId = 'driver_e102f00c-ee1b-4e59-91d9-b69e3e3bee61';
+    const fetcher = vi.fn().mockImplementation((_url, options) => {
+      const ids = requestIds(options.body);
+      return response(
+        scores(
+          ids.length === 10 ? [...ids.map((id, i) => (i === 6 ? alteredId : id)), 'driver_10'] : ids
+        )
+      );
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness(p);
+    await launch(h.get, h.change, 'test-key', models, 'ratings', [models[0].id]).done;
+    const run = h.get().runs[0];
+    expect(run.error).toContain(`${alteredId}, driver_10`);
+    expect(run.error).toContain('9 valid scores were kept');
+    expect(h.get().drivers[6].ratings).toEqual([]);
+    expect(h.get().drivers[10].ratings[0].runId).toBe(h.get().runs[1].id);
+    expect(
+      planRequests(h.get(), models, 'ratings', [models[0].id], undefined, run.id).requests[0]
+        .targetIds
+    ).toEqual([p.drivers[6].id]);
+    const restored = parseProject(JSON.parse(JSON.stringify(h.get())));
+    expect(restored.drivers.map((d) => d.ratings)).toEqual(h.get().drivers.map((d) => d.ratings));
+    expect(restored.runs[0].error).toBe(run.error);
   });
+
+  it.each([
+    { supported: ['structured_outputs'] },
+    { supported: ['response_format'] },
+    { supported: [] }
+  ])(
+    'supplies exact batch IDs and rating count with capabilities $supported',
+    async ({ supported }) => {
+      vi.stubGlobal('navigator', { onLine: true });
+      const fetcher = vi
+        .fn()
+        .mockImplementation((_url, options) => response(scores(requestIds(options.body))));
+      vi.stubGlobal('fetch', fetcher);
+      const model = { ...models[0], supported_parameters: supported };
+      const h = harness(ratingProject(11));
+      await launch(h.get, h.change, 'test-key', [model], 'ratings', [model.id]).done;
+      for (const call of fetcher.mock.calls) {
+        const body = JSON.parse(call[1].body);
+        const schema = JSON.parse(body.messages[0].content.split('matching this schema: ')[1]);
+        const ids = requestIds(call[1].body);
+        expect(schema.properties.ratings.items.properties.driverId.enum).toEqual(ids);
+        expect(schema.properties.ratings.minItems).toBe(ids.length);
+        expect(schema.properties.ratings.maxItems).toBe(ids.length);
+        if (supported.includes('structured_outputs'))
+          expect(body.response_format.json_schema.schema).toEqual(schema);
+      }
+    }
+  );
 
   it('renders raw and legacy response strings without adding quotes or escapes', async () => {
     vi.stubGlobal('navigator', { onLine: true });
@@ -486,7 +601,7 @@ describe.each<Task>([
       chains: {
         chains: [
           {
-            title: 'A new chain',
+            title: 'A new combination',
             kind: 'main',
             items: p.drivers
               .filter((d) => d.selected)
@@ -534,7 +649,7 @@ describe.each<Task>([
   });
 });
 
-describe('chain construction batches', () => {
+describe('combination construction batches', () => {
   function project() {
     const p = exampleProject();
     p.chains = [];
@@ -662,7 +777,7 @@ describe('chain construction batches', () => {
     ).done;
     const failed = h.get().runs.find((r) => r.status === 'failed')!;
     expect(h.get().chains).toHaveLength(3);
-    expect(failed.error).toContain('Chain “wildcard 1”');
+    expect(failed.error).toContain('Combination “wildcard 1”');
     expect(failed.error).toContain('missing uncertainties:');
     expect(failed.error).toContain('Work & incomes');
     expect(failed.rawOutput).toBeDefined();
@@ -971,7 +1086,7 @@ describe('chain construction batches', () => {
     expect(h.get().drivers).toEqual(originalDrivers);
   });
 
-  it('reserves the complete chain operation before dispatch', () => {
+  it('reserves the complete combination operation before dispatch', () => {
     vi.stubGlobal('navigator', { onLine: true });
     const fetcher = vi.fn();
     vi.stubGlobal('fetch', fetcher);
@@ -1387,10 +1502,21 @@ describe('structured analytical responses', () => {
       })
     ).toThrow();
   });
-  it('requires exact hypothesis references in chain construction', () => {
+  it('preserves existing scores and analyst decisions for duplicated and unexpected IDs', () => {
+    const p = exampleProject();
+    const before = structuredClone(p.drivers);
+    const output = scores(['unknown', p.drivers[0].id, p.drivers[1].id, p.drivers[0].id]);
+    output.ratings[1].impact = 1;
+    const message = applyOutput(p, makeRun(p, 'ratings', p.drivers[0].ratings[0].modelId), output);
+    expect(message).toContain('Duplicate driver IDs');
+    expect(p.drivers[0]).toEqual(before[0]);
+    expect(p.drivers.slice(2)).toEqual(before.slice(2));
+    expect(p.drivers.map((d) => d.decision)).toEqual(before.map((d) => d.decision));
+  });
+  it('requires exact hypothesis references in combination construction', () => {
     const p = exampleProject();
     const chain = {
-      title: 'Invalid chain',
+      title: 'Invalid combination',
       kind: 'main',
       items: p.drivers
         .filter((d) => d.selected)
@@ -1550,6 +1676,87 @@ describe('structured analytical responses', () => {
     expect(p.mergeSuggestions).toHaveLength(1);
     expect(p.mergeSuggestions[0].status).toBe('pending');
   });
+  it('keeps valid merge groups and reports unknown and repeated IDs through the launch flow', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const p = exampleProject();
+    p.stage = 1;
+    const before = JSON.stringify(p.drivers);
+    const valid = {
+      entityIds: [p.drivers[0].id, p.drivers[1].id],
+      title: 'Valid overlap',
+      reason: 'Equivalent drivers for review'
+    };
+    const unknownId = `${p.drivers[0].id}-altered`;
+    const output = {
+      groups: [
+        { ...valid, title: 'Altered reference', entityIds: [p.drivers[0].id, unknownId] },
+        valid,
+        { ...valid, title: 'Repeated reference', entityIds: [p.drivers[0].id, p.drivers[0].id] }
+      ]
+    };
+    const fetcher = vi.fn().mockResolvedValue(response(output));
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness(p);
+    await launch(h.get, h.change, 'test-key', models, 'consolidate', [models[0].id]).done;
+    const result = h.get();
+    const run = result.runs.at(-1)!;
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(run.status).toBe('failed');
+    expect(run.error).toContain('Group 1 “Altered reference”: IDs not supplied for this review');
+    expect(run.error).toContain(unknownId);
+    expect(run.error).toContain(`Group 3 “Repeated reference”: repeated IDs: ${p.drivers[0].id}`);
+    expect(run.error).toContain('1 valid merge suggestion was kept for review');
+    expect(run.output).toEqual(output);
+    expect(JSON.parse(run.rawOutput!)).toEqual(output);
+    expect(run.confirmed).toBe(0.002);
+    expect(result.mergeSuggestions).toHaveLength(1);
+    expect(result.mergeSuggestions[0]).toMatchObject({
+      ...valid,
+      status: 'pending',
+      runId: run.id
+    });
+    expect(mergeResults(result, 'driver').state).toBe('partial');
+    expect(JSON.stringify(result.drivers)).toBe(before);
+    expect(parseProject(JSON.parse(JSON.stringify(result))).mergeSuggestions).toEqual(
+      result.mergeSuggestions
+    );
+  });
+  it.each([
+    { supportedParameters: ['structured_outputs'] },
+    { supportedParameters: ['response_format'] },
+    { supportedParameters: [] }
+  ])(
+    'supplies exact consolidation ID choices with model capabilities $supportedParameters',
+    async ({ supportedParameters }) => {
+      vi.stubGlobal('navigator', { onLine: true });
+      const p = exampleProject();
+      p.stage = 1;
+      const model = { ...models[0], supported_parameters: supportedParameters };
+      const fetcher = vi.fn().mockResolvedValue(response({ groups: [] }));
+      vi.stubGlobal('fetch', fetcher);
+      const h = harness(p);
+      await launch(h.get, h.change, 'test-key', [model], 'consolidate', [model.id]).done;
+      const body = JSON.parse(fetcher.mock.calls[0][1].body);
+      const schema = JSON.parse(body.messages[0].content.split('matching this schema: ')[1]);
+      const expected = p.drivers.filter((d) => !d.archived).map((d) => d.id);
+      expect(schema.properties.groups.items.properties.entityIds.items.enum).toEqual(expected);
+      if (supportedParameters.includes('structured_outputs'))
+        expect(body.response_format.json_schema.schema).toEqual(schema);
+      expect(h.get().runs.at(-1)?.status).toBe('succeeded');
+    }
+  );
+  it('rejects an entirely invalid merge response with the offending group and ID', () => {
+    const p = exampleProject();
+    p.stage = 1;
+    const before = JSON.stringify(p.drivers);
+    expect(() =>
+      applyOutput(p, makeRun(p, 'consolidate'), {
+        groups: [{ entityIds: [p.drivers[0].id, 'invented'], title: 'Invalid', reason: 'Overlap' }]
+      })
+    ).toThrow('Group 1 “Invalid”: IDs not supplied for this review: invented');
+    expect(p.mergeSuggestions).toHaveLength(0);
+    expect(JSON.stringify(p.drivers)).toBe(before);
+  });
   it('rejects consolidation of future states from different uncertainties', () => {
     const p = exampleProject();
     p.stage = 4;
@@ -1597,7 +1804,7 @@ describe('optional narrative assistance', () => {
       estimate(models[0], verbose, 'narrative_edit')! - estimate(models[0], base, 'narrative_edit')!
     ).toBeCloseTo(0.004);
   });
-  it('estimates and sends the human text, chain and editing request without applying the response', async () => {
+  it('estimates and sends the human text, combination and editing request without applying the response', async () => {
     vi.stubGlobal('navigator', { onLine: true });
     const p = writingProject();
     const c = p.chains[0];
@@ -1648,7 +1855,7 @@ describe('optional narrative assistance', () => {
     });
     expect(h.get().runs[0].estimated).toBe(plan.estimatedTotal);
   });
-  it('uses a clear default editing request and retains proposals when the analyst types or changes the chain', async () => {
+  it('uses a clear default editing request and retains proposals when the analyst types or changes the combination', async () => {
     vi.stubGlobal('navigator', { onLine: true });
     const p = writingProject();
     const c = p.chains[0];
@@ -1827,7 +2034,7 @@ describe('retired coherence requests', () => {
   });
 });
 
-describe('editable chain reasoning and removed work', () => {
+describe('editable combination reasoning and removed work', () => {
   it('sends the current analyst explanation to writing while preserving original notes', async () => {
     vi.stubGlobal('navigator', { onLine: true });
     const p = exampleProject();
@@ -1852,7 +2059,7 @@ describe('editable chain reasoning and removed work', () => {
   });
 
   it.each(['narrative'] as const)(
-    'retains a late %s response as a failed operation without restoring a removed chain',
+    'retains a late %s response as a failed operation without restoring a removed combination',
     async (task) => {
       vi.stubGlobal('navigator', { onLine: true });
       const p = exampleProject();
@@ -1885,7 +2092,7 @@ describe('editable chain reasoning and removed work', () => {
     }
   );
 
-  it('recalculates chain batches, candidates and cost when an optional second model is included', () => {
+  it('recalculates combination batches, candidates and cost when an optional second model is included', () => {
     const p = exampleProject();
     p.mainCount = 3;
     p.wildcardCount = 1;

@@ -5,8 +5,8 @@
 
   let { close }: { close: () => void } = $props();
   const tabs = [
-    { id: 'how', label: 'How Scenario Designer works' },
-    { id: 'about', label: 'About' },
+    { id: 'how', label: 'What is Scenario Designer?' },
+    { id: 'about', label: 'Who made it?' },
     { id: 'roadmap', label: 'Roadmap' }
   ];
   let activeTab = $state('how');
@@ -35,7 +35,7 @@
   }
 </script>
 
-<Modal title="How it works" {close}>
+<Modal title="What is this?" {close}>
   <div class="settings-tabs help-tabs" role="tablist" aria-label="About Scenario Designer">
     {#each tabs as tab, index}
       <button
@@ -78,7 +78,7 @@
       <li>Identifying the drivers of change in the system you’re analysing.</li>
       <li>Judging the impact and uncertainty of the drivers of change.</li>
       <li>Coming up with hypotheses for how drivers of change might evolve in future.</li>
-      <li>Connecting these hypotheses into coherent, contrasting 'chains'.</li>
+      <li>Connecting these hypotheses into coherent, contrasting 'combinations'.</li>
       <li>Writing scenarios from your selection of hypotheses.</li>
     </ul>
     <p>

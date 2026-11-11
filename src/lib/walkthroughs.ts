@@ -37,7 +37,7 @@ export const walkthroughs: Record<WalkthroughId, WalkthroughStep[]> = {
     step(
       'home-example',
       'Follow one example from the beginning',
-      'Explore an example traces a question through a driver, its scores, alternative outcomes, a combination and a narrative. Use Exit example beside the guide’s primary action to return to your exercises.'
+      'Explore an example traces a question through a driver, its scores, alternative outcomes, a combination and a narrative. Use Exit example beside the guide’s primary action to return to your scenarios.'
     ),
     step(
       'walkthrough-launcher',
@@ -211,7 +211,7 @@ export const walkthroughs: Record<WalkthroughId, WalkthroughStep[]> = {
     step(
       'stage-heading',
       'Build different possible futures',
-      'A hypothesis chain combines a possible outcome for each uncertainty into one future. The outcomes should make sense together and give you something useful to compare with other chains.'
+      'A scenario combination combines a possible outcome for each uncertainty into one future. The outcomes should make sense together and give you something useful to compare with other combinations.'
     ),
     step(
       'stage-actions',
@@ -221,29 +221,29 @@ export const walkthroughs: Record<WalkthroughId, WalkthroughStep[]> = {
     step(
       'chain-comparison',
       'Compare and refine',
-      'Compare the outcomes in each chain, edit its explanation and adjust the choices. You can leave an outcome explicitly unresolved. If a wildcard adds new drivers of change, you will need to review and accept or remove them.'
+      'Compare the outcomes in each combination, edit its explanation and adjust the choices. You can leave an outcome explicitly unresolved. If a wildcard adds new drivers of change, you will need to review and accept or remove them.'
     ),
     step(
       'chain-chooser',
-      'Choose the chains you want to write',
-      'Open the full candidate list to see all active chains. Include any selection of one or more chains. You can remove unwanted chains and restore them later.'
+      'Choose the combinations you want to write',
+      'Open the full candidate list to see all active combinations. Include any selection of one or more combinations. You can remove unwanted combinations and restore them later.'
     ),
     step(
       'stage-complete',
       'Review and approve your selection',
-      'Use the bottom action to review your selection and approve it in the chooser. At least one hypothesis chain is required, and any issues must be resolved. Once approved, continue to “Write & review scenarios”.'
+      'Use the bottom action to review your selection and approve it in the chooser. At least one scenario combination is required, and any issues must be resolved. Once approved, continue to “Write & review scenarios”.'
     )
   ],
   writing: [
     step(
       'stage-heading',
-      'Turn each hypothesis chain into a story',
+      'Turn each scenario combination into a story',
       'Write what this future looks like, how it could come about and what it could mean for people. Keep any unresolved outcomes clear rather than treating them as settled facts.'
     ),
     step(
       'writing-scenarios',
       'Open a scenario to write or review',
-      'Click/tap a scenario to open the editor, where you can write a draft. Your text saves as you type, and the hypothesis chain remains available as a reference.'
+      'Click/tap a scenario to open the editor, where you can write a draft. Your text saves as you type, and the scenario combination remains available as a reference.'
     ),
     step(
       'stage-actions',
@@ -253,12 +253,12 @@ export const walkthroughs: Record<WalkthroughId, WalkthroughStep[]> = {
     step(
       'stage-guide',
       'Review every story',
-      'Read each draft alongside its hypothesis chain. The checklist inside the editor is optional. The guidance here links to missing drafts or chains that need renewed approval.'
+      'Read each draft alongside its scenario combination. The checklist inside the editor is optional. The guidance here links to missing drafts or combinations that need renewed approval.'
     ),
     step(
       'stage-complete',
       'Save your final set and export',
-      'Every selected scenario needs a non-empty draft, and the hypothesis chain selection must be approved. Then choose “Save final set & export”. This saves final snapshots; you can still return and edit later.'
+      'Every selected scenario needs a non-empty draft, and the scenario combination selection must be approved. Then choose “Save final set & export”. This saves final snapshots; you can still return and edit later.'
     )
   ],
   export: [
@@ -270,7 +270,7 @@ export const walkthroughs: Record<WalkthroughId, WalkthroughStep[]> = {
     step(
       'export-options',
       'Choose how much to include',
-      'Share the narratives on their own, include hypothesis chains and assumptions, or include the full analytical record for a deeper review.'
+      'Share the narratives on their own, include scenario combinations and assumptions, or include the full analytical record for a deeper review.'
     ),
     step(
       'export-download',

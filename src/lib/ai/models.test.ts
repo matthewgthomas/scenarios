@@ -157,7 +157,7 @@ describe('thinking effort', () => {
 });
 
 describe('compatible exercise preferences', () => {
-  it('starts new exercises with one recommended model and leaves old selections intact', () => {
+  it('starts new scenarios with one recommended model and leaves old selections intact', () => {
     expect(newProject().models).toEqual(['~anthropic/claude-sonnet-latest']);
     const old = JSON.parse(JSON.stringify(newProject()));
     old.models = ['anthropic/claude-sonnet-4.5', 'openai/gpt-5-mini', 'google/gemini-2.5-flash'];

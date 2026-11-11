@@ -86,10 +86,10 @@
     allApproved
       ? 'Your scenario set is ready to write.'
       : !selected.length
-        ? 'Choose at least one hypothesis chain to take into the writing stage.'
+        ? 'Choose at least one scenario combination to take into the writing stage.'
         : readiness.issues.length
-          ? `Review ${readiness.issues.length} ${readiness.issues.length === 1 ? 'issue' : 'issues'} in your chosen chains.`
-          : `${selected.length} ${selected.length === 1 ? 'chain' : 'chains'} selected. Ready to approve.`
+          ? `Review ${readiness.issues.length} ${readiness.issues.length === 1 ? 'issue' : 'issues'} in your chosen combinations.`
+          : `${selected.length} ${selected.length === 1 ? 'combination' : 'combinations'} selected. Ready to approve.`
   );
 
   function saveExplanation() {
@@ -216,7 +216,7 @@
   function restoreChain(chainId: string) {
     change(
       (p) => archiveChain(p, chainId, false),
-      'Chain restored. Review it and include it when you are ready.'
+      'Combination restored. Review it and include it when you are ready.'
     );
     if (removedId === chainId) removedId = '';
     showAll = true;
@@ -245,7 +245,7 @@
       flagDownstream(
         p,
         5,
-        `${d.title} changed. Accept the novel driver and approve the updated chain.`,
+        `${d.title} changed. Accept the novel driver and approve the updated combination.`,
         affected.map((c) => c.id)
       );
     });
@@ -278,30 +278,30 @@
     <h1 data-walkthrough="stage-heading">Build scenario combinations.</h1>
     <p>
       Choose one alternative outcome per uncertainty and explain how those choices fit together.
-      These “hypothesis chains” describe a combination, rather than a chronological sequence.
+      Each scenario combination brings outcomes together rather than describing a chronological sequence.
     </p>
   </div>
   <details class="chain-help">
-    <summary aria-label="About scenario chains"><CircleHelp size={20} /></summary>
+    <summary aria-label="About scenario combinations"><CircleHelp size={20} /></summary>
     <p>
-      Look for contrasting futures whose choices make sense together. Select one or more chains to
+      Look for contrasting futures whose choices make sense together. Select one or more scenario combinations to
       write. Explore a disruption when you want to consider a surprising but plausible change.
     </p>
   </details>
 </div>
-<ol class="chain-steps" aria-label="Steps to complete hypothesis chains">
+<ol class="chain-steps" aria-label="Steps to complete scenario combinations">
   <li class:step-done={candidates.length > 0}>
     <span class="step-number">1</span>
     <div>
       <strong>Create scenario combinations</strong><small
-        >Generate ideas with AI or build your own.</small
+        >Generate ideas with AI or build your own scenario combinations.</small
       >
     </div>
   </li>
   <li>
     <span class="step-number">2</span>
     <div>
-      <strong>Explore & refine</strong><small>Compare choices and make each chain your own.</small>
+      <strong>Explore & refine</strong><small>Compare choices and make each combination your own.</small>
     </div>
   </li>
   <li class:step-done={allApproved}>
@@ -327,7 +327,7 @@
 
 {#if removedId && removed.some((c) => c.id === removedId)}
   <div class="removal-receipt" role="status">
-    <span>Chain removed. Its writing and history are kept.</span><button
+    <span>Combination removed. Its writing and history are kept.</span><button
       class="text-button"
       onclick={() => restoreChain(removedId)}><RotateCcw size={15} /> Undo removal</button
     >
@@ -337,13 +337,13 @@
   <div>
     <h2 data-walkthrough="chain-comparison" tabindex="-1" bind:this={comparisonHeading}>
       {candidates.length
-        ? `${candidates.length} candidate ${candidates.length === 1 ? 'chain' : 'chains'} to explore`
+        ? `${candidates.length} candidate ${candidates.length === 1 ? 'combination' : 'combinations'} to explore`
         : 'Your possible futures start here'}
     </h2>
     <p>
       {candidates.length
-        ? 'Compare the columns. Open any hypothesis to shape its chain.'
-        : 'Generate a starting set from your approved hypotheses, or add a chain yourself.'}
+        ? 'Compare the columns. Open any hypothesis to shape its scenario combination.'
+        : 'Generate a starting set from your approved hypotheses, or add a combination yourself.'}
     </p>
   </div>
   {#if candidates.length}<button
@@ -352,7 +352,7 @@
       onclick={chooseScenarios}
       >View {candidates.length === 1 ? '' : 'all'}
       {candidates.length}
-      {candidates.length === 1 ? 'chain' : 'chains'}
+      {candidates.length === 1 ? 'combination' : 'scenario combinations'}
       <Layers size={16} /></button
     >{/if}
 </div>
@@ -368,14 +368,14 @@
         >
         <button
           class="secondary small"
-          aria-label="Previous chains"
+          aria-label="Previous combinations"
           disabled={firstVisible === 0}
           onclick={() => scrollToChain(Math.max(0, firstVisible - 1))}
           ><ChevronLeft size={16} /> Previous</button
         >
         <button
           class="secondary small"
-          aria-label="Next chains"
+          aria-label="Next combinations"
           disabled={lastVisible >= columns.length - 1}
           onclick={() => scrollToChain(Math.min(columns.length - 1, firstVisible + 1))}
           >Next <ChevronRight size={16} /></button
@@ -391,12 +391,12 @@
       bind:this={scrollRegion}
       onscroll={measureColumns}
       role="region"
-      aria-label="Compare hypothesis chains"
+      aria-label="Compare scenario combinations"
     >
       <table class="chain-table" style:min-width={`${180 + columns.length * 250}px`}>
         <caption class="sr-only"
           >One hypothesis per critical uncertainty. Open a cell to inspect or change it. Choose
-          chains with Include in set.</caption
+          combinations with Include in set.</caption
         >
         <colgroup
           ><col class="uncertainty-column" />{#each columns as c (c.id)}<col />{/each}</colgroup
@@ -439,15 +439,15 @@
                       : c.approvedRevision === c.revision
                         ? '✓ Analyst-approved'
                         : c.origins.length
-                          ? '○ Proposed chain'
+                          ? '○ Proposed combination'
                           : '○ Analyst-created'}</span
                   >
                 </div>
                 <div class="chain-header-actions">
                   <button
                     class="text-button"
-                    aria-label={`Remove chain: ${c.title}`}
-                    onclick={() => removeChain(c.id)}><Trash2 size={14} /> Remove chain</button
+                    aria-label={`Remove combination: ${c.title}`}
+                    onclick={() => removeChain(c.id)}><Trash2 size={14} /> Remove combination</button
                   >
                 </div>
               </th>{/each}</tr
@@ -496,14 +496,14 @@
   </div>{/if}
 
 {#if removed.length}<details class="removed-chains">
-    <summary>Removed chains ({removed.length})</summary>
+    <summary>Removed combinations ({removed.length})</summary>
     <p class="small muted">
-      Their writing and history are saved. Restoring a chain does not automatically include or
+      Their writing and history are saved. Restoring a combination does not automatically include or
       approve it.
     </p>
     {#each removed as c (c.id)}<div class="removed-chain">
         <span>{c.title}</span><button class="secondary small" onclick={() => restoreChain(c.id)}
-          ><RotateCcw size={14} /> Restore chain</button
+          ><RotateCcw size={14} /> Restore combination</button
         >
       </div>{/each}
   </details>{/if}
@@ -513,7 +513,7 @@
       <Layers size={20} />
       <div>
         <strong role="status">{progress}</strong><small
-          >{selected.length} {selected.length === 1 ? 'chain' : 'chains'} selected</small
+          >{selected.length} {selected.length === 1 ? 'combination' : 'combinations'} selected</small
         >
       </div>
     </div>
@@ -533,8 +533,8 @@
         >
       {:else}<button class="primary" onclick={chooseScenarios} aria-haspopup="dialog"
           >{readiness.canApprove
-            ? `Review & approve ${selected.length} ${selected.length === 1 ? 'chain' : 'chains'}`
-            : 'Choose chains to write'}
+            ? `Review & approve ${selected.length} ${selected.length === 1 ? 'combination' : 'combinations'}`
+            : 'Choose combinations to write'}
           <ArrowRight size={16} /></button
         >{/if}
     </div>
@@ -594,15 +594,15 @@
     </form>
   </Modal>{/if}
 
-{#if choosing}<Modal title="Choose chains to write" close={() => (choosing = false)} wide>
+{#if choosing}<Modal title="Choose combinations to write" close={() => (choosing = false)} wide>
     <p class="chooser-intro">
-      Choose any chains you want to turn into scenarios. Select at least one. Your choices are saved
+      Choose any combinations you want to turn into scenarios. Select at least one. Your choices are saved
       as you go.
     </p>
     <div class="chooser-progress" aria-live="polite">
-      <strong>{selected.length} {selected.length === 1 ? 'chain' : 'chains'} selected</strong>
+      <strong>{selected.length} {selected.length === 1 ? 'combination' : 'combinations'} selected</strong>
     </div>
-    <section aria-label="Candidate chains">
+    <section aria-label="Candidate combinations">
       {#each candidates as c (c.id)}{@const issues = readiness.candidateIssues.filter(
           (issue) => issue.chainId === c.id
         )}
@@ -626,7 +626,7 @@
             ></label
           >
           <button class="text-button" onclick={() => openIssue({ chainId: c.id })}
-            >Review chain <ChevronRight size={16} /></button
+            >Review combination <ChevronRight size={16} /></button
           >
           {#if issues.length}<div class="choice-issues">
               {#each issues as issue}<button class="workflow-link" onclick={() => openIssue(issue)}
@@ -638,9 +638,9 @@
     </section>
     <div class="chooser-footer">
       <div class="chooser-readiness" role="status">
-        {#if !selected.length}<p>Choose at least one hypothesis chain to take into writing.</p>
+        {#if !selected.length}<p>Choose at least one scenario combination to take into writing.</p>
         {:else if readiness.issues.length}<p>
-            Review the named issues in your included chains before approving.
+            Review the named issues in your included scenario combinations before approving.
           </p>
         {:else}<p>
             <Check size={16} /> Your set is ready to approve. Next, you’ll write each scenario.
@@ -650,18 +650,18 @@
         <button class="secondary" onclick={() => (choosing = false)}>Back to comparison</button
         ><button class="primary" disabled={!readiness.canApprove} onclick={approve}
           ><Check size={16} /> Approve {selected.length}
-          {selected.length === 1 ? 'chain' : 'chains'} & start writing</button
+          {selected.length === 1 ? 'combination' : 'combinations'} & start writing</button
         >
       </div>
     </div>
   </Modal>{/if}
 
 {#if editorOpen && chain && driver}<Modal
-    title={`Edit chain: ${chain.title}`}
+    title={`Edit combination: ${chain.title}`}
     close={closeEditor}
     wide
   >
-    <section class="inspector modal-inspector" aria-label="Chain reasoning and hypothesis editor">
+    <section class="inspector modal-inspector" aria-label="Combination reasoning and hypothesis editor">
       <div class="chain-reasoning">
         <div class="context-line"><GitBranch size={18} /><span>{chain.title}</span></div>
         <label class="explanation-label" for="chain-explanation">What connects these choices?</label
@@ -841,7 +841,7 @@
     </section>
     <div class="dialog-actions">
       <button class="text-button" onclick={() => removeChain(chain.id)}
-        ><Trash2 size={16} /> Remove chain</button
+        ><Trash2 size={16} /> Remove combination</button
       ><button class="primary" onclick={closeEditor}
         >{returnToChooser ? 'Back to your choices' : 'Done'}</button
       >

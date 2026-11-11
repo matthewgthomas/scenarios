@@ -134,7 +134,7 @@
       <header class="sd-top"><div class="sd-top-left"><span>UK financial hardship</span><span class="sd-mode">Quick mode</span></div><span class="sd-top-right"><i data-lucide="hard-drive" aria-hidden="true"></i> Saved on this device</span></header>
       <main class="sd-work">
         <div class="sd-heading"><div><h2>Make room for different futures.</h2><p>Compare how five uncertainties could combine. Each column tells a different story.</p></div></div>
-        <div class="sd-sectionbar"><span>Construct chains</span><span class="sd-count">3 main scenarios / 0 wildcards</span></div>
+        <div class="sd-sectionbar"><span>Build scenario combinations</span><span class="sd-count">3 main scenarios / 0 wildcards</span></div>
         <div class="sd-board"><div class="sd-grid-wrap"></div><div class="sd-board-foot"><span>Select a hypothesis to inspect or change it.</span><span>Illustrative exercise</span></div><section class="sd-inspector" aria-label="Selected hypothesis"></section></div>
         <div class="sd-change-note" role="status"></div>
       </main><footer class="sd-footer"></footer>
@@ -145,13 +145,13 @@
 <script>
 (() => {
   const root = document.getElementById('scenario-directions');
-  const stages = ['Explore drivers','Assess drivers','Select uncertainties','Develop hypotheses','Construct chains','Write scenarios','Review & complete'];
+  const stages = ['Explore drivers','Assess drivers','Select uncertainties','Develop hypotheses','Build scenario combinations','Write scenarios','Review & complete'];
   const chainNames = ['Local lifelines','The digital divide','Public renewal'];
   const rows = [
-    {name:'Household energy',tag:'Economic',options:['Prices remain volatile','Lower costs, unequal gains','Stable regulated bills'],reason:'Energy costs shape what remains for food, housing and transport. This state needs to fit the income support and housing choices in the same chain.'},
+    {name:'Household energy',tag:'Economic',options:['Prices remain volatile','Lower costs, unequal gains','Stable regulated bills'],reason:'Energy costs shape what remains for food, housing and transport. This state needs to fit the income support and housing choices in the same combination.'},
     {name:'Income support',tag:'Political',options:['Local emergency funds','Automated, tightly targeted','Broader national support'],reason:'Targeted support could ease pressure for people the system reaches. Digital barriers could leave others without help, even as energy costs fall.'},
     {name:'Work & incomes',tag:'Economic / social',options:['Portfolio incomes expand','Automation reshapes work','Public service jobs grow'],reason:'Changes in work affect both household resources and access to support. Consider people whose hours, health or caring responsibilities limit their options.'},
-    {name:'Housing access',tag:'Social / political',options:['Rents keep rising','Access becomes fragmented','Social housing grows slowly'],reason:'Housing changes often take longer than financial support. The chain needs to account for households whose rent pressures persist through the horizon.'},
+    {name:'Housing access',tag:'Social / political',options:['Rents keep rising','Access becomes fragmented','Social housing grows slowly'],reason:'Housing changes often take longer than financial support. The combination needs to account for households whose rent pressures persist through the horizon.'},
     {name:'Community capacity',tag:'Social',options:['Mutual aid expands','Digital-first assistance','Formal local partnerships'],reason:'Local capacity affects who can reach help. A plausible pathway should explain how organisations gain the staff, funding and trust needed for this future.'}
   ];
   const initial = {};
@@ -175,20 +175,20 @@
     const inspector = app.querySelector('.sd-inspector');
     const footer = app.querySelector('.sd-footer');
     const notice = app.querySelector('.sd-change-note');
-    app.querySelector('.sd-rail').innerHTML = `<div class="sd-brand"><i data-lucide="waypoints" aria-hidden="true"></i><span>Scenario<br> Designer</span></div><div class="sd-project">Financial hardship<small>United Kingdom<br>2026–2029</small></div><ol class="sd-stages" aria-label="Exercise stages">${stages.map((s,i)=>`<li class="${i<4?'sd-done':i===4?'sd-current':''}" ${i===4?'aria-current="step"':''}><span class="sd-step">${i<4?'✓':i+1}</span><span>${s}</span></li>`).join('')}</ol><div class="sd-rail-bottom"><div>Independent perspectives<div class="sd-ensemble"><span class="sd-model">A</span><span class="sd-model">B</span><span class="sd-model">C</span></div>3 example models</div><div>Example spend<br><strong>$1.24 used</strong> / $5 budget</div></div><span class="sd-mobile-label">5. Construct chains</span>`;
+    app.querySelector('.sd-rail').innerHTML = `<div class="sd-brand"><i data-lucide="waypoints" aria-hidden="true"></i><span>Scenario<br> Designer</span></div><div class="sd-project">Financial hardship<small>United Kingdom<br>2026–2029</small></div><ol class="sd-stages" aria-label="Exercise stages">${stages.map((s,i)=>`<li class="${i<4?'sd-done':i===4?'sd-current':''}" ${i===4?'aria-current="step"':''}><span class="sd-step">${i<4?'✓':i+1}</span><span>${s}</span></li>`).join('')}</ol><div class="sd-rail-bottom"><div>Independent perspectives<div class="sd-ensemble"><span class="sd-model">A</span><span class="sd-model">B</span><span class="sd-model">C</span></div>3 example models</div><div>Example spend<br><strong>$1.24 used</strong> / $5 budget</div></div><span class="sd-mobile-label">5. Build scenario combinations</span>`;
     const valueAt = (r,c) => state.changes[`${r}-${c}`] ?? c;
     const hypothesis = (r,c) => valueAt(r,c)===3 ? 'Unresolved' : rows[r].options[valueAt(r,c)];
     function renderGrid() {
-      gridWrap.innerHTML = `<table class="sd-grid" aria-label="Compare scenario chains"><thead><tr><th scope="col">Critical uncertainty</th>${chainNames.map((name,c)=>`<th scope="col"><div class="sd-chain-head" data-chain="${c}"><span class="sd-chain-name">${name}</span><span class="sd-chain-meta">${state.approved?'✓ Analyst-approved':'○ AI-proposed chain'}</span></div></th>`).join('')}</tr></thead><tbody>${rows.map((row,r)=>`<tr><th scope="row">${row.name}<small>${row.tag}</small></th>${chainNames.map((name,c)=>`<td><button type="button" class="sd-cell cursor-interaction" data-r="${r}" data-c="${c}" aria-pressed="${r===state.row&&c===state.col}" aria-label="${escape(name+': '+row.name+'. '+hypothesis(r,c)+'. Inspect or change hypothesis.')}"><span>${escape(hypothesis(r,c))}</span><i data-lucide="chevron-down" aria-hidden="true"></i></button></td>`).join('')}</tr>`).join('')}</tbody></table>`;
+      gridWrap.innerHTML = `<table class="sd-grid" aria-label="Compare scenario combinations"><thead><tr><th scope="col">Critical uncertainty</th>${chainNames.map((name,c)=>`<th scope="col"><div class="sd-chain-head" data-chain="${c}"><span class="sd-chain-name">${name}</span><span class="sd-chain-meta">${state.approved?'✓ Analyst-approved':'○ AI-proposed combination'}</span></div></th>`).join('')}</tr></thead><tbody>${rows.map((row,r)=>`<tr><th scope="row">${row.name}<small>${row.tag}</small></th>${chainNames.map((name,c)=>`<td><button type="button" class="sd-cell cursor-interaction" data-r="${r}" data-c="${c}" aria-pressed="${r===state.row&&c===state.col}" aria-label="${escape(name+': '+row.name+'. '+hypothesis(r,c)+'. Inspect or change hypothesis.')}"><span>${escape(hypothesis(r,c))}</span><i data-lucide="chevron-down" aria-hidden="true"></i></button></td>`).join('')}</tr>`).join('')}</tbody></table>`;
     }
     function reasoning() {
       const chosen = hypothesis(state.row,state.col);
       if (chosen==='Unresolved') return 'This uncertainty remains open. The narrative should preserve that gap rather than invent an outcome. Request a coherence recheck when you are ready.';
       if (Object.hasOwn(state.changes,`${state.row}-${state.col}`)) return 'You changed this hypothesis. The earlier model reasoning has been preserved, but it may no longer apply. A coherence recheck would need an explicit request.';
-      if (state.model===1) return 'A competing view: implementation could matter more than the policy choice itself. Check who can access support, who is excluded, and what the chain assumes about local capacity.';
+      if (state.model===1) return 'A competing view: implementation could matter more than the policy choice itself. Check who can access support, who is excluded, and what the combination assumes about local capacity.';
       if (state.model===2) return 'An assumption to examine: households and local organisations can adapt within three years. The pathway should explain the resources and time that adaptation would require.';
       if (state.row===1 && state.col===0) return 'Local funds and mutual aid could bridge immediate gaps. Their reach depends on uneven local resources, while volatile energy bills keep demand unpredictable.';
-      if (state.row===1 && state.col===2) return 'Broader national support and regulated bills could improve household stability. The chain still needs to explain how support reaches people facing persistent housing pressures.';
+      if (state.row===1 && state.col===2) return 'Broader national support and regulated bills could improve household stability. The combination still needs to explain how support reaches people facing persistent housing pressures.';
       return rows[state.row].reason;
     }
     function renderInspector() {
@@ -197,7 +197,7 @@
     }
     function renderFooter() {
       const changed = Object.keys(state.changes).length;
-      footer.innerHTML = `<div class="sd-footer-status"><i data-lucide="${state.approved?'check-check':changed?'circle-alert':'layers'}" aria-hidden="true"></i><div>${state.approved?'Three chains approved':changed?'Review suggested':'Your judgement, at every stage'}<small>${state.approved?'Ready to choose a drafting model.':changed?'Changes retained. No AI recheck has run.':'Inspect the combinations before approving.'}</small></div></div><button type="button" class="sd-primary cursor-interaction" data-approve>${state.approved?'Undo approval':'Approve 3 chains'}</button>`;
+      footer.innerHTML = `<div class="sd-footer-status"><i data-lucide="${state.approved?'check-check':changed?'circle-alert':'layers'}" aria-hidden="true"></i><div>${state.approved?'Three combinations approved':changed?'Review suggested':'Your judgement, at every stage'}<small>${state.approved?'Ready to choose a drafting model.':changed?'Changes retained. No AI recheck has run.':'Inspect the combinations before approving.'}</small></div></div><button type="button" class="sd-primary cursor-interaction" data-approve>${state.approved?'Undo approval':'Approve 3 combinations'}</button>`;
       notice.dataset.visible = changed ? 'true' : 'false';
       notice.textContent = changed ? `${changed} ${changed===1?'hypothesis changed':'hypotheses changed'}. Earlier coherence notes may need review. No model calls were made.` : '';
     }

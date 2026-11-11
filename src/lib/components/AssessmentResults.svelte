@@ -1,6 +1,6 @@
 <script lang="ts">
   import { assessmentResults } from '$lib/domain/task-results';
-  import { modelName, type Project } from '$lib/domain/project';
+  import type { Project } from '$lib/domain/project';
   let {
     p,
     expectedModels,
@@ -62,45 +62,6 @@
             )}>Review assessed drivers</button
         >
       </div>
-      <details class="assessment-result-details">
-        <summary>See assessed drivers and current AI scores ({results.affected.length})</summary>
-        <div class="table-scroll">
-          <table class="data-table">
-            <caption class="sr-only"
-              >Drivers with scores received in the latest assessment; medians include all current
-              model scores.</caption
-            >
-            <thead
-              ><tr
-                ><th scope="col">Driver</th><th scope="col">AI median impact</th><th scope="col"
-                  >AI median uncertainty</th
-                ><th scope="col">Current model coverage</th><th scope="col">Review</th></tr
-              ></thead
-            >
-            <tbody>
-              {#each results.affected as row (row.driver.id)}
-                <tr>
-                  <th scope="row">{row.driver.title}</th>
-                  <td class="numeric">{row.comparison.impact?.median ?? 'Missing'}</td>
-                  <td class="numeric">{row.comparison.uncertainty?.median ?? 'Missing'}</td>
-                  <td
-                    >{row.comparison.ratings.length}
-                    {row.comparison.ratings.length === 1 ? 'model' : 'models'}
-                    {#if row.comparison.missingModels.length}<p class="small muted">
-                        Missing: {row.comparison.missingModels.map(modelName).join(', ')}
-                      </p>{/if}
-                  </td>
-                  <td
-                    ><button class="text-button" onclick={() => inspect(row.driver.id)}
-                      >Review {row.driver.title}</button
-                    ></td
-                  >
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-      </details>
     {:else if results.state === 'complete'}
       <p class="small muted">
         There are no results for active drivers at their current revision. Earlier revision scores

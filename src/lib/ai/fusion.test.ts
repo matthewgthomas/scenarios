@@ -5,6 +5,9 @@ import {
   newProject,
   parseProject,
   reserved,
+  spent,
+  canSpend,
+  remainingBudget,
   uncertainSpend,
   type Project
 } from '$lib/domain/project';
@@ -61,56 +64,26 @@ afterEach(() => {
 });
 
 describe('Fusion planning and accounting', () => {
-  it('requires a positive allowance and retains unavailable Fusion as blocked', () => {
-    for (const allowance of [undefined, 0, -1, NaN, Infinity]) {
-      expect(
-        planRequests(
-          newProject(),
-          [fusion],
-          'drivers',
-          [FUSION_MODEL],
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          { fusionAllowance: allowance }
-        ).estimatedTotal
-      ).toBeNull();
+  it('requires a remaining exercise budget and retains unavailable Fusion as blocked', () => {
+    for (const budget of [null, 0, -1, NaN, Infinity]) {
+      const p = newProject();
+      p.budget = budget;
+      expect(planRequests(p, [fusion], 'drivers', [FUSION_MODEL]).estimatedTotal).toBeNull();
     }
-    expect(
-      planRequests(
-        newProject(),
-        [],
-        'drivers',
-        [FUSION_MODEL],
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        { fusionAllowance: 1 }
-      ).estimatedTotal
-    ).toBeNull();
+    expect(planRequests(newProject(), [], 'drivers', [FUSION_MODEL]).estimatedTotal).toBeNull();
+    expect(planRequests(newProject(), [fusion], 'drivers', [FUSION_MODEL]).estimatedTotal).toBe(5);
   });
-  it('reserves one operation allowance divided across rating batches', () => {
+  it('reserves the remaining exercise budget divided across rating batches', () => {
     const p = exampleProject();
     p.stage = 2;
+    p.budget = 1.2;
     p.drivers = Array.from({ length: 21 }, (_, i) => ({
       ...structuredClone(p.drivers[0]),
       id: `driver-${i}`,
       ratings: [],
       approved: true
     }));
-    const plan = planRequests(
-      p,
-      [fusion],
-      'ratings',
-      [FUSION_MODEL],
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { fusionAllowance: 1.2 }
-    );
+    const plan = planRequests(p, [fusion], 'ratings', [FUSION_MODEL]);
     expect(plan.requests).toHaveLength(3);
     expect(plan.estimatedTotal).toBe(1.2);
     expect(
@@ -119,39 +92,15 @@ describe('Fusion planning and accounting', () => {
   });
   it('checks budget before dispatch and never permits Fusion alongside individual contributors', () => {
     const p = newProject();
-    p.budget = 0.5;
+    p.budget = 0;
     const h = harness(p);
     const fetcher = vi.fn();
     vi.stubGlobal('fetch', fetcher);
+    expect(() => launch(h.get, h.change, 'test', [fusion], 'drivers', [FUSION_MODEL])).toThrow(
+      'exercise budget'
+    );
     expect(() =>
-      launch(
-        h.get,
-        h.change,
-        'test',
-        [fusion],
-        'drivers',
-        [FUSION_MODEL],
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        { fusionAllowance: 1 }
-      )
-    ).toThrow('exceeds');
-    expect(() =>
-      launch(
-        h.get,
-        h.change,
-        'test',
-        [fusion, direct],
-        'drivers',
-        [FUSION_MODEL, direct.id],
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        { fusionAllowance: 0.1 }
-      )
+      launch(h.get, h.change, 'test', [fusion, direct], 'drivers', [FUSION_MODEL, direct.id])
     ).toThrow('individual models or Fusion');
     expect(fetcher).not.toHaveBeenCalled();
     expect(h.get().runs).toHaveLength(0);
@@ -160,19 +109,7 @@ describe('Fusion planning and accounting', () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(result())));
     vi.stubGlobal('fetch', fetcher);
     const h = harness();
-    await launch(
-      h.get,
-      h.change,
-      'test',
-      [fusion],
-      'drivers',
-      [FUSION_MODEL],
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { fusionAllowance: 1 }
-    ).done;
+    await launch(h.get, h.change, 'test', [fusion], 'drivers', [FUSION_MODEL]).done;
     const [url, options] = fetcher.mock.calls[0];
     const body = JSON.parse(options.body);
     expect(url).toMatch(/\/responses$/);
@@ -187,7 +124,7 @@ describe('Fusion planning and accounting', () => {
       resolvedModelId: 'resolved/outer',
       fusionInvoked: true,
       costBasis: 'allowance',
-      estimated: 1,
+      estimated: 5,
       confirmed: 0.15,
       unknownCharge: false
     });
@@ -197,7 +134,7 @@ describe('Fusion planning and accounting', () => {
     expect(backup).not.toContain('Bearer');
     expect(parseProject(JSON.parse(backup)).runs).toEqual(h.get().runs);
   });
-  it('retains malformed results, known charges and retry settings without applying content', async () => {
+  it('reconciles malformed results and retries against the current exercise budget', async () => {
     const fetcher = vi
       .fn()
       .mockImplementation(() =>
@@ -205,19 +142,7 @@ describe('Fusion planning and accounting', () => {
       );
     vi.stubGlobal('fetch', fetcher);
     const h = harness();
-    await launch(
-      h.get,
-      h.change,
-      'test',
-      [fusion],
-      'drivers',
-      [FUSION_MODEL],
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { fusionAllowance: 1 }
-    ).done;
+    await launch(h.get, h.change, 'test', [fusion], 'drivers', [FUSION_MODEL]).done;
     const run = h.get().runs[0];
     expect(run.status).toBe('failed');
     expect(run.rawOutput).toBe('not JSON');
@@ -225,28 +150,24 @@ describe('Fusion planning and accounting', () => {
     expect(h.get().drivers).toHaveLength(0);
     expect(
       planRequests(h.get(), [fusion], 'drivers', [FUSION_MODEL], undefined, run.id).estimatedTotal
-    ).toBe(1);
+    ).toBe(4.8);
+    h.get().budget = 8;
+    expect(
+      planRequests(h.get(), [fusion], 'drivers', [FUSION_MODEL], undefined, run.id).estimatedTotal
+    ).toBe(7.8);
   });
-  it('retains the planning allowance when successful work has no reported charge', async () => {
+  it('retains the budget reservation when successful work has no reported charge', async () => {
     const response = result();
     delete response.usage.cost;
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(response))));
     const h = harness();
-    await launch(
-      h.get,
-      h.change,
-      'test',
-      [fusion],
-      'drivers',
-      [FUSION_MODEL],
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { fusionAllowance: 0.8 }
-    ).done;
+    await launch(h.get, h.change, 'test', [fusion], 'drivers', [FUSION_MODEL]).done;
     expect(h.get().runs[0].confirmed).toBeNull();
-    expect(uncertainSpend(h.get())).toBe(0.8);
+    expect(uncertainSpend(h.get())).toBe(5);
+    expect(remainingBudget(h.get())).toBe(0);
+    expect(() => launch(h.get, h.change, 'test', [fusion], 'drivers', [FUSION_MODEL])).toThrow(
+      'exercise budget'
+    );
   });
   it('keeps possible charges for dispatched cancellation and timeout', async () => {
     vi.useFakeTimers();
@@ -262,62 +183,75 @@ describe('Fusion planning and accounting', () => {
       )
     );
     const h = harness();
-    const operation = launch(
-      h.get,
-      h.change,
-      'test',
-      [fusion],
-      'drivers',
-      [FUSION_MODEL],
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { fusionAllowance: 0.7 }
-    );
-    expect(reserved(h.get())).toBe(0.7);
+    const operation = launch(h.get, h.change, 'test', [fusion], 'drivers', [FUSION_MODEL]);
+    expect(reserved(h.get())).toBe(5);
     await vi.advanceTimersByTimeAsync(599999);
     expect(h.get().runs[0].status).toBe('running');
     await vi.advanceTimersByTimeAsync(1);
     await operation.done;
     expect(h.get().runs[0].status).toBe('failed');
-    expect(uncertainSpend(h.get())).toBe(0.7);
-    const next = launch(
-      h.get,
-      h.change,
-      'test',
-      [fusion],
-      'drivers',
-      [FUSION_MODEL],
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { fusionAllowance: 0.4 }
-    );
+    expect(uncertainSpend(h.get())).toBe(5);
+    h.get().budget = 6;
+    const next = launch(h.get, h.change, 'test', [fusion], 'drivers', [FUSION_MODEL]);
     next.cancel();
     await next.done;
     expect(h.get().runs.at(-1)?.status).toBe('cancelled');
-    expect(uncertainSpend(h.get())).toBeCloseTo(1.1);
+    expect(uncertainSpend(h.get())).toBe(6);
+  });
+  it('accounts for confirmed, reserved and unknown charges from all models', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(result(0.2)))));
+    const h = harness();
+    await launch(h.get, h.change, 'test', [fusion], 'drivers', [FUSION_MODEL]).done;
+    const saved = h.get().runs[0];
+    h.get().runs.push(
+      {
+        ...saved,
+        id: 'queued-direct',
+        modelId: direct.id,
+        status: 'queued',
+        confirmed: null,
+        estimated: 0.3
+      },
+      {
+        ...saved,
+        id: 'unknown-direct',
+        modelId: direct.id,
+        status: 'failed',
+        confirmed: null,
+        estimated: 0.4,
+        unknownCharge: true
+      }
+    );
+    const plan = planRequests(h.get(), [fusion], 'drivers', [FUSION_MODEL]);
+    expect(plan.estimatedTotal).toBeCloseTo(4.1);
+    expect(canSpend(h.get(), plan.estimatedTotal!)).toBe(true);
+    expect(canSpend(h.get(), plan.estimatedTotal! + 0.01)).toBe(false);
+  });
+  it('releases unused budget for subsequent Fusion runs and blocks after overspending', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(result(0.15))))
+      .mockResolvedValueOnce(new Response(JSON.stringify(result(5))));
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness();
+    await launch(h.get, h.change, 'test', [fusion], 'drivers', [FUSION_MODEL]).done;
+    expect(remainingBudget(h.get())).toBe(4.85);
+    const next = launch(h.get, h.change, 'test', [fusion], 'drivers', [FUSION_MODEL]);
+    expect(reserved(h.get())).toBe(4.85);
+    await next.done;
+    expect(spent(h.get())).toBe(5.15);
+    expect(remainingBudget(h.get())).toBe(0);
+    expect(() => launch(h.get, h.change, 'test', [fusion], 'drivers', [FUSION_MODEL])).toThrow(
+      'exercise budget'
+    );
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
   it('never accepts a direct answer as a completed Fusion consultation', async () => {
     const response = result();
     response.output = response.output.filter((v) => v.type === 'message');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(response))));
     const h = harness();
-    await launch(
-      h.get,
-      h.change,
-      'test',
-      [fusion],
-      'drivers',
-      [FUSION_MODEL],
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { fusionAllowance: 1 }
-    ).done;
+    await launch(h.get, h.change, 'test', [fusion], 'drivers', [FUSION_MODEL]).done;
     expect(h.get().runs[0].status).toBe('failed');
     expect(h.get().drivers).toHaveLength(0);
     expect(

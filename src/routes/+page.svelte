@@ -44,6 +44,7 @@
     reserved,
     uncertainSpend,
     canSpend,
+    remainingBudget,
     prerequisite,
     modelName,
     workflowStages,
@@ -133,7 +134,6 @@
   let catalogueGeneration = 0;
   let paidMode = $state<ModelMode>('individual');
   let paidEfforts = $state<Record<string, ReasoningEffort>>({});
-  let fusionAllowance = $state<number | undefined>(1);
   let paidTask = $state<Task>('drivers');
   let paidTargets = $state<string[] | undefined>();
   let paidContributors = $state<{ modelId: string; included: boolean }[]>([]);
@@ -179,7 +179,7 @@
           retryId,
           paidNarrativeOptions,
           paidChainOptions,
-          { reasoningEfforts: paidEfforts, fusionAllowance }
+          { reasoningEfforts: paidEfforts }
         )
       : null
   );
@@ -425,14 +425,6 @@
     dialog = 'settings';
     if (catalogueForKey !== key.trim() && !catalogueLoading) void loadCatalogue();
   }
-  function remainingAllowance() {
-    return !p || p.budget === null
-      ? 1
-      : Math.max(
-          0,
-          Math.floor((p.budget - spent(p) - reserved(p) - uncertainSpend(p)) * 100) / 100
-        );
-  }
   function request(
     task: Task,
     targets?: string[],
@@ -458,10 +450,6 @@
       ...p.reasoningEfforts,
       ...(retry?.reasoningEffort ? { [retry.modelId]: retry.reasoningEffort } : {})
     };
-    fusionAllowance =
-      retry?.costBasis === 'allowance'
-        ? Math.min(retry.estimated, remainingAllowance())
-        : Math.min(1, remainingAllowance());
     paidTargets = targets;
     retryId = retry?.id;
     paidNarrativeOptions =
@@ -502,7 +490,7 @@
         retryId,
         paidNarrativeOptions,
         paidChainOptions,
-        { reasoningEfforts: paidEfforts, fusionAllowance }
+        { reasoningEfforts: paidEfforts }
       );
       started = true;
       if (project?.modelSetupStatus === 'skipped')
@@ -632,7 +620,7 @@
   <aside class="sidebar" aria-label="Exercise navigation">
     <button class="brand" onclick={home} disabled={busy || leaving}
       ><GitBranch size={27} strokeWidth={1.5} /><span
-        >Scenario<br />Designer<span class="brand-sub">A workspace for possible futures</span></span
+        >Scenario<br />Designer<span class="brand-sub">A space for possible futures</span></span
       ></button
     >
     {#if p}<button class="project-context" onclick={() => navigate(0)}
@@ -678,9 +666,9 @@
         <p>Possible futures.<br />AI-augmented perspectives.<br />Your judgement.</p>
       </div>
       <nav aria-label="Main navigation">
-        <button class="current" onclick={home}><FolderOpen size={18} /> Your exercises</button
+        <button class="current" onclick={home}><FolderOpen size={18} /> Your scenarios</button
         ><button data-walkthrough="home-how-it-works" onclick={() => (dialog = 'help')}
-          ><HelpCircle size={18} /> How it works</button
+          ><HelpCircle size={18} /> What is this?</button
         >
       </nav>{/if}
     <div class="sidebar-bottom">
@@ -717,13 +705,9 @@
   <div class="workspace" style:--workspace-topbar-height={`${topbarHeight}px`}>
     <header class="topbar" bind:offsetHeight={topbarHeight}>
       <div class="topbar-context">
-        {#if p}<button class="secondary back-to-exercises" onclick={home} disabled={busy || leaving}
+        {#if p}<button class="secondary back-to-scenarios" onclick={home} disabled={busy || leaving}
             ><ArrowLeft size={17} /> Back to start</button
-          >{#if showModeLabels}<span class="mode-badge">Quick mode</span>{/if}{#if p.example}<span
-              class="example-label">Example</span
-            >{/if}{:else}<span>Your exercises</span>{#if showModeLabels}<span class="mode-badge"
-              >Quick mode</span
-            >{/if}{/if}
+          >{/if}
       </div>
       <div class="topbar-tools">
         {#if p}{#if saveState === 'Changes not saved'}<button
@@ -799,9 +783,9 @@
         {:else if p}
           {#if p.example}<div class="example-notice">
               <BookOpen size={16} /><span
-                >Example analysis. Scores, reasoning, approvals and stories are
-                illustrations, not live model results.{#if examplePreview}{' '}
-                  Saved to Your exercises only when you make edits.{/if}</span
+                >Example analysis. Scores, reasoning, approvals and stories are illustrations, not
+                live model results.{#if examplePreview}{' '}
+                  Saved to Your scenarios only when you make edits.{/if}</span
               >
             </div>{/if}
           {#if p.example}<ExampleJourney
@@ -920,7 +904,7 @@
                           ? 'Confirmed cost unavailable'
                           : `Confirmed cost $${r.confirmed.toFixed(5)}`} · {r.costBasis ===
                         'allowance'
-                          ? 'planning allowance'
+                          ? 'budget reservation'
                           : 'estimate'} ${r.estimated.toFixed(5)}
                       </p>
                       {#if r.reasoningEffort || r.resolvedModelId || r.fusionInvoked !== undefined}<p
@@ -967,7 +951,7 @@
           <section class="home-hero">
             <div class="home-hero-copy">
               <div class="home-symbol"><GitBranch size={34} strokeWidth={1.4} /></div>
-              <h1>A workspace for<br />possible futures.</h1>
+              <h1>A space for<br />possible futures.</h1>
               <p>
                 Explore how change might unfold through a scenario design process controlled by you
                 and augmented by AI.
@@ -1017,7 +1001,7 @@
           <section class="projects-section">
             <div class="section-line">
               <h2 data-walkthrough="home-projects">
-                Your exercises <span class="count">{projects.length}</span>
+                Your scenarios <span class="count">{projects.length}</span>
               </h2>
               <button
                 data-walkthrough="home-import"
@@ -1072,7 +1056,7 @@
             <button
               data-walkthrough="home-how-it-works"
               class="text-button"
-              onclick={() => (dialog = 'help')}>How it works <ArrowUpRight size={15} /></button
+              onclick={() => (dialog = 'help')}>What is this? <ArrowUpRight size={15} /></button
             >
           </div>
           <p class="privacy-line">
@@ -1163,7 +1147,11 @@
           )}</pre>
       </details>
     </section>
-    <p>Review this task and its estimated cost before running.</p>
+    <p>
+      {paidMode === 'fusion'
+        ? 'Review this task and your remaining exercise budget before running.'
+        : 'Review this task and its estimated cost before running.'}
+    </p>
     {#if paidTask === 'narrative_edit'}<p class="small">
         <strong>Editing request:</strong>
         {paidNarrativeOptions?.instructions?.trim() ||
@@ -1215,51 +1203,41 @@
       onmode={(mode) => (paidMode = mode)}
       oneffort={(id, effort) => (paidEfforts = { ...paidEfforts, [id]: effort })}
     />
-    {#if paidMode === 'fusion'}<label class="spaced"
-        >Planning allowance for this run (USD)<input
-          type="number"
-          min="0.01"
-          step="0.01"
-          bind:value={fusionAllowance}
-        /></label
-      >
-      <p class="small muted">
-        This reserves money in your exercise budget for the whole run. It is not an OpenRouter
-        spending cap; actual charges may be higher. Use a spending-limited key for an external cap.
-      </p>{/if}
     {#if paidTask === 'chains'}
       <p class="chain-generation-summary" role="status">
         <strong
           >{paidCandidateCount} new candidate {paidCandidateCount === 1
-            ? 'chain'
-            : 'chains'}</strong
+            ? 'combination'
+            : 'combinations'}</strong
         >
         from {paidModels.length}
         {paidMode === 'fusion'
           ? 'combined contributor'
           : paidModels.length === 1
             ? 'model'
-            : 'models'}. Choose any one or more chains to take into writing.
+            : 'models'}. Choose any one or more combinations to take into writing.
       </p>
     {/if}
     <div class="estimate-box">
       <span
-        >{paidMode === 'fusion' ? 'Planning allowance' : 'Estimated allowance'} for {paidTask ===
-        'ratings'
-          ? `scoring ${scoringDriverCount} ${scoringDriverCount === 1 ? 'driver' : 'drivers'}`
-          : paidTask === 'drivers'
-            ? 'generating a driver list'
-            : paidTask === 'chains'
-              ? `creating ${paidCandidateCount} combinations`
-              : paidTask === 'hypotheses'
-                ? 'developing alternative outcomes'
-                : paidTask === 'consolidate'
-                  ? 'reviewing overlap'
-                  : 'one writing proposal'}</span
+        >{#if paidMode === 'fusion'}Remaining exercise budget{:else}Estimated allowance for {paidTask ===
+          'ratings'
+            ? `scoring ${scoringDriverCount} ${scoringDriverCount === 1 ? 'driver' : 'drivers'}`
+            : paidTask === 'drivers'
+              ? 'generating a driver list'
+              : paidTask === 'chains'
+                ? `creating ${paidCandidateCount} combinations`
+                : paidTask === 'hypotheses'
+                  ? 'developing alternative outcomes'
+                  : paidTask === 'consolidate'
+                    ? 'reviewing overlap'
+                    : 'one writing proposal'}{/if}</span
       ><strong
         >{paidEstimate === null
           ? paidMode === 'fusion'
-            ? 'Enter an available allowance'
+            ? p.budget === null
+              ? 'Set an exercise budget'
+              : `$${(remainingBudget(p) ?? 0).toFixed(4)} USD`
             : 'Price unavailable'
           : `$${paidEstimate.toFixed(4)} USD`}</strong
       ><small
@@ -1269,8 +1247,10 @@
           ? 'combined contributor'
           : paidModels.length === 1
             ? 'model'
-            : 'models'}. {#if paidMode === 'fusion'}Final charges depend on Fusion’s work.{:else}Based
-          on current prices and up to {Math.max(
+            : 'models'}. {#if paidMode === 'fusion'}Fusion uses the same budget as the rest of this
+          exercise. Costs vary; the remaining budget is reserved while this run is in progress, then
+          updated with reported charges. This is not an external spending cap.{:else}Based on
+          current prices and up to {Math.max(
             0,
             ...(paidPlan?.requests.map((r) => r.maxOutputTokens) ?? [])
           ).toLocaleString()} output tokens per request, including thinking. Actual charges can vary.{/if}</small
@@ -1279,11 +1259,24 @@
     {#if paidTask === 'chains'}<p class="small muted">
         {#if retryId}The saved request scope is retained for this retry.{:else}Generate combinations
           requests three candidates per model; Explore a disruption requests one per model.{/if} Every
-        chain includes all selected uncertainties. Retry / replace repeats only the failed batch.
+        combination includes all selected uncertainties. Retry / replace repeats only the failed batch.
       </p>{/if}
+    {#if paidMode === 'fusion' && (remainingBudget(p) ?? 0) <= 0}<p
+        class="notice review"
+        role="status"
+      >
+        Set an exercise budget with money remaining in Models and budget before running Fusion.
+      </p>
+      <button
+        class="text-button"
+        onclick={() => {
+          settingsTab = 'budget';
+          dialog = 'settings';
+        }}>Adjust exercise budget</button
+      >{/if}
     {#if paidEstimate !== null && !canSpend(p, paidEstimate)}<p class="notice review" role="status">
         This run exceeds your remaining exercise allowance. {paidMode === 'fusion'
-          ? 'Lower the planning allowance or adjust your budget.'
+          ? 'Adjust your exercise budget.'
           : 'Choose fewer models, try a free option or adjust your budget.'}
       </p>{/if}
     {#if new Set(paidModels).size !== paidModels.length}<p class="notice review" role="status">

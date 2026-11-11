@@ -128,7 +128,7 @@ The product's MVP is desktop-only. Test 1024, 1280 and 1440px layouts and 200% t
 
 On phones, provide the spec's clear desktop-use message. Do not use a viewport-width check to block a desktop user who has zoomed in. Essential saved-work navigation and controls must remain usable through reflow; the exact unsupported-device treatment needs browser testing. The responsive miniature in the reference makes the concept viewable and is not a mobile product specification.
 
-## 4. Signature screen: construct chains
+## 4. Signature screen: construct combinations
 
 This is the approved visual anchor. Use it to calibrate the component library before expanding to other stages. See FR-13–17 and FR-28 in the spec.
 
@@ -138,22 +138,22 @@ This is the approved visual anchor. Use it to calibrate the component library be
 - The uncertainty column is neutral. Scenario headers carry their stable soft colour, editable name, proposal/approval state and scenario-selection control.
 - Keep hypothesis cells on white/paper surfaces. A selected cell receives the soft selected fill plus a visible evergreen boundary. Display full text with wrapping rather than relying on truncated text or hover.
 - Put the reasoning/editor panel beneath the grid, as in Common Ground. It stays in context and has two columns at comfortable widths: reasoning on the left, hypothesis choice on the right. Stack it at narrower widths.
-- Support any user-selected set of at least one chain. The reference's three columns and five uncertainties are examples, not caps. For additional columns, use horizontal table scrolling with a sticky uncertainty column and headers where feasible. Do not compress all columns to fit.
-- Show the selected chain count without quotas or main/wildcard categories. Candidate selection, cell inspection, and analyst approval remain distinct. Optional Explore a disruption adds one candidate per model to the same list; standard generation adds three per model.
+- Support any user-selected set of at least one combination. The reference's three columns and five uncertainties are examples, not caps. For additional columns, use horizontal table scrolling with a sticky uncertainty column and headers where feasible. Do not compress all columns to fit.
+- Show the selected combination count without quotas or main/wildcard categories. Candidate selection, cell inspection, and analyst approval remain distinct. Optional Explore a disruption adds one candidate per model to the same list; standard generation adds three per model.
 
 ### Cell interaction contract
 
 1. Activate a hypothesis cell to select it and update the inspector. Keep focus on the triggering control; provide a keyboard-accessible `Edit hypothesis` action that moves focus into the inspector when requested.
 2. Show scenario name, uncertainty, current hypothesis, its provenance, relevant coherence reasoning, contradictions and assumptions. Each model's reasoning is separately inspectable and clearly attributed using its real identifier.
-3. The hypothesis selector lists states for that uncertainty only, plus `Unresolved`. The grid and inspector edit the same chain record.
-4. On change, save the edit, record its revision and label the affected chain `Analyst-edited`. Preserve earlier coherence notes with their checked revision/time; label them `Review suggested` if they precede the edit.
-5. Show which dependent narratives or chains are affected. Preserve their content and approval history. Do not equate review suggested with proven invalidity.
-6. Opening the panel, changing a cell and approving a chain make zero AI calls. There is no separate coherence recheck action. Preserve the model reasoning from generation and any historical checks, with their original revisions and attribution.
+3. The hypothesis selector lists states for that uncertainty only, plus `Unresolved`. The grid and inspector edit the same combination record.
+4. On change, save the edit, record its revision and label the affected combination `Analyst-edited`. Preserve earlier coherence notes with their checked revision/time; label them `Review suggested` if they precede the edit.
+5. Show which dependent narratives or combinations are affected. Preserve their content and approval history. Do not equate review suggested with proven invalidity.
+6. Opening the panel, changing a cell and approving a combination make zero AI calls. There is no separate coherence recheck action. Preserve the model reasoning from generation and any historical checks, with their original revisions and attribution.
 7. Allow approval with an intentionally unresolved uncertainty. Keep that uncertainty visible downstream; it cannot be silently filled in by the writer.
 
 A model disagreement is a reason to inspect, not an automatic blocker. Initial generation includes coherence assessment; the reference's generic model text is not that implementation. Production needs the actual reinforcing relationships, tensions, assumptions, timestamps and model provenance.
 
-The footer uses an accurate action such as `Approve 3 selected chains`, with the count derived from selection. Keep undo separate and available. Revoking approval must not discard a draft produced from the earlier approved revision.
+The footer uses an accurate action such as `Approve 3 selected combinations`, with the count derived from selection. Keep undo separate and available. Revoking approval must not discard a draft produced from the earlier approved revision.
 
 ## 5. Extend Common Ground through the workflow
 
@@ -167,8 +167,8 @@ The footer uses an accurate action such as `Approve 3 selected chains`, with the
 | Assess drivers | Impact × uncertainty plot beside a prioritised review queue, with a table alternative | Inspect per-model positions, edit final scores numerically, and explicitly approve remaining medians |
 | Select uncertainties | Reuse the approved matrix/table with selection controls and a selected-items summary | Recommend 4–6 without enforcing a cap; explain increasing combination complexity; no required causal map |
 | Develop hypotheses | One expandable uncertainty section with distinct future-state options and provenance | The number of alternatives varies; support add/edit/merge/split/remove and explicit approval; do not force three states |
-| Construct chains | Scenario columns, uncertainty rows, contextual reasoning/editor below | See the interaction contract above; analyst review and optional disruption exploration |
-| Write & review scenarios | One prose workspace with chain guidance, rich-text/Markdown editing, undo/redo, collapsed AI help and an optional review checklist in each editor | Write from approved chains; compare AI proposals before explicit application; require text for every selected scenario before saving the final set and continuing to export; preserve original/working/final snapshots; QA checkboxes never block completion |
+| Construct combinations | Scenario columns, uncertainty rows, contextual reasoning/editor below | See the interaction contract above; analyst review and optional disruption exploration |
+| Write & review scenarios | One prose workspace with combination guidance, rich-text/Markdown editing, undo/redo, collapsed AI help and an optional review checklist in each editor | Write from approved combinations; compare AI proposals before explicit application; require text for every selected scenario before saving the final set and continuing to export; preserve original/working/final snapshots; QA checkboxes never block completion |
 | Completion/export | Scenario list and straightforward export choices, with annotation options | Copy, Markdown, DOCX, PDF, full analytical record and project/analytical JSON; explain the difference between portable project and analytical data |
 
 ### Matrix detail
@@ -197,7 +197,7 @@ These are suggested component boundaries for SvelteKit, not mandatory filenames.
 | StageActionBar | Decision summary and primary action | Selected count, prerequisites, pending save and operation state; approve/generate intents kept separate |
 | ModelAttribution / ModelRunList | Exact identities, contribution coverage, per-model progress | Model IDs, operation statuses, missing cells; retry/replace/skip intents |
 | DriverMatrix / AssessmentTable | The same scores in plot and accessible controls | Provisional median, individual ratings, analyst decision, missing values, approval type |
-| HypothesisCell / ChainGrid | Selected intersection and hypothesis value | Stable chain, uncertainty and hypothesis IDs; select/edit intents, including explicit unresolved |
+| HypothesisCell / ChainGrid | Selected intersection and hypothesis value | Stable combination, uncertainty and hypothesis IDs; select/edit intents, including explicit unresolved |
 | ReasoningPanel | Attributed explanations, tensions and context editor | Current revision, checked revision, model contributions, dependencies; analyst review |
 | EvidenceInspector | Source metadata, claim support and verification state | Finding/source IDs and annotation type; exclude/flag/approve intents |
 | DependencyNotice | Affected saved work and the upstream change | Parent revision and affected records; inspect/retain/selectively-regenerate intents |
@@ -210,7 +210,7 @@ Store the selected cell by stable IDs, not row/column indices; sorting or filter
 | --- | --- |
 | AI proposal | Neutral label: `AI-proposed`; include attribution |
 | Analyst decision | Check + `Analyst-approved`; edited values retain `Analyst-edited` history |
-| Upstream change | Amber notice: `Income support changed. Two chains and one narrative may need review.` Include affected items |
+| Upstream change | Amber notice: `Income support changed. Two combinations and one narrative may need review.` Include affected items |
 | Empty driver list | `Start by exploring possible drivers.` Primary action: `Generate drivers`, with estimate |
 | Operation running | Per-model queued/running/succeeded/failed/cancelled rows; show useful partial results |
 | One model fails | `Two models finished. [Model name] did not return a score for Housing access.` Retry only failed work, replace explicitly, or continue partially |
@@ -239,7 +239,7 @@ Do not say `Consensus`, `Validated`, `Safe`, or `Correct` merely because models 
 
 ## 8. Implementation sequence and scope
 
-Start with the shell, tokens and core controls, then build the chain table and inspector using deterministic fixtures. Verify the approved composition and accessibility at laptop width before multiplying components. Add the matrix/table and driver/hypothesis workflows next, followed by the narrative editor, evidence checkpoint and remaining foundation/export screens. This is an implementation sequence; Research Mode remains required for public MVP release.
+Start with the shell, tokens and core controls, then build the combination table and inspector using deterministic fixtures. Verify the approved composition and accessibility at laptop width before multiplying components. Add the matrix/table and driver/hypothesis workflows next, followed by the narrative editor, evidence checkpoint and remaining foundation/export screens. This is an implementation sequence; Research Mode remains required for public MVP release.
 
 The reference is intentionally a small demonstration. It does not implement real navigation, setup, research, matrix scoring, candidate selection, complete coherence reasoning, IndexedDB, model access, dependency tracking, exports or the full editor. Its model names, costs, stage completion markers and analysis are examples. Use the documented contracts above and the functional spec to build those behaviours.
 

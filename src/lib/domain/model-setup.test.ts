@@ -128,7 +128,7 @@ describe('guided model setup and saved-project compatibility', () => {
       notes: [],
       origins: [],
       wildcardDriverIds: [],
-      distinctiveness: 'Analyst-created chain',
+      distinctiveness: 'Analyst-created combination',
       snapshots: []
     });
     expect(approveChainSet(p)).toBe(true);
@@ -158,7 +158,7 @@ describe('guided model setup and saved-project compatibility', () => {
     expect(restored).not.toHaveProperty('verifiedKey');
   });
 
-  it('preserves existing exercises, their historical stage IDs and choices', () => {
+  it('preserves existing scenarios, their historical stage IDs and choices', () => {
     const p = parseProject(exampleProject());
     p.completed = p.completed.filter((stage) => stage !== MODEL_SETUP_STAGE);
     p.stage = 4;

@@ -66,7 +66,7 @@ export function acceptMerge(p: Project, suggestionId: string) {
     flagDownstream(
       p,
       4,
-      'Equivalent future states merged. Existing chain references are preserved for review.',
+      'Equivalent future states merged. Existing combination references are preserved for review.',
       affected.map((c) => c.id)
     );
   }

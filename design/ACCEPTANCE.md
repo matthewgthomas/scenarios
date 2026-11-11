@@ -14,17 +14,17 @@ Use with [DESIGN.md](../DESIGN.md) and [spec.md](../spec.md). These checks descr
 - [ ] Sticky elements never obscure focused controls, the last row or the footer. Layout grows with content; the prototype's artificial minimum height is absent.
 - [ ] Motion explains an interaction, stops under reduced-motion preferences and does not delay editing.
 
-## Analyst ownership and the chain screen
+## Analyst ownership and the combination screen
 
-- [ ] Selecting a cell updates the inspector for the correct stable chain/uncertainty IDs. Selection survives sorting and does not imply approval. (FR-14)
+- [ ] Selecting a cell updates the inspector for the correct stable combination/uncertainty IDs. Selection survives sorting and does not imply approval. (FR-14)
 - [ ] The grid and detail view read/write the same hypothesis reference. Long hypothesis descriptions remain available without hover. (FR-14)
-- [ ] Each chain has one hypothesis per selected uncertainty unless explicitly `Unresolved`. An unresolved option remains visible in drafting and export. (FR-13, FR-19)
+- [ ] Each combination has one hypothesis per selected uncertainty unless explicitly `Unresolved`. An unresolved option remains visible in drafting and export. (FR-13, FR-19)
 - [ ] Editing a hypothesis preserves earlier content and reasoning, identifies affected downstream work and makes **zero model calls**. Record a network trace for this test. (FR-15, FR-28)
 - [ ] Old coherence notes show their revision/time and `Review suggested` after an applicable edit. They do not appear freshly checked. (FR-15)
 - [ ] No coherence recheck action or historical-run retry is offered. Earlier reasoning stays readable, and editing and approval make zero model calls. (FR-15, FR-30)
-- [ ] Any valid selection of one or more chains can proceed to writing, without scenario targets or main/wildcard categories. Empty selections explain the minimum requirement. Standard generation offers three candidates per model; optional disruption exploration offers one. (FR-16)
+- [ ] Any valid selection of one or more combinations can proceed to writing, without scenario targets or main/wildcard categories. Empty selections explain the minimum requirement. Standard generation offers three candidates per model; optional disruption exploration offers one. (FR-16)
 - [ ] An additional disruption driver is explicitly accepted or removed and remains visibly unscored unless actually scored. (FR-17)
-- [ ] Approval applies to the intended selected chains, records the correct revision and remains reversible. Approval does not initiate drafting or rechecking. (FR-13, FR-15, FR-28)
+- [ ] Approval applies to the intended selected combinations, records the correct revision and remains reversible. Approval does not initiate drafting or rechecking. (FR-13, FR-15, FR-28)
 - [ ] Model names/IDs and genuine reasoning replace all example A/B/C labels and generic text. The interface never describes agreement as proof. (FR-04, FR-13)
 
 ## Driver assessment and hypotheses
@@ -45,8 +45,8 @@ Use with [DESIGN.md](../DESIGN.md) and [spec.md](../spec.md). These checks descr
 - [ ] Sources expose provenance, verification status and supporting claims. An inaccessible source is not shown as verified. (FR-25)
 - [ ] Later research requests state the question, expected usefulness and estimate; no request starts before approval. Changed evidence flags affected decisions without overwriting them. (FR-27)
 - [ ] Quick Mode contains no invented citations. Annotation types distinguish historical evidence, assumptions/hypotheses and imagined futures. (FR-22)
-- [ ] Writing opens an empty editor with chain guidance. Human-only drafting through review, completion and export works without a model key. Optional generated starting drafts remain inside collapsed AI help. (FR-18)
-- [ ] Rich-text and Markdown edits preserve supported formatting and make no AI calls. Optional whole-scenario editing accepts instructions and returns a proposal to explicitly apply or dismiss. Changed text or chain revisions prevent applying stale proposals. (FR-20)
+- [ ] Writing opens an empty editor with combination guidance. Human-only drafting through review, completion and export works without a model key. Optional generated starting drafts remain inside collapsed AI help. (FR-18)
+- [ ] Rich-text and Markdown edits preserve supported formatting and make no AI calls. Optional whole-scenario editing accepts instructions and returns a proposal to explicitly apply or dismiss. Changed text or combination revisions prevent applying stale proposals. (FR-20)
 - [ ] Original human or accepted AI draft, working text and final snapshot are distinguishable. Applying a proposal and restoring snapshots preserve previous working text through Undo. Every selected scenario needs non-empty text to review and complete. (FR-21)
 - [ ] Evidence annotations are off by default. Editing affected text marks broken/detached anchors for review rather than leaving misleading citations. (FR-22)
 - [ ] The advisory checklist can be entirely unchecked without blocking completion/export or triggering an extra AI critique. (FR-23)
@@ -64,7 +64,7 @@ Use with [DESIGN.md](../DESIGN.md) and [spec.md](../spec.md). These checks descr
 
 ## Accessibility and pilot review
 
-- [ ] Complete the main path using only the keyboard; repeat matrix editing, chain editing and evidence inspection with a screen reader.
+- [ ] Complete the main path using only the keyboard; repeat matrix editing, combination editing and evidence inspection with a screen reader.
 - [ ] Landmarks, headings, table captions/headers, labels and focus order are meaningful. Dialogs/popovers return focus, and state updates do not drop it.
 - [ ] All colour encodings have text/shape equivalents; every hover-only detail has a keyboard and touch equivalent.
 - [ ] Status messages announce approval, save and failure changes without repeatedly announcing streaming text or hover.

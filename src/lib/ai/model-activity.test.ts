@@ -114,7 +114,7 @@ describe('model activity', () => {
     );
   });
 
-  it('tolerates malformed preferences and isolates exercises', () => {
+  it('tolerates malformed preferences and isolates scenarios', () => {
     expect(parseActivityPreferences('invalid')).toEqual(empty());
     expect(parseActivityPreferences('null')).toEqual(empty());
     expect(parseActivityPreferences('{"read":["a","a",2],"dismissed":false}')).toEqual({

@@ -93,9 +93,11 @@
     >
     <p>{mode === 'fusion' ? 'OpenRouter Fusion' : selected.map(name).join(', ')}</p>
     <p class="small muted">
-      {mode === 'individual' && selected.length === 1
-        ? 'Recommended for getting started: one response to review, one set of charges. You can add perspectives after seeing a result.'
-        : 'Review the contribution and cost of each perspective before running.'}
+      {mode === 'fusion'
+        ? 'One combined contribution, charged to your overall exercise budget.'
+        : selected.length === 1
+          ? 'Recommended for getting started: one response to review, one set of charges. You can add perspectives after seeing a result.'
+          : 'Review the contribution and cost of each perspective before running.'}
     </p>
     {#if mode === 'individual' && selected.length === 1}<p class="small muted">
         Thinking effort: {selectedModel
@@ -148,8 +150,8 @@
             together. It may research the web and takes longer than a single model.
           </p>
           <p class="small muted">
-            Its panel uses High thinking effort. Costs vary, so you’ll choose a planning allowance
-            before each run.
+            Its panel uses High thinking effort. Costs vary and count towards the same overall
+            exercise budget as every other model.
           </p>
           {#if loaded && !catalogue.some((m) => m.id === FUSION_MODEL)}<p class="notice review">
               Fusion isn’t available for this connection. Refresh the list or choose individual

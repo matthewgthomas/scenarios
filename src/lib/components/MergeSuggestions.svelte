@@ -77,7 +77,7 @@
             remove
             {preview.removed.map((record) => `“${record.title}”`).join(', ')} from the active list. Original
             contributions are preserved{kind === 'hypothesis'
-              ? '; affected chains are flagged for review'
+              ? '; affected combinations are flagged for review'
               : ''}.
           </p>
         {:else}

@@ -11,7 +11,7 @@
   }
 </script>
 
-<details class="research-notes" open>
+<details class="research-notes">
   <summary>Research and analyst judgement</summary>
   <p class="small muted">
     Optional notes save automatically and travel into your analytical export and project backup.

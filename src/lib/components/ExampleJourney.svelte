@@ -45,7 +45,7 @@
     {
       stage: 5,
       title: 'Combine outcomes into a scenario',
-      text: 'Read the chain of hypotheses for the “Local lifelines” scenario below: volatile energy prices combine with local emergency funds, portfolio incomes, rising rents and mutual aid. The explanation connects these choices. The column combines outcomes across uncertainties; it is not a timeline.'
+      text: 'Read the combination of hypotheses for the “Local lifelines” scenario below: volatile energy prices combine with local emergency funds, portfolio incomes, rising rents and mutual aid. The explanation connects these choices. The column combines outcomes across uncertainties; it is not a timeline.'
     },
     {
       stage: 6,

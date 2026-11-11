@@ -176,7 +176,7 @@
     flagDownstream(
       p,
       4,
-      'Hypotheses removed. Existing chain references are retained for review.',
+      'Hypotheses removed. Existing combination references are retained for review.',
       affected.map((c) => c.id)
     );
   }
@@ -635,7 +635,7 @@
             </p>{/each}
         </details>{/if}
       {#if editing.id}<p class="small muted">
-          Saving requires approval again. Chains and narratives that use this hypothesis will be
+          Saving requires approval again. Combinations and narratives that use this hypothesis will be
           flagged for review.
         </p>{:else if editing.sourceId}<p class="small muted">
           Edit this copy into a distinct alternative. The original hypothesis is kept.

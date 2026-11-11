@@ -528,7 +528,7 @@ pre {
 .topbar-context {
   min-width: 0;
 }
-.back-to-exercises {
+.back-to-scenarios {
   flex-shrink: 0;
   white-space: nowrap;
 }
@@ -1529,19 +1529,6 @@ table {
 }
 .task-results {
   overflow-wrap: anywhere;
-}
-.assessment-result-details {
-  margin-top: 16px;
-}
-.assessment-result-details summary {
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-.assessment-result-details .table-scroll {
-  margin-top: 12px;
-}
-.assessment-result-details .data-table {
-  min-width: 760px;
 }
 @media (max-width: 640px) {
   .merge-comparison {

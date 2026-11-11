@@ -78,7 +78,7 @@ describe('human-first narrative writing', () => {
     undoNarrative(p, p.chains[0].id, true);
     expect(p.narratives[0].working).toBe('Some prose');
   });
-  it('blocks new drafts on unapproved chains but preserves existing editable drafts after upstream changes', () => {
+  it('blocks new drafts on unapproved combinations but preserves existing editable drafts after upstream changes', () => {
     const p = exercise();
     const c = p.chains[0];
     c.approvedRevision = null;

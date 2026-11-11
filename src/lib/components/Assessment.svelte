@@ -85,6 +85,12 @@
     )
   );
   const selected = $derived(drivers.find((d) => d.id === selectedId));
+  const scoresApproved = $derived(
+    selected?.decision?.revision === selected?.revision &&
+      selected?.decision !== undefined &&
+      selected.decision.impact === impact &&
+      selected.decision.uncertainty === uncertainty
+  );
   const assessmentIds = $derived(assessmentOrder.filter((id) => drivers.some((d) => d.id === id)));
   const assessmentIndex = $derived(assessmentIds.indexOf(selectedId));
   const expectedModels = $derived(p.overrides['2'] ?? p.models);
@@ -199,7 +205,7 @@
       flagDownstream(
         p,
         3,
-        'Critical uncertainty selection changed. Saved chains and narratives are preserved.'
+        'Critical uncertainty selection changed. Saved combinations and narratives are preserved.'
       );
     });
   }
@@ -634,11 +640,13 @@
       <div>
         <h3>Your assessment</h3>
         <p class="small muted">
-          {selected.decision?.revision === selected.revision
+          {scoresApproved
             ? 'Your saved, approved scores.'
-            : coordinates(selected).impact !== null
-              ? 'Starting values from available AI scores. Review before approving.'
-              : 'No scores chosen yet. Enter your judgement from 1 to 5; no starting score is recommended.'}
+            : selected.decision?.revision === selected.revision
+              ? 'You have unapproved score changes. Approve to save your updated assessment.'
+              : coordinates(selected).impact !== null
+                ? 'Starting values from available AI scores. Review before approving.'
+                : 'No scores chosen yet. Enter your judgement from 1 to 5; no starting score is recommended.'}
         </p>
         <div class="form-row">
           <label
@@ -663,8 +671,9 @@
         </div>
         <ResearchNotes driver={selected} {change} />
         <button
-          class="primary"
-          disabled={impact === undefined ||
+          class="primary approve-scores"
+          disabled={scoresApproved ||
+            impact === undefined ||
             uncertainty === undefined ||
             !(impact >= 1 && impact <= 5 && uncertainty >= 1 && uncertainty <= 5)}
           onclick={() => {
@@ -673,9 +682,16 @@
             change((p) => {
               approveDriverScores(p, selected.id, scores.impact, scores.uncertainty);
             }, 'Analyst assessment approved.');
-            editorOpen = false;
-          }}><Check size={16} /> Approve these scores</button
+          }}
+          ><Check size={16} /> {scoresApproved ? 'Scores approved' : 'Approve these scores'}</button
         >
+        <div role="status">
+          {#if scoresApproved}
+            <p class="notice approval-confirmation">
+              <Check size={16} /> Scores approved. Humanitarian impact: {impact}; uncertainty: {uncertainty}.
+            </p>
+          {/if}
+        </div>
         {#if selection}<label class="check-label uncertainty-selection">
             <input
               type="checkbox"
@@ -826,6 +842,13 @@
   }
   .uncertainty-selection {
     margin-top: 16px;
+  }
+  .approve-scores {
+    margin-block: 16px;
+  }
+  .approval-confirmation {
+    color: var(--cg-status-approved-text);
+    background: var(--cg-status-approved-bg);
   }
   .overlapping-drivers {
     margin-bottom: 24px;

@@ -70,9 +70,10 @@
   </dl>
   <h4>You stay in control of each request</h4>
   <p>
-    Before AI work starts, you’ll see an estimated cost, or a planning allowance for Fusion, and
-    confirm the request. The app blocks new requests when their estimates would take this analysis
-    over budget. Actual charges can differ from estimates, so also set a spending limit on
+    Before AI work starts, you’ll confirm the request. Individual models show an estimated cost;
+    Fusion uses the remaining overall exercise budget, with no separate allowance. The app blocks
+    new requests when their estimates would take this analysis over budget. Actual charges can
+    differ from estimates, so also set a spending limit on
     <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noreferrer"
       >your OpenRouter key</a
     >. Choosing settings and moving between stages does not run models.

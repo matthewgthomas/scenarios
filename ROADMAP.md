@@ -4,9 +4,9 @@ Last reviewed: 9 November 2026.
 
 ## What is already available
 
-The app supports the complete manual scenario-design workflow, with optional AI help: drivers of change, impact and uncertainty assessment, critical uncertainties, hypotheses, coherent chains, disruption exploration, writing and review. It also includes multi-model contributions, semantic merge suggestions, per-stage model settings, human-first editing, local autosave, portable backups, exports, cost controls, partial-failure recovery and page walkthroughs.
+The app supports the complete manual scenario-design workflow, with optional AI help: drivers of change, impact and uncertainty assessment, critical uncertainties, hypotheses, coherent combinations, disruption exploration, writing and review. It also includes multi-model contributions, semantic merge suggestions, per-stage model settings, human-first editing, local autosave, portable backups, exports, cost controls, partial-failure recovery and page walkthroughs.
 
-Individual AI models use their existing knowledge. OpenRouter Fusion can use web research, but this does not provide the Research Mode, approved evidence base or source verification described in the spec. Current export annotations describe chain hypotheses and assumptions; they are not claim-level evidence citations.
+Individual AI models use their existing knowledge. OpenRouter Fusion can use web research, but this does not provide the Research Mode, approved evidence base or source verification described in the spec. Current export annotations describe combination hypotheses and assumptions; they are not claim-level evidence citations.
 
 ### Delivery principles
 
@@ -25,7 +25,7 @@ AI remains optional and human analyst judgement remains central. New capabilitie
 
 ## Claim-level annotations and evidence-aware exports
 
-Partially implemented for hypothesis chains.
+Partially implemented for scenario combinations.
 
 - Link narrative claims to sources, findings, hypotheses and explicit assumptions.
 - Distinguish historical or present-day evidence, supported assumptions and imagined future developments.
@@ -37,14 +37,14 @@ Partially implemented for hypothesis chains.
 
 Partially implemented.
 
-- Show the combination count and practical complexity of the selected uncertainties and hypotheses before chain construction.
+- Show the combination count and practical complexity of the selected uncertainties and hypotheses before combination construction.
 - Extend the existing stage review flags and scoped generation controls with more precise dependencies between individual records and revisions, including future source/finding revisions.
 - Explain which downstream decisions are affected by a change and offer regeneration of the affected work on request, preserving analyst edits and unaffected results.
 - Calibrate disagreement and attention cues through usability testing, with configurable heuristics where useful.
 
 ## Construct scenarios with a 2 × 2 matrix
 
-Let analysts choose two critical uncertainties, define contrasting ends for each axis and develop four quadrant scenarios. Carry the chosen assumptions through writing, review, provenance and exports. Retain the existing multiple-hypothesis chain method as an alternative. This is a scenario-construction method, separate from the current impact × uncertainty assessment plot.
+Let analysts choose two critical uncertainties, define contrasting ends for each axis and develop four quadrant scenarios. Carry the chosen assumptions through writing, review, provenance and exports. Retain the existing multiple-scenario combination method as an alternative. This is a scenario-construction method, separate from the current impact × uncertainty assessment plot.
 
 ## Refresh suggested models from AA Briefcase rankings
 
@@ -62,7 +62,7 @@ Add optional conversations for exploring and interrogating the current stage, wi
 
 ## AI editing of selected passages
 
-Allow analysts to request revisions to a selected narrative passage, compare the proposal and explicitly apply it. Preserve surrounding text, undo history, chain meaning and future evidence annotations. Whole-scenario AI editing is already available.
+Allow analysts to request revisions to a selected narrative passage, compare the proposal and explicitly apply it. Preserve surrounding text, undo history, combination meaning and future evidence annotations. Whole-scenario AI editing is already available.
 
 ## Immersive storytelling formats
 

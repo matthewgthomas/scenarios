@@ -460,7 +460,7 @@ export function editHypothesis(
   flagDownstream(
     p,
     4,
-    `${h.title} changed. ${affected.length} dependent chains and their narratives may need review.`,
+    `${h.title} changed. ${affected.length} dependent combinations and their narratives may need review.`,
     affected.map((c) => c.id)
   );
 }
@@ -499,7 +499,13 @@ export function uncertainSpend(p: Project) {
 }
 export function canSpend(p: Project, estimate: number) {
   if (estimate === 0) return true;
-  return p.budget === null || spent(p) + reserved(p) + uncertainSpend(p) + estimate <= p.budget;
+  const remaining = remainingBudget(p);
+  return remaining === null || estimate <= remaining;
+}
+export function remainingBudget(p: Project): number | null {
+  return p.budget === null
+    ? null
+    : Math.max(0, p.budget - spent(p) - reserved(p) - uncertainSpend(p));
 }
 export function prerequisite(p: Project, stage: number): string | null {
   stage = canonicalStage(stage);
@@ -534,7 +540,7 @@ export function prerequisite(p: Project, stage: number): string | null {
 export function parseProject(value: unknown): Project {
   const p = projectSchema.parse(value);
   p.stage = canonicalStage(p.stage);
-  // Existing exercises can continue where they left off, with their model choices intact.
+  // Existing scenarios can continue where they left off, with their model choices intact.
   if (
     value &&
     typeof value === 'object' &&
@@ -561,11 +567,11 @@ export function parseProject(value: unknown): Project {
         (hypothesisId &&
           !p.hypotheses.some((h) => h.id === hypothesisId && h.driverId === driverId))
       )
-        throw new Error('A chain has an invalid hypothesis reference.');
+        throw new Error('A combination has an invalid hypothesis reference.');
     }
   for (const n of p.narratives) {
     if (!p.chains.some((c) => c.id === n.chainId))
-      throw new Error('A narrative refers to a missing chain.');
+      throw new Error('A narrative refers to a missing combination.');
     const chosen = n.drafts.find((d) => d.id === n.chosenId);
     if (!n.original && chosen) {
       n.original = {

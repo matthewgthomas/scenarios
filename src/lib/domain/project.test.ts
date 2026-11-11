@@ -92,7 +92,7 @@ describe('analyst decisions and provenance', () => {
     d.revision++;
     expect(coordinates(d).impact).toBeNull();
   });
-  it('snapshots a chain before a hypothesis edit, preserving original content and model notes', () => {
+  it('snapshots a combination before a hypothesis edit, preserving original content and model notes', () => {
     const p = exampleProject();
     const c = p.chains[0];
     const h = p.hypotheses.find((h) => h.id === c.items[p.drivers[0].id])!;
@@ -152,7 +152,7 @@ describe('analyst decisions and provenance', () => {
     expect(restored.schemaVersion).toBe('1.0');
     expect(restored.runs).toEqual([historical, batch, chainBatch]);
   });
-  it('records only one immutable snapshot per chain revision', () => {
+  it('records only one immutable snapshot per combination revision', () => {
     const p = exampleProject();
     const c = p.chains[0];
     snapshotChain(p, c);

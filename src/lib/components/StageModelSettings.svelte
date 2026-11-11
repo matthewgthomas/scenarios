@@ -174,7 +174,7 @@
         >{/if}</summary
     >
     <p class="small muted">
-      Most exercises can use the same models throughout. Change a stage below only if you want a
+      Most scenarios can use the same models throughout. Change a stage below only if you want a
       different selection for that part of the work.
     </p>
     <ul class="stage-model-list" aria-label="Models by stage">

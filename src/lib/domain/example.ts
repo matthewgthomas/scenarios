@@ -133,7 +133,7 @@ export function exampleProject(): Project {
   );
   const titles = ['Local lifelines', 'The digital divide', 'Public renewal'];
   const reasoning = [
-    'Local emergency funds and mutual aid reinforce one another as public support becomes more uneven. Portfolio incomes offer flexibility, but volatile energy bills and rising rents keep households close to crisis. This chain assumes that community organisations can sustain their capacity without replacing adequate national provision.',
+    'Local emergency funds and mutual aid reinforce one another as public support becomes more uneven. Portfolio incomes offer flexibility, but volatile energy bills and rising rents keep households close to crisis. This combination assumes that community organisations can sustain their capacity without replacing adequate national provision.',
     'Targeted support could ease pressure for people the system reaches. Digital barriers could leave others without help, even as energy costs fall. Automation changes incomes and access to services at the same time, creating reinforcing advantages for digitally connected households and compounding exclusion for others.',
     'Broader income support and public service jobs reinforce household stability. More predictable energy bills create room to plan, while local partnerships connect services. The main tension is timing: housing supply responds slowly, so higher disposable income does not immediately produce more secure accommodation.'
   ];

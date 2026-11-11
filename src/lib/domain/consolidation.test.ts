@@ -28,7 +28,7 @@ describe('explicit consolidation decisions', () => {
     expect(p.mergeSuggestions[0].status).toBe('accepted');
     expect(p.chains.every((c) => c.review)).toBe(true);
   });
-  it('flags chains referencing a removed future state and keeps their previous notes and content', () => {
+  it('flags combinations referencing a removed future state and keeps their previous notes and content', () => {
     const p = exampleProject();
     const [first, second] = p.hypotheses;
     p.mergeSuggestions.push({

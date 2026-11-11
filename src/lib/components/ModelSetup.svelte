@@ -93,8 +93,8 @@
   <div>
     <h2 id="manual-heading">Prefer to work through the analysis yourself?</h2>
     <p>
-      Add and assess drivers, develop hypotheses, build chains and write scenarios manually. No
-      OpenRouter account, model selection or budget is needed. You can add AI help later using
+      Add and assess drivers, develop hypotheses, build combinations and write scenarios manually.
+      No OpenRouter account, model selection or budget is needed. You can add AI help later using
       “Models and budget” in the top bar.
     </p>
   </div>
@@ -150,10 +150,10 @@
       <details class="model-learning-details">
         <summary>What do prices, tokens and thinking effort mean?</summary>
         <p>
-          A token is a small piece of text, often part of a word. Input is the text the AI model reads;
-          output is what it writes. Prices per million tokens help you compare models; they are not
-          the price of a single question. Scenario Designer estimates the cost of your request before you run
-          it.
+          A token is a small piece of text, often part of a word. Input is the text the AI model
+          reads; output is what it writes. Prices per million tokens help you compare models; they
+          are not the price of a single question. Scenario Designer estimates the cost of your
+          request before you run it.
         </p>
         <p>
           Thinking effort controls how much extra reasoning a model can do before answering, where
@@ -163,10 +163,12 @@
       </details>
     </div>
     <p class="notice">
-      Generating a starting list of drivers with your current selection: {driverEstimate === null
-        ? 'connect and load model prices to see an estimate'
-        : `estimated allowance $${driverEstimate.toFixed(4)} USD`}. You’ll confirm the actual task
-      and cost before each run; setup does not run a model.
+      Generating a starting list of drivers with your current selection: {p.modelMode === 'fusion'
+        ? 'Fusion uses your overall exercise budget; final charges depend on its work'
+        : driverEstimate === null
+          ? 'connect and load model prices to see an estimate'
+          : `estimated allowance $${driverEstimate.toFixed(4)} USD`}. You’ll confirm the actual task
+      and spending details before each run; setup does not run a model.
     </p>
     <StageModelSettings {p} {change} {catalogue} {loading} {loaded} {status} {refresh} />
     {#if !modelsReady}<p class="notice review" role="status">

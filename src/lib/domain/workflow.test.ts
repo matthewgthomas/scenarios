@@ -85,7 +85,7 @@ describe('actionable workflow readiness', () => {
     expect(parseProject({ ...p, stage: 8 }).stage).toBe(8);
     expect(restored.narratives.map((n) => n.final)).toEqual(p.narratives.map((n) => n.final));
   });
-  it('clears a chain review warning only when a valid selected set is explicitly approved', () => {
+  it('clears a combination review warning only when a valid selected set is explicitly approved', () => {
     const p = exampleProject();
     p.chains.forEach((c) => (c.review = true));
     p.chains[0].selected = false;
@@ -124,7 +124,7 @@ describe('actionable workflow readiness', () => {
       canApprove: true
     });
   });
-  it('identifies the exact chain and uncertainty with a removed or unapproved state', () => {
+  it('identifies the exact combination and uncertainty with a removed or unapproved state', () => {
     const p = exampleProject();
     p.hypotheses[0].archived = true;
     const r = chainReadiness(p);
