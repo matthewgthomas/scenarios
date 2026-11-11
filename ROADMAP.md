@@ -1,6 +1,6 @@
 # Scenario Designer roadmap
 
-Last reviewed: 9 November 2026.
+Last reviewed: 11 November 2026.
 
 ## What is already available
 
@@ -11,6 +11,10 @@ Individual AI models use their existing knowledge. OpenRouter Fusion can use web
 ### Delivery principles
 
 AI remains optional and human analyst judgement remains central. New capabilities will preserve explicit approval, visible provenance, existing projects, accessible controls, portable exports and clear costs.
+
+## Improve UX for choosing different models to use for each stage of the analysis
+
+- Minimise the amount of clicks needed to assign different AI models (and/or Fusion router) to different stage.
 
 ## Research Mode and an approved evidence base
 
@@ -51,6 +55,14 @@ Let analysts choose two critical uncertainties, define contrasting ends for each
 Automatically update the suggested AI model list using [Artificial Analysis AA Briefcase rankings](https://artificialanalysis.ai/evaluations/aa-briefcase), matched to available OpenRouter model identifiers and capabilities. Show the ranking source and refresh date, consider developer diversity and cost, and preserve users' existing model choices.
 
 The ranking page currently states that there is no publicly available API. Confirm a permitted, reliable data feed or scheduled import before implementing automatic refreshes. Keep a last-known-good list if updates fail, and make clear that benchmark performance is not a direct measure of foresight quality.
+
+## Estimate environmental impact of designing your scenarios with AI assistance
+
+- If possible. Not sure whether OpenRouter supports this, or whether environmental impacts could readily be estimated in other ways.
+
+## YOLO mode: Let users run the full scenario design process without any human intervention
+
+Not recommended, but a user might want to fully automate the entire scenario design process. This would essentially turn Scenario Designer into a strategic foresight 'harness'.
 
 ## Connect to local AI models
 

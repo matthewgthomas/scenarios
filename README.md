@@ -1,8 +1,26 @@
 # Scenario Designer
 
-A local-first, analyst-led workbench for constructing humanitarian scenarios with independent model perspectives. Built from [the product specification](spec.md), [Common Ground](DESIGN.md) and its supplied design tokens.
+At its best, foresight brings together [diverse voices and perspectives](https://www.forumforthefuture.org/what-does-it-mean-to-decolonize-the-future) to imagine ‘what if’.
 
-Individual models use their existing knowledge without external research. Optional **OpenRouter Fusion** combines a model panel and may research the web. Desk review and consultation notes, source links, analyst score rationale and represented or missing perspectives can be recorded locally and included in analytical exports.
+So what if we included artificial intelligence (AI) alongside these voices?
+
+Scenario Designer uses an AI-augmented version of [IARAN’s approach to strategic foresight](https://www.iaran.org/strategic-planning) to design scenarios. It will guide you through:
+
+- Identifying the drivers of change in the system you’re analysing.</li>
+- Judging the impact and uncertainty of the drivers of change.</li>
+- Coming up with hypotheses for how drivers of change might evolve in future.</li>
+- Connecting these hypotheses into coherent, contrasting 'combinations'.</li>
+- Writing scenarios from your selection of hypotheses.</li>
+
+At every stage, you can choose to receive inputs from a diversity of AI-generated views. Using AI is completely optional. You can complete the entire scenario design process without AI assistance if you wish.
+
+Human expertise and judgement is vital. We must always check for confidently delivered nonsense (from machines as well as humans). But AI models <em>can</em> be helpful for checking our own biases, particularly if we are working as individual analysts exploring potential futures.
+
+And remember that AI reflects the biases and worldviews of the data that goes into training them — which generally excludes the most marginalised and minoritised people — so proceed with caution if bringing AI into your foresight practice.
+
+## This repo
+
+In this repo, you'll find the source code for Scenario Designer, [the product specification](spec.md), the ['Common Ground' design system](DESIGN.md) and the [product roadmap](ROADMAP.md).
 
 ## Run locally
 
