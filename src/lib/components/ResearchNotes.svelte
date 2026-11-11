@@ -2,6 +2,26 @@
   import type { Driver, Change } from '$lib/domain/project';
   let { driver, change }: { driver: Driver; change: Change } = $props();
   type Evidence = NonNullable<Driver['evidence']>;
+  const textFields = [
+    {
+      field: 'notes',
+      label: 'Research and consultation notes',
+      placeholder:
+        'What did the desk review or consultations find? Record dates, limitations and conflicting findings.'
+    },
+    {
+      field: 'rationale',
+      label: 'Why these scores?',
+      placeholder:
+        'Explain your judgement, including why you agree with or override a model assessment.'
+    },
+    {
+      field: 'perspectives',
+      label: 'Whose experience does this assessment represent?',
+      placeholder:
+        'Who was consulted? Whose experience is missing? How might impacts differ for marginalised groups, and where do people disagree?'
+    }
+  ] as const;
   function save<K extends keyof Evidence>(field: K, value: Evidence[K]) {
     change((p) => {
       const d = p.drivers.find((d) => d.id === driver.id)!;
@@ -30,30 +50,15 @@
         )}
       placeholder="https://…"></textarea></label
   >
-  <label
-    >Research and consultation notes<textarea
-      rows="3"
-      value={driver.evidence?.notes ?? ''}
-      oninput={(e) => save('notes', e.currentTarget.value)}
-      placeholder="What did the desk review or consultations find? Record dates, limitations and conflicting findings."
-    ></textarea></label
-  >
-  <label
-    >Why these scores?<textarea
-      rows="3"
-      value={driver.evidence?.rationale ?? ''}
-      oninput={(e) => save('rationale', e.currentTarget.value)}
-      placeholder="Explain your judgement, including why you agree with or override a model assessment."
-    ></textarea></label
-  >
-  <label
-    >Whose experience does this assessment represent?<textarea
-      rows="3"
-      value={driver.evidence?.perspectives ?? ''}
-      oninput={(e) => save('perspectives', e.currentTarget.value)}
-      placeholder="Who was consulted? Whose experience is missing? How might impacts differ for marginalised groups, and where do people disagree?"
-    ></textarea></label
-  >
+  {#each textFields as { field, label, placeholder }}
+    <label
+      >{label}<textarea
+        rows="3"
+        value={driver.evidence?.[field] ?? ''}
+        oninput={(e) => save(field, e.currentTarget.value)}
+        {placeholder}></textarea></label
+    >
+  {/each}
 </details>
 
 <style>

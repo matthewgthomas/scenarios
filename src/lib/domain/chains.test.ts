@@ -96,25 +96,28 @@ describe('guided combination decisions', () => {
     expect(restored.chains[0].approvedRevision).not.toBe(restored.chains[0].revision);
   });
 
-  it.each([1, 2, 7, 20])('approves %i combinations regardless of legacy targets or types', (count) => {
-    const p = exampleProject();
-    const template = structuredClone(p.chains[0]);
-    p.chains = Array.from({ length: count }, (_, i) => ({
-      ...structuredClone(template),
-      id: `chain-${i}`,
-      kind: i % 2 ? 'main' : 'wildcard'
-    }));
-    p.narratives = [];
-    p.mainCount = 12;
-    p.wildcardCount = 6;
-    expect(chainReadiness(p).canApprove).toBe(true);
-    expect(approveChainSet(p)).toBe(true);
-    expect(approvedChainSet(p)).toBe(true);
-    const restored = parseProject(JSON.parse(projectJSON(p)));
-    expect(restored.mainCount).toBe(12);
-    expect(restored.chains).toHaveLength(count);
-    expect(approvedChainSet(restored)).toBe(true);
-  });
+  it.each([1, 2, 7, 20])(
+    'approves %i combinations regardless of legacy targets or types',
+    (count) => {
+      const p = exampleProject();
+      const template = structuredClone(p.chains[0]);
+      p.chains = Array.from({ length: count }, (_, i) => ({
+        ...structuredClone(template),
+        id: `chain-${i}`,
+        kind: i % 2 ? 'main' : 'wildcard'
+      }));
+      p.narratives = [];
+      p.mainCount = 12;
+      p.wildcardCount = 6;
+      expect(chainReadiness(p).canApprove).toBe(true);
+      expect(approveChainSet(p)).toBe(true);
+      expect(approvedChainSet(p)).toBe(true);
+      const restored = parseProject(JSON.parse(projectJSON(p)));
+      expect(restored.mainCount).toBe(12);
+      expect(restored.chains).toHaveLength(count);
+      expect(approvedChainSet(restored)).toBe(true);
+    }
+  );
 
   it('blocks empty selections and preserves approval when legacy targets differ', () => {
     const p = exampleProject();

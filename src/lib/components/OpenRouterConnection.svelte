@@ -90,8 +90,9 @@
           here does not happen automatically when you set this app’s budget.
         </p>
         <p>
-          You don't have to pay to use this app; OpenRouter also offers free AI models that you can choose in the next step. 
-          They have usage limits and may be temporarily unavailable. For billing details, see <a
+          You don't have to pay to use this app; OpenRouter also offers free AI models that you can
+          choose in the next step. They have usage limits and may be temporarily unavailable. For
+          billing details, see <a
             href="https://openrouter.ai/docs/faq"
             target="_blank"
             rel="noreferrer">OpenRouter’s frequently asked questions</a
@@ -102,7 +103,8 @@
         <h4>Come back and check your key</h4>
         <p>
           Paste your key below and choose “Check connection”. This checks access to your account; it
-          does not ask a model to generate anything nor does it cost any money. You’ll choose models and a budget next.
+          does not ask a model to generate anything nor does it cost any money. You’ll choose models
+          and a budget next.
         </p>
       </li>
     </ol>
@@ -140,12 +142,22 @@
   {#if connected}
     <div role="status" aria-atomic="true" class="connection-status connection-confirmed">
       <CheckCircle2 size={24} aria-hidden="true" />
-      <div><strong>Connected</strong><p>{status.replace(/^Connected\.\s*/, '')}</p></div>
+      <div>
+        <strong>Connected</strong>
+        <p>{status.replace(/^Connected\.\s*/, '')}</p>
+      </div>
     </div>
   {:else if failed}
     <div role="alert" aria-atomic="true" class="connection-status connection-failed">
       <CircleAlert size={24} aria-hidden="true" />
-      <div><strong>{status.startsWith('This key was not accepted.') ? 'Key not accepted' : 'Connection check failed'}</strong><p>{status}</p></div>
+      <div>
+        <strong
+          >{status.startsWith('This key was not accepted.')
+            ? 'Key not accepted'
+            : 'Connection check failed'}</strong
+        >
+        <p>{status}</p>
+      </div>
     </div>
   {:else}<p role="status" class="connection-status">{status}</p>{/if}
 {/if}
@@ -182,13 +194,26 @@
     flex-shrink: 0;
     margin-top: 2px;
   }
-  .connection-confirmed strong, .connection-failed strong { font-size: 1rem; }
-  .connection-confirmed p, .connection-failed p { margin: 4px 0 0; }
+  .connection-confirmed strong,
+  .connection-failed strong {
+    font-size: 1rem;
+  }
+  .connection-confirmed p,
+  .connection-failed p {
+    margin: 4px 0 0;
+  }
   @keyframes connection-confirmed {
-    from { box-shadow: 0 0 0 5px color-mix(in srgb, var(--connection-status-color) 25%, transparent); }
-    to { box-shadow: 0 0 0 0 transparent; }
+    from {
+      box-shadow: 0 0 0 5px color-mix(in srgb, var(--connection-status-color) 25%, transparent);
+    }
+    to {
+      box-shadow: 0 0 0 0 transparent;
+    }
   }
   @media (prefers-reduced-motion: reduce) {
-    .connection-confirmed, .connection-failed { animation: none; }
+    .connection-confirmed,
+    .connection-failed {
+      animation: none;
+    }
   }
 </style>

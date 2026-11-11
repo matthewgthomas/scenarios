@@ -41,8 +41,10 @@
   let search = $state('');
   let advanced = $state(false);
   let limit = $state(20);
-  const selectedModel = $derived(catalogue.find((m) => m.id === selected[0]));
+  const modelsById = $derived(new Map(catalogue.map((model) => [model.id, model])));
+  const selectedModel = $derived(modelsById.get(selected[0]));
   const selectedEffort = $derived(effectiveEffort(selectedModel, efforts[selected[0]]));
+  const searchTerm = $derived(search.trim().toLowerCase());
   const available = $derived(
     catalogue.filter((m) => m.id !== FUSION_MODEL && !m.id.startsWith('openrouter/fusion'))
   );
@@ -52,7 +54,7 @@
       : view === 'free'
         ? available.filter(isFreeModel)
         : available
-    ).filter((m) => `${m.name} ${m.id}`.toLowerCase().includes(search.trim().toLowerCase()))
+    ).filter((m) => `${m.name} ${m.id}`.toLowerCase().includes(searchTerm))
   );
   function choose(id: string) {
     if (selected.includes(id)) {
@@ -61,18 +63,21 @@
     }
     onmodels(multiple ? [...selected, id] : [id]);
   }
-  const name = (id: string) => displayModelName(id, catalogue.find((m) => m.id === id)?.name) || id;
-  const developer = (id: string) =>
-    ({
-      anthropic: 'Anthropic',
-      openai: 'OpenAI',
-      google: 'Google',
-      mistralai: 'Mistral',
-      moonshotai: 'MoonshotAI',
-      meta: 'Meta',
-      openrouter: 'OpenRouter',
-      nvidia: 'NVIDIA'
-    })[id.replace(/^~/, '').split('/')[0]] ?? id.replace(/^~/, '').split('/')[0];
+  const name = (id: string) => displayModelName(id, modelsById.get(id)?.name) || id;
+  const developers: Record<string, string> = {
+    anthropic: 'Anthropic',
+    openai: 'OpenAI',
+    google: 'Google',
+    mistralai: 'Mistral',
+    moonshotai: 'MoonshotAI',
+    meta: 'Meta',
+    openrouter: 'OpenRouter',
+    nvidia: 'NVIDIA'
+  };
+  function developer(id: string) {
+    const prefix = id.replace(/^~/, '').split('/')[0];
+    return developers[prefix] ?? prefix;
+  }
   const price = (m: Model) => {
     const input = Number(m.pricing.prompt),
       output = Number(m.pricing.completion);
@@ -177,7 +182,7 @@
       </p>
       <div class="picker-selected">
         {#each selected as id, i (id)}
-          {@const model = catalogue.find((m) => m.id === id)}
+          {@const model = modelsById.get(id)}
           {@const choices = supportedEfforts(model)}
           <div class="picker-selected-model">
             <div class="picker-model-heading">
@@ -220,7 +225,7 @@
           </div>
         {/each}
       </div>
-      {#if selected.some((id) => supportedEfforts(catalogue.find((m) => m.id === id)).length)}<p
+      {#if selected.some((id) => supportedEfforts(modelsById.get(id)).length)}<p
           class="small muted picker-thinking-help"
         >
           More thinking can take longer and cost more. The recommended starter uses Medium where

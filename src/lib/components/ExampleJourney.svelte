@@ -62,7 +62,9 @@
 
 <section class="example-journey" aria-label="Guided example">
   {#if guided && index >= 0}
-    <p class="small muted">Follow one driver of change through the example · {index + 1} of {steps.length}</p>
+    <p class="small muted">
+      Follow one driver of change through the example · {index + 1} of {steps.length}
+    </p>
     <h2>{steps[index].title}</h2>
     <p>{steps[index].text}</p>
     <div class="journey-actions">
@@ -82,9 +84,7 @@
           <ArrowRight size={15} /></button
         >{:else}<button class="primary small" onclick={() => onguided(false)}>Finish guide</button
         >{/if}
-      <button class="secondary small" onclick={onexit} disabled={exitDisabled}
-        >Exit example</button
-      >
+      <button class="secondary small" onclick={onexit} disabled={exitDisabled}>Exit example</button>
     </div>
     <p class="small muted">
       The illustrative upstream decisions are already approved so you can inspect every stage.
@@ -94,8 +94,7 @@
     <div class="journey-actions">
       <button class="text-button" onclick={() => go(0)}
         >Trace the example from its question <ArrowRight size={15} /></button
-      ><button class="secondary small" onclick={onexit} disabled={exitDisabled}
-        >Exit example</button
+      ><button class="secondary small" onclick={onexit} disabled={exitDisabled}>Exit example</button
       >
     </div>
   {/if}

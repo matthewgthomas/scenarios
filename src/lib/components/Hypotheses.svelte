@@ -635,8 +635,8 @@
             </p>{/each}
         </details>{/if}
       {#if editing.id}<p class="small muted">
-          Saving requires approval again. Combinations and narratives that use this hypothesis will be
-          flagged for review.
+          Saving requires approval again. Combinations and narratives that use this hypothesis will
+          be flagged for review.
         </p>{:else if editing.sourceId}<p class="small muted">
           Edit this copy into a distinct alternative. The original hypothesis is kept.
         </p>{/if}

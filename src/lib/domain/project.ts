@@ -551,27 +551,27 @@ export function parseProject(value: unknown): Project {
     p.modelSetupStep = 'budget';
   }
   if (!p.overrides['6'] && p.overrides['7']) p.overrides['6'] = [...p.overrides['7']];
+  const driverIds = new Set(p.drivers.map((d) => d.id));
+  const hypothesesById = new Map(p.hypotheses.map((h) => [h.id, h]));
+  const chainIds = new Set(p.chains.map((c) => c.id));
   if (
-    new Set(p.drivers.map((d) => d.id)).size !== p.drivers.length ||
-    new Set(p.hypotheses.map((h) => h.id)).size !== p.hypotheses.length ||
-    new Set(p.chains.map((c) => c.id)).size !== p.chains.length
+    driverIds.size !== p.drivers.length ||
+    hypothesesById.size !== p.hypotheses.length ||
+    chainIds.size !== p.chains.length
   )
     throw new Error('Duplicate analytical IDs. Import a valid project backup.');
   for (const h of p.hypotheses)
-    if (!p.drivers.some((d) => d.id === h.driverId))
-      throw new Error('A hypothesis refers to a missing driver.');
+    if (!driverIds.has(h.driverId)) throw new Error('A hypothesis refers to a missing driver.');
   for (const c of p.chains)
     for (const [driverId, hypothesisId] of Object.entries(c.items)) {
       if (
-        !p.drivers.some((d) => d.id === driverId) ||
-        (hypothesisId &&
-          !p.hypotheses.some((h) => h.id === hypothesisId && h.driverId === driverId))
+        !driverIds.has(driverId) ||
+        (hypothesisId && hypothesesById.get(hypothesisId)?.driverId !== driverId)
       )
         throw new Error('A combination has an invalid hypothesis reference.');
     }
   for (const n of p.narratives) {
-    if (!p.chains.some((c) => c.id === n.chainId))
-      throw new Error('A narrative refers to a missing combination.');
+    if (!chainIds.has(n.chainId)) throw new Error('A narrative refers to a missing combination.');
     const chosen = n.drafts.find((d) => d.id === n.chosenId);
     if (!n.original && chosen) {
       n.original = {
@@ -707,6 +707,7 @@ export function applyNarrativeProposal(p: Project, chainId: string, draftId: str
 }
 export function snapshotChain(p: Project, c: Chain) {
   if ((c.snapshots ??= []).some((s) => s.revision === c.revision)) return;
+  const hypothesisIds = new Set(Object.values(c.items));
   c.snapshots.push({
     revision: c.revision,
     at: now(),
@@ -714,7 +715,7 @@ export function snapshotChain(p: Project, c: Chain) {
     explanation: chainExplanation(c),
     items: { ...c.items },
     states: p.hypotheses
-      .filter((h) => Object.values(c.items).includes(h.id))
+      .filter((h) => hypothesisIds.has(h.id))
       .map((h) => ({ id: h.id, title: h.title, description: h.description, revision: h.revision }))
   });
 }

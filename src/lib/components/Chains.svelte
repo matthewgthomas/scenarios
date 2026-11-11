@@ -65,6 +65,7 @@
   let explanationTimer: ReturnType<typeof setTimeout>;
   const rows = $derived(uncertainties(p));
   const candidates = $derived(activeChains(p));
+  const hypothesesById = $derived(new Map(p.hypotheses.map((h) => [h.id, h])));
   const removed = $derived(p.chains.filter((c) => c.archived));
   const columns = $derived(candidates.filter((c) => showAll || c.selected));
   const chain = $derived(
@@ -278,14 +279,16 @@
     <h1 data-walkthrough="stage-heading">Build scenario combinations.</h1>
     <p>
       Choose one alternative outcome per uncertainty and explain how those choices fit together.
-      Each scenario combination brings outcomes together rather than describing a chronological sequence.
+      Each scenario combination brings outcomes together rather than describing a chronological
+      sequence.
     </p>
   </div>
   <details class="chain-help">
     <summary aria-label="About scenario combinations"><CircleHelp size={20} /></summary>
     <p>
-      Look for contrasting futures whose choices make sense together. Select one or more scenario combinations to
-      write. Explore a disruption when you want to consider a surprising but plausible change.
+      Look for contrasting futures whose choices make sense together. Select one or more scenario
+      combinations to write. Explore a disruption when you want to consider a surprising but
+      plausible change.
     </p>
   </details>
 </div>
@@ -301,7 +304,9 @@
   <li>
     <span class="step-number">2</span>
     <div>
-      <strong>Explore & refine</strong><small>Compare choices and make each combination your own.</small>
+      <strong>Explore & refine</strong><small
+        >Compare choices and make each combination your own.</small
+      >
     </div>
   </li>
   <li class:step-done={allApproved}>
@@ -447,7 +452,8 @@
                   <button
                     class="text-button"
                     aria-label={`Remove combination: ${c.title}`}
-                    onclick={() => removeChain(c.id)}><Trash2 size={14} /> Remove combination</button
+                    onclick={() => removeChain(c.id)}
+                    ><Trash2 size={14} /> Remove combination</button
                   >
                 </div>
               </th>{/each}</tr
@@ -456,9 +462,8 @@
         <tbody
           >{#each rows as d (d.id)}<tr
               ><th scope="row"><span>{d.title}</span><small>{d.tags.join(' / ')}</small></th>
-              {#each columns as c (c.id)}{@const h = p.hypotheses.find(
-                  (h) => h.id === c.items[d.id]
-                )}<td
+              {#each columns as c (c.id)}{@const hypothesisId = c.items[d.id]}{@const h =
+                  hypothesisId == null ? undefined : hypothesesById.get(hypothesisId)}<td
                   ><button
                     class="hypothesis-cell"
                     class:selected-cell={chain?.id === c.id && driver?.id === d.id}
@@ -513,7 +518,8 @@
       <Layers size={20} />
       <div>
         <strong role="status">{progress}</strong><small
-          >{selected.length} {selected.length === 1 ? 'combination' : 'combinations'} selected</small
+          >{selected.length}
+          {selected.length === 1 ? 'combination' : 'combinations'} selected</small
         >
       </div>
     </div>
@@ -596,11 +602,13 @@
 
 {#if choosing}<Modal title="Choose combinations to write" close={() => (choosing = false)} wide>
     <p class="chooser-intro">
-      Choose any combinations you want to turn into scenarios. Select at least one. Your choices are saved
-      as you go.
+      Choose any combinations you want to turn into scenarios. Select at least one. Your choices are
+      saved as you go.
     </p>
     <div class="chooser-progress" aria-live="polite">
-      <strong>{selected.length} {selected.length === 1 ? 'combination' : 'combinations'} selected</strong>
+      <strong
+        >{selected.length} {selected.length === 1 ? 'combination' : 'combinations'} selected</strong
+      >
     </div>
     <section aria-label="Candidate combinations">
       {#each candidates as c (c.id)}{@const issues = readiness.candidateIssues.filter(
@@ -661,7 +669,10 @@
     close={closeEditor}
     wide
   >
-    <section class="inspector modal-inspector" aria-label="Combination reasoning and hypothesis editor">
+    <section
+      class="inspector modal-inspector"
+      aria-label="Combination reasoning and hypothesis editor"
+    >
       <div class="chain-reasoning">
         <div class="context-line"><GitBranch size={18} /><span>{chain.title}</span></div>
         <label class="explanation-label" for="chain-explanation">What connects these choices?</label

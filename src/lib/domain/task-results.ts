@@ -82,6 +82,7 @@ export function assessmentResults(p: Project, expectedModels: string[]) {
     )
   }));
   const affected = rows.filter((row) => row.received.length);
+  const rowsById = new Map(rows.map((row) => [row.driver.id, row]));
   const modelCount = new Set(
     affected.flatMap((row) => row.received.map((rating) => rating.modelId))
   ).size;
@@ -90,7 +91,7 @@ export function assessmentResults(p: Project, expectedModels: string[]) {
     const context = run.context as { drivers?: { id: string; revision: number }[] } | null;
     const requested = context?.drivers ?? run.targetIds.map((id) => ({ id, revision: undefined }));
     for (const input of requested) {
-      const row = rows.find((row) => row.driver.id === input.id);
+      const row = rowsById.get(input.id);
       if (
         row &&
         (input.revision === undefined || row.driver.revision === input.revision) &&

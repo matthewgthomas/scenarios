@@ -47,6 +47,7 @@
   const categoryFor = (tag: string) =>
     pestleCategories.find((category) => category.toLowerCase() === tag.trim().toLowerCase());
   const drivers = $derived(activeDrivers(p));
+  const searchTerm = $derived(search.toLowerCase());
   const pending = $derived(drivers.filter((d) => !d.approved));
   const originalProposals = $derived(
     p.drivers
@@ -57,7 +58,7 @@
     drivers.filter(
       (d) =>
         (!attentionOnly || !d.approved) &&
-        `${d.title} ${d.summary} ${d.tags.join(' ')}`.toLowerCase().includes(search.toLowerCase())
+        `${d.title} ${d.summary} ${d.tags.join(' ')}`.toLowerCase().includes(searchTerm)
     )
   );
   function edit(driverId: string) {
@@ -142,7 +143,8 @@
           flagDownstream(p, 1, `${title.trim()} added. Reassess scores and dependent work.`);
         }
         p.completed = p.completed.filter((s) => s !== 1);
-        if (activeDrivers(p).length && activeDrivers(p).every((d) => d.approved)) complete(p, 1);
+        const active = activeDrivers(p);
+        if (active.length && active.every((d) => d.approved)) complete(p, 1);
       },
       editing
         ? 'Driver saved. Dependent decisions may need review.'

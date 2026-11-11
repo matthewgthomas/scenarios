@@ -4,6 +4,33 @@
   import StarterKit from '@tiptap/starter-kit';
   import { Markdown } from '@tiptap/markdown';
   import { Bold, Italic, Heading2, List, Quote } from '@lucide/svelte';
+  const formatting = [
+    {
+      label: 'Bold',
+      Icon: Bold,
+      apply: (editor: Editor) => editor.chain().focus().toggleBold().run()
+    },
+    {
+      label: 'Italic',
+      Icon: Italic,
+      apply: (editor: Editor) => editor.chain().focus().toggleItalic().run()
+    },
+    {
+      label: 'Heading',
+      Icon: Heading2,
+      apply: (editor: Editor) => editor.chain().focus().toggleHeading({ level: 2 }).run()
+    },
+    {
+      label: 'Bullet list',
+      Icon: List,
+      apply: (editor: Editor) => editor.chain().focus().toggleBulletList().run()
+    },
+    {
+      label: 'Block quote',
+      Icon: Quote,
+      apply: (editor: Editor) => editor.chain().focus().toggleBlockquote().run()
+    }
+  ];
   let {
     value,
     onedit,
@@ -38,33 +65,14 @@
 
 <div class="rich-editor">
   <div class="editor-toolbar" aria-label="Text formatting">
-    <button
-      class="icon-button"
-      aria-label="Bold"
-      title="Bold"
-      onclick={() => editor?.chain().focus().toggleBold().run()}><Bold size={17} /></button
-    ><button
-      class="icon-button"
-      aria-label="Italic"
-      title="Italic"
-      onclick={() => editor?.chain().focus().toggleItalic().run()}><Italic size={17} /></button
-    ><button
-      class="icon-button"
-      aria-label="Heading"
-      title="Heading"
-      onclick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
-      ><Heading2 size={17} /></button
-    ><button
-      class="icon-button"
-      aria-label="Bullet list"
-      title="Bullet list"
-      onclick={() => editor?.chain().focus().toggleBulletList().run()}><List size={17} /></button
-    ><button
-      class="icon-button"
-      aria-label="Block quote"
-      title="Block quote"
-      onclick={() => editor?.chain().focus().toggleBlockquote().run()}><Quote size={17} /></button
-    >
+    {#each formatting as { label, Icon, apply }}
+      <button
+        class="icon-button"
+        aria-label={label}
+        title={label}
+        onclick={() => editor && apply(editor)}><Icon size={17} /></button
+      >
+    {/each}
   </div>
   <div bind:this={element}></div>
 </div>

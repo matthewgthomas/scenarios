@@ -1,6 +1,15 @@
 # Quick Mode implementation verification
 
-Latest review: 9 November 2026. Earlier sections record their original checks. This records checks actually performed; it is not a certification or a completed analyst pilot. Research requirements in the original acceptance checklist are intentionally outside this implementation's scope.
+Latest review: 11 November 2026. Earlier sections record their original checks. This records checks actually performed; it is not a certification or a completed analyst pilot. Research requirements in the original acceptance checklist are intentionally outside this implementation's scope.
+
+## Behaviour-preserving cleanup — 11 November 2026
+
+- Reviewed all 30 Svelte components and the application modules. Removed 52 unused global CSS selectors and consolidated duplicate resets and responsive overrides while retaining their winning values and cascade order. Preserved dynamically generated scenario, activity and walkthrough styles. Production CSS decreased from 98,833 to 95,100 bytes (18,595 to 17,923 bytes gzipped).
+- Removed unused imports, shared repeated editor-toolbar and research-field markup, reused the existing scenario-opening handler, and cached repeated assessment calculations, model lookups and search normalization. Backup validation and combination snapshots use indexed references; workflow readiness, assessment results and analytical exports reuse intermediate collections. TypeScript now checks unused locals and parameters.
+- All 260 tests across 17 files pass. Svelte/TypeScript checking reports zero errors or warnings, application-source formatting passes, and the static production build succeeds. The existing dependency annotation and bundle-size build warnings remain.
+- Compared 26 production screens before and after the cleanup: all nine workflow stages, the assessment table and three settings tabs, at 1440px in light appearance and 390px in dark appearance. Normalized text, control values/states, visible element geometry and the checked computed CSS properties match throughout. Screenshots were also visually reviewed. These are Chromium checks, not a complete cross-browser or screen-reader audit.
+- Browser interaction checks passed for model addition/reset, thinking effort and Fusion switching; case-insensitive driver search, editing and exercise undo; research-field autosave, fractional score approval and reactive queue/table updates; table sorting; combination inclusion/undo and explanation autosave; all five rich-text formatting commands, Markdown round trips and text undo/redo. Notes, scores and writing survived saving, returning home and reloading. Full analytical Markdown, Word and PDF downloads succeeded; the Markdown and Word contents include the edited writing, research fields and combination explanation. The PDF download was checked separately with a longer wait after the initial ten-second download-event timeout.
+- Repeatable browser checks, reference screenshots, computed-style comparisons and the build log are under ignored `output/playwright/cleanup/`. The model catalogue was mocked locally; no paid inference was used.
 
 ## Simplified top bar — 9 November 2026
 

@@ -147,10 +147,7 @@
   }
   async function reviewProposals() {
     if (!attentionTarget) return;
-    selectedId = attentionTarget.chainId;
-    editorOpen = true;
-    snapshot = '';
-    restoring = false;
+    openScenario(attentionTarget.chainId);
     await tick();
     proposalsHeading?.focus({ preventScroll: true });
     proposalsHeading?.scrollIntoView({
@@ -322,12 +319,12 @@
 {#if editorOpen && chain}
   <Modal title={`Write & review scenario: ${chain.title}`} close={() => (editorOpen = false)} wide>
     {#if chain.review || narrative?.review}<p class="notice review">
-        Review suggested: the combination or an upstream hypothesis changed. Your narrative and original
-        snapshots are preserved.
+        Review suggested: the combination or an upstream hypothesis changed. Your narrative and
+        original snapshots are preserved.
       </p>{/if}
     {#if chain.approvedRevision !== chain.revision}<p class="notice review">
-        Approve this combination’s current revision in Build scenario combinations before starting a new
-        draft or requesting AI help. You can keep editing an existing narrative.
+        Approve this combination’s current revision in Build scenario combinations before starting a
+        new draft or requesting AI help. You can keep editing an existing narrative.
       </p>{/if}
     {#if uncertainties(p).some((d) => !chain.items[d.id])}<p class="notice review">
         Intentionally unresolved: {uncertainties(p)
@@ -542,8 +539,8 @@
               </div>
             </div>
             {#if !current}<p class="notice review small">
-                Your text or combination has changed since this proposal. Request a fresh proposal to
-                apply AI changes to your current draft.
+                Your text or combination has changed since this proposal. Request a fresh proposal
+                to apply AI changes to your current draft.
               </p>{/if}
             <div class="toolbar-group">
               <button

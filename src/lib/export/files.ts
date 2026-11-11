@@ -37,18 +37,19 @@ export function analyticalJSON(p: Project) {
   );
 }
 export function markdown(p: Project, annotations = false, full = false): string {
+  const drivers = uncertainties(p);
   let text = `# ${p.title}\n\n${p.question}\n\nTime horizon: ${p.horizon}\n\n${showModeLabels ? 'Quick Mode — hypothetical' : 'Hypothetical'} futures, not forecasts.${p.example ? ' This is an authored example exercise.' : ''}\n\n`;
   for (const c of activeChains(p).filter((c) => c.selected)) {
     const n = p.narratives.find((n) => n.chainId === c.id);
     text += `## ${c.title}\n\n`;
     text += `${n?.working.trim() ? n.working : '_No narrative written yet._'}\n\n`;
     if (n?.review || c.review) text += '_Review suggested after an upstream edit._\n\n';
-    const unresolved = uncertainties(p).filter((d) => !c.items[d.id]);
+    const unresolved = drivers.filter((d) => !c.items[d.id]);
     if (unresolved.length)
       text += `Unresolved uncertainties: ${unresolved.map((d) => d.title).join(', ')}. No outcome has been assumed.\n\n`;
     if (annotations) {
       text += '### Scenario hypotheses and assumptions\n\n';
-      for (const d of uncertainties(p))
+      for (const d of drivers)
         text += `- ${d.title}: ${p.hypotheses.find((h) => h.id === c.items[d.id])?.title ?? (Object.hasOwn(c.items, d.id) ? 'Deliberately unresolved' : 'Not chosen yet')} (hypothetical future state).\n`;
       const latest = c.notes.at(-1);
       if (latest)
@@ -88,10 +89,7 @@ export function markdown(p: Project, annotations = false, full = false): string 
       text += `#### ${c.title}\n\nRevision ${c.revision}; approved revision ${c.approvedRevision ?? 'none'}. ${c.distinctiveness}\n\n`;
       if (chainExplanation(c))
         text += `What connects these choices${c.explanation == null ? ' (original model explanation)' : ' (analyst explanation)'}: ${chainExplanation(c)}\n\n`;
-      for (const driverId of new Set([
-        ...uncertainties(p).map((d) => d.id),
-        ...Object.keys(c.items)
-      ])) {
+      for (const driverId of new Set([...drivers.map((d) => d.id), ...Object.keys(c.items)])) {
         const hId = c.items[driverId];
         text += `- ${p.drivers.find((d) => d.id === driverId)?.title ?? driverId}: ${p.hypotheses.find((h) => h.id === hId)?.title ?? (Object.hasOwn(c.items, driverId) ? 'Deliberately unresolved' : 'Not chosen yet')}\n`;
       }

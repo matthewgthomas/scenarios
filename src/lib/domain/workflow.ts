@@ -24,16 +24,19 @@ export function skipModelSetup(p: Project): boolean {
 }
 
 export function chainReadiness(p: Project) {
-  const selected = activeChains(p).filter((c) => c.selected);
-  const candidateIssues = activeChains(p).flatMap((c) => [
-    ...uncertainties(p)
+  const candidates = activeChains(p);
+  const selected = candidates.filter((c) => c.selected);
+  const selectedIds = new Set(selected.map((c) => c.id));
+  const drivers = uncertainties(p);
+  const candidateIssues = candidates.flatMap((c) => [
+    ...drivers
       .filter((d) => !Object.hasOwn(c.items, d.id))
       .map((d) => ({
         chainId: c.id,
         driverId: d.id,
         message: `${c.title}: choose an outcome for ${d.title}, or deliberately leave it unresolved.`
       })),
-    ...uncertainties(p)
+    ...drivers
       .filter(
         (d) =>
           c.items[d.id] &&
@@ -54,7 +57,7 @@ export function chainReadiness(p: Project) {
         message: `${c.title}: review the additional driver “${p.drivers.find((d) => d.id === id)?.title ?? id}”.`
       }))
   ]);
-  const issues = candidateIssues.filter((issue) => selected.some((c) => c.id === issue.chainId));
+  const issues = candidateIssues.filter((issue) => selectedIds.has(issue.chainId));
   return {
     selected,
     issues,

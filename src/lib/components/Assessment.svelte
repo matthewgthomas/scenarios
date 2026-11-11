@@ -63,12 +63,17 @@
     Record<string, { impact: number | undefined; uncertainty: number | undefined }>
   >({});
   const drivers = $derived(activeDrivers(p));
+  // Share calculations across sorting, the matrix, the queue and the inspector.
+  const positions = $derived(new Map(drivers.map((d) => [d.id, coordinates(d)])));
+  const disagreements = $derived(new Map(drivers.map((d) => [d.id, disagreement(d)])));
+  const position = (d: Driver) => positions.get(d.id)!;
+  const difference = (d: Driver) => disagreements.get(d.id)!;
   const hasModelScores = $derived(
     drivers.some((d) => d.ratings.some((r) => r.driverRevision === d.revision))
   );
   const pending = $derived(drivers.filter((d) => d.decision?.revision !== d.revision));
   const missing = $derived(
-    pending.filter((d) => coordinates(d).impact === null || coordinates(d).uncertainty === null)
+    pending.filter((d) => position(d).impact === null || position(d).uncertainty === null)
   );
   const visibleDrivers = $derived(
     !selection && missingOnly ? missing : attentionOnly && !selection ? pending : drivers
@@ -76,12 +81,12 @@
   const sorted = $derived(
     [...visibleDrivers].sort((a, b) =>
       sort === 'impact'
-        ? (coordinates(b).impact ?? -1) - (coordinates(a).impact ?? -1)
+        ? (position(b).impact ?? -1) - (position(a).impact ?? -1)
         : sort === 'uncertainty'
-          ? (coordinates(b).uncertainty ?? -1) - (coordinates(a).uncertainty ?? -1)
+          ? (position(b).uncertainty ?? -1) - (position(a).uncertainty ?? -1)
           : sort === 'unique'
             ? a.origins.length - b.origins.length
-            : disagreement(b) - disagreement(a)
+            : difference(b) - difference(a)
     )
   );
   const selected = $derived(drivers.find((d) => d.id === selectedId));
@@ -126,11 +131,11 @@
       case 'title':
         return d.title;
       case 'impact':
-        return coordinates(d).impact;
+        return position(d).impact;
       case 'uncertainty':
-        return coordinates(d).uncertainty;
+        return position(d).uncertainty;
       case 'disagreement':
-        return comparisons.get(d.id)!.ratings.length ? disagreement(d) : null;
+        return comparisons.get(d.id)!.ratings.length ? difference(d) : null;
       case 'review':
         return reviewState(d);
     }
@@ -162,7 +167,7 @@
   const groups = $derived(
     Object.values(
       drivers.reduce<Record<string, typeof drivers>>((all, d) => {
-        const c = coordinates(d);
+        const c = position(d);
         if (c.impact !== null && c.uncertainty !== null)
           (all[`${c.uncertainty}:${c.impact}`] ??= []).push(d);
         return all;
@@ -182,7 +187,7 @@
     if (!assessmentOrder.includes(driverId)) assessmentOrder.push(driverId);
     selectedId = driverId;
     editorOpen = true;
-    const c = coordinates(drivers.find((d) => d.id === driverId)!);
+    const c = position(drivers.find((d) => d.id === driverId)!);
     impact = Object.hasOwn(scoreDrafts, driverId)
       ? scoreDrafts[driverId].impact
       : (c.impact ?? undefined);
@@ -210,9 +215,7 @@
     });
   }
   function approveRemaining() {
-    if (
-      drivers.some((d) => coordinates(d).impact === null || coordinates(d).uncertainty === null)
-    ) {
+    if (drivers.some((d) => position(d).impact === null || position(d).uncertainty === null)) {
       error =
         'Some drivers have no scores. Run the models, retry missing work, or enter an explicit analyst score for each missing driver.';
       return false;
@@ -394,7 +397,7 @@
             text-anchor="middle"
             class="axis-label">Humanitarian impact</text
           >
-          {#each groups as group}{@const c = coordinates(group[0])}
+          {#each groups as group}{@const c = position(group[0])}
             {@const highlighted = group.some((d) => (selection ? d.selected : d.id === selectedId))}
             {@const checkedCount = group.filter((d) => d.selected).length}<g
               class="point-control"
@@ -483,7 +486,7 @@
           the AI median; ranges show differences in judgements.
         </p>{/if}
       <div class="driver-queue">
-        {#each sorted as d (d.id)}{@const c = coordinates(d)}
+        {#each sorted as d (d.id)}{@const c = position(d)}
           {@const comparison = comparisons.get(d.id)!}
           <div class:queue-selected={selectedId === d.id} class="queue-row">
             {#if selection}<input
@@ -508,7 +511,7 @@
                   ? '✓ Analyst-approved'
                   : c.impact === null || c.uncertainty === null
                     ? 'Scores missing'
-                    : disagreement(d) >= (selection ? 2 : 1)
+                    : difference(d) >= (selection ? 2 : 1)
                       ? '◒ Differing scores'
                       : '○ Provisional median'}</span
               ></button
@@ -539,7 +542,7 @@
             >{/each}<th scope="col">Action</th></tr
         ></thead
       ><tbody
-        >{#each tableDrivers as d (d.id)}{@const c = coordinates(d)}{@const comparison =
+        >{#each tableDrivers as d (d.id)}{@const c = position(d)}{@const comparison =
             comparisons.get(d.id)!}<tr
             >{#if selection}<td
                 ><input
@@ -644,7 +647,7 @@
             ? 'Your saved, approved scores.'
             : selected.decision?.revision === selected.revision
               ? 'You have unapproved score changes. Approve to save your updated assessment.'
-              : coordinates(selected).impact !== null
+              : position(selected).impact !== null
                 ? 'Starting values from available AI scores. Review before approving.'
                 : 'No scores chosen yet. Enter your judgement from 1 to 5; no starting score is recommended.'}
         </p>
@@ -754,7 +757,7 @@
     <strong
       >{selection
         ? `${selectedCount} critical ${selectedCount === 1 ? 'uncertainty' : 'uncertainties'}`
-        : `${drivers.filter((d) => d.decision?.revision === d.revision).length} of ${drivers.length} assessments approved`}</strong
+        : `${drivers.length - pending.length} of ${drivers.length} assessments approved`}</strong
     ><small
       >{selection
         ? 'More uncertainties increase the space to explore; choose what you can meaningfully compare.'
@@ -770,9 +773,7 @@
       onclick={() => {
         if (!selectedCount) {
           inspect(
-            [...drivers].sort(
-              (a, b) => (coordinates(b).impact ?? 0) - (coordinates(a).impact ?? 0)
-            )[0].id
+            [...drivers].sort((a, b) => (position(b).impact ?? 0) - (position(a).impact ?? 0))[0].id
           );
           return;
         }
@@ -781,7 +782,7 @@
       }}
       >{selectedCount ? 'Confirm selection & develop hypotheses' : 'Choose an uncertainty'}
       <ArrowRight size={16} /></button
-    >{:else if drivers.every((d) => d.decision?.revision === d.revision)}<button
+    >{:else if !pending.length}<button
       class="primary"
       onclick={() => {
         change((p) => complete(p, 2));
