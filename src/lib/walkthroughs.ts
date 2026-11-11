@@ -31,33 +31,18 @@ export const walkthroughs: Record<WalkthroughId, WalkthroughStep[]> = {
   home: [
     step(
       'home-create',
-      'Start with your own question',
-      'Choose “Design a new set of scenarios” to get started. You can complete the whole analysis manually without an OpenRouter account, model selection or budget, or use optional AI help. You will build several possible futures, rather than predict a single outcome.'
+      'Explore possible futures',
+      'Start with an open question, a place and a time horizon. Work manually or add optional AI help. Every scenario is a possibility to explore, rather than a prediction.'
     ),
     step(
       'home-example',
-      'Try an example first',
-      '“Explore an example” opens a complete analysis you can look through and edit. Its scores and stories are illustrations, not live AI results.'
-    ),
-    step(
-      'home-projects',
-      'Come back to your work',
-      'Your analyses appear here as you create them. Open one to continue from where you left off. Work saves in this browser on this device.'
-    ),
-    step(
-      'home-import',
-      'Bring a saved analysis with you',
-      'Use “Import project” to open a project backup. Download backups regularly from an analysis: clearing browser storage can remove your saved work.'
-    ),
-    step(
-      'home-how-it-works',
-      'See how Scenario Designer works',
-      'Open “How it works” for an overview of the scenario design process, how optional AI help fits in, and the role of your judgement.'
+      'Follow one example from the beginning',
+      'Explore an example traces a question through a driver, its scores, alternative outcomes, a combination and a narrative. Use Exit example beside the guide’s primary action to return to your exercises.'
     ),
     step(
       'walkthrough-launcher',
-      'Help is always here',
-      'Open “Page walkthrough” on any page to see its instructions again. Choose Done, then start an analysis or explore the example when you are ready.'
+      'Get help when you need it',
+      'Each workspace has contextual guidance. Page walkthrough replays detailed instructions on request; further tours will not open automatically. Your work saves on this device; download project backups regularly.'
     )
   ],
   define: [
@@ -91,7 +76,7 @@ export const walkthroughs: Record<WalkthroughId, WalkthroughStep[]> = {
     step(
       'model-manual',
       'AI setup is optional',
-      'Choose “Continue manually” to skip AI setup and design scenarios yourself. You can add drivers of change, enter impact/uncertainty scores, develop hypotheses, construct hypothesis chains, write scenarios and export your work without needing to use AI. You can add AI help later using the “Models and budget” button in the top bar.'
+      'Choose “Continue manually” to skip AI setup and design scenarios yourself. You can add drivers of change, enter impact/uncertainty scores, develop hypotheses, build scenario combinations, write scenarios and export your work without needing to use AI. You can add AI help later using the “Models and budget” button in the top bar.'
     ),
     step(
       'model-connection-step',
@@ -218,7 +203,7 @@ export const walkthroughs: Record<WalkthroughId, WalkthroughStep[]> = {
     ),
     step(
       'stage-complete',
-      'Approve and construct chains',
+      'Approve and build combinations',
       'When every uncertainty has a hypothesis, this button lets you approve the retained set and continue. Next you will combine these outcomes into contrasting futures.'
     )
   ],
@@ -231,7 +216,7 @@ export const walkthroughs: Record<WalkthroughId, WalkthroughStep[]> = {
     step(
       'stage-actions',
       'Create candidates',
-      'Use “Add chain” to build a candidate yourself, choosing a hypothesis for each uncertainty. Optional AI help can generate three candidates per selected model or explore a disruptive wildcard. You review and confirm any AI request first.'
+      'Use “Add combination” to build a candidate yourself, choosing a hypothesis for each uncertainty. Optional AI help can generate three candidates per selected model or explore a disruptive wildcard. You review and confirm any AI request first.'
     ),
     step(
       'chain-comparison',
@@ -350,6 +335,11 @@ export function shouldShowWalkthrough(
   dialogOpen: boolean
 ): boolean {
   return (
-    ready && !blocked && !dialogOpen && preferences.automatic && !preferences.seen.includes(page)
+    page === 'home' &&
+    ready &&
+    !blocked &&
+    !dialogOpen &&
+    preferences.automatic &&
+    !preferences.seen.includes(page)
   );
 }

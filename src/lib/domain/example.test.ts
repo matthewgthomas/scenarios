@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { exampleProject, hasExerciseEdits } from './example';
+import { exampleProject, finishedExampleProject, hasExerciseEdits } from './example';
+import { approvedChainSet, parseProject, stageIsComplete } from './project';
 
 describe('example preview edits', () => {
+  it('starts the guided example at the question with a finished authored set available', () => {
+    const p = parseProject(JSON.parse(JSON.stringify(finishedExampleProject())));
+    expect(p.stage).toBe(0);
+    expect(p.example).toBe(true);
+    expect(p.runs).toEqual([]);
+    expect(approvedChainSet(p)).toBe(true);
+    expect(stageIsComplete(p, 6)).toBe(true);
+    expect(p.narratives.every((n) => n.final === n.working && n.finalAt)).toBe(true);
+    const browsed = structuredClone(p);
+    browsed.stage = 6;
+    expect(hasExerciseEdits(p, browsed)).toBe(false);
+  });
   it('ignores browsing positions and save bookkeeping', () => {
     const original = exampleProject();
     const browsed = structuredClone(original);

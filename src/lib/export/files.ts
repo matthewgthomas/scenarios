@@ -49,7 +49,7 @@ export function markdown(p: Project, annotations = false, full = false): string 
     if (annotations) {
       text += '### Scenario hypotheses and assumptions\n\n';
       for (const d of uncertainties(p))
-        text += `- ${d.title}: ${p.hypotheses.find((h) => h.id === c.items[d.id])?.title ?? 'Unresolved'} (hypothetical future state).\n`;
+        text += `- ${d.title}: ${p.hypotheses.find((h) => h.id === c.items[d.id])?.title ?? (Object.hasOwn(c.items, d.id) ? 'Deliberately unresolved' : 'Not chosen yet')} (hypothetical future state).\n`;
       const latest = c.notes.at(-1);
       if (latest)
         text += `\nAssumptions (${latest.modelId}, checked revision ${latest.revision}): ${latest.assumptions.join('; ')}\n`;
@@ -57,10 +57,24 @@ export function markdown(p: Project, annotations = false, full = false): string 
     }
   }
   if (full) {
-    text += '## Analytical record\n\n### Drivers and decisions\n\n';
+    text += '## Analytical record\n\n';
+    if (p.researchNotes?.trim())
+      text += `### Desk review and consultation notes\n\n${p.researchNotes}\n\n`;
+    if (p.backgroundAssumptions?.trim())
+      text += `### Background assumptions\n\n${p.backgroundAssumptions}\n\n`;
+    text += '### Drivers and decisions\n\n';
     for (const d of p.drivers.filter((d) => !d.archived)) {
       const scores = coordinates(d);
       text += `#### ${d.title}\n\n${d.summary}\n\nOrigin: ${d.origin === 'wildcard' ? 'additional disruption driver' : d.origin}. Revision: ${d.revision}. ${d.origin === 'wildcard' ? `Unscored. ${d.assessment ?? ''}` : `Humanitarian impact: ${scores.impact ?? 'Missing'}; uncertainty: ${scores.uncertainty ?? 'Missing'}. Decision: ${d.decision?.type ?? 'Not approved'}.`}\n\n`;
+      if (d.evidence) {
+        if (d.evidence.sources.length)
+          text += `Sources:\n${d.evidence.sources.map((url) => `- ${url}`).join('\n')}\n\n`;
+        if (d.evidence.notes.trim())
+          text += `Research and consultation notes: ${d.evidence.notes}\n\n`;
+        if (d.evidence.rationale.trim()) text += `Analyst rationale: ${d.evidence.rationale}\n\n`;
+        if (d.evidence.perspectives.trim())
+          text += `Represented and missing perspectives: ${d.evidence.perspectives}\n\n`;
+      }
       for (const r of d.ratings)
         text += `- ${r.modelId}: impact ${r.impact}, uncertainty ${r.uncertainty}. ${r.rationale}\n`;
       for (const o of d.origins) text += `- Original proposal (${o.modelId}): ${o.text}\n`;
@@ -73,8 +87,13 @@ export function markdown(p: Project, annotations = false, full = false): string 
       text += `#### ${c.title}\n\nRevision ${c.revision}; approved revision ${c.approvedRevision ?? 'none'}. ${c.distinctiveness}\n\n`;
       if (chainExplanation(c))
         text += `What connects these choices${c.explanation == null ? ' (original model explanation)' : ' (analyst explanation)'}: ${chainExplanation(c)}\n\n`;
-      for (const [driverId, hId] of Object.entries(c.items))
-        text += `- ${p.drivers.find((d) => d.id === driverId)?.title ?? driverId}: ${p.hypotheses.find((h) => h.id === hId)?.title ?? 'Unresolved'}\n`;
+      for (const driverId of new Set([
+        ...uncertainties(p).map((d) => d.id),
+        ...Object.keys(c.items)
+      ])) {
+        const hId = c.items[driverId];
+        text += `- ${p.drivers.find((d) => d.id === driverId)?.title ?? driverId}: ${p.hypotheses.find((h) => h.id === hId)?.title ?? (Object.hasOwn(c.items, driverId) ? 'Deliberately unresolved' : 'Not chosen yet')}\n`;
+      }
       for (const note of c.notes)
         text += `\n${note.modelId}, checked revision ${note.revision}, ${note.at}: ${note.reasoning}\n\nTensions: ${note.tensions.join('; ')}\n\nAssumptions: ${note.assumptions.join('; ')}\n`;
     }

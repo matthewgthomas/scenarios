@@ -15,8 +15,8 @@ describe('page walkthroughs', () => {
     expect(Object.keys(walkthroughs).sort()).toEqual(ids.sort());
     expect(walkthroughId(7)).toBe(walkthroughId(6));
     expect(walkthroughId(null)).toBe('home');
-    for (const steps of Object.values(walkthroughs)) {
-      expect(steps.length).toBeGreaterThanOrEqual(4);
+    for (const [page, steps] of Object.entries(walkthroughs)) {
+      expect(steps.length).toBeGreaterThanOrEqual(page === 'home' ? 3 : 4);
       expect(steps.length).toBeLessThanOrEqual(6);
       expect(steps.every((step) => step.title && step.description && step.target)).toBe(true);
     }
@@ -54,10 +54,13 @@ describe('page walkthroughs', () => {
     expect(readWalkthroughPreferences(JSON.stringify(preferences))).toEqual(preferences);
   });
 
-  it('only automatically opens unseen pages after loading and without blockers or dialogs', () => {
+  it('only automatically opens the short home orientation after loading without blockers or dialogs', () => {
     const preferences = { automatic: true, seen: ['home'] as const };
     const saved = { ...preferences, seen: [...preferences.seen] };
-    expect(shouldShowWalkthrough(saved, 'define', true, false, false)).toBe(true);
+    expect(shouldShowWalkthrough(saved, 'define', true, false, false)).toBe(false);
+    expect(shouldShowWalkthrough({ automatic: true, seen: [] }, 'home', true, false, false)).toBe(
+      true
+    );
     expect(shouldShowWalkthrough(saved, 'home', true, false, false)).toBe(false);
     expect(shouldShowWalkthrough(saved, 'define', false, false, false)).toBe(false);
     expect(shouldShowWalkthrough(saved, 'define', true, true, false)).toBe(false);
@@ -67,10 +70,10 @@ describe('page walkthroughs', () => {
     ).toBe(false);
   });
 
-  it('re-enabling automatic tours keeps seen pages dismissed and unseen pages eligible', () => {
+  it('re-enabling automatic orientation never launches stage tours', () => {
     const saved = readWalkthroughPreferences('{"automatic":false,"seen":["home","drivers"]}');
     const enabled = { ...saved, automatic: true };
     expect(shouldShowWalkthrough(enabled, 'drivers', true, false, false)).toBe(false);
-    expect(shouldShowWalkthrough(enabled, 'assessment', true, false, false)).toBe(true);
+    expect(shouldShowWalkthrough(enabled, 'assessment', true, false, false)).toBe(false);
   });
 });

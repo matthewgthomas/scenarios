@@ -113,6 +113,43 @@
         placeholder="For example, United Kingdom, 2026–2029"
       /></label
     >
+    <details class="research-context">
+      <summary>Research and background assumptions (optional)</summary>
+      <label class="spaced"
+        >Desk review and consultation notes<textarea
+          rows="4"
+          value={p.researchNotes ?? ''}
+          oninput={(e) =>
+            change((p) => {
+              p.researchNotes = e.currentTarget.value;
+            })}
+          placeholder="Key findings, source links, consultation dates and disagreements to carry through the analysis."
+        ></textarea></label
+      >
+      <label class="spaced"
+        >Background assumptions<textarea
+          rows="4"
+          value={p.backgroundAssumptions ?? ''}
+          oninput={(e) => {
+            const value = e.currentTarget.value;
+            change((p) => {
+              p.backgroundAssumptions = value;
+              flagDownstream(
+                p,
+                0,
+                'Background assumptions changed. Review scenarios against the updated context.'
+              );
+            });
+          }}
+          placeholder="What do you expect to remain relatively stable? Which important, predictable drivers underpin all scenarios?"
+        ></textarea></label
+      >
+      <p class="small muted">
+        Unselected drivers stay in your analytical record. They do not automatically become
+        assumptions: record the ones that underpin every scenario here. These notes are included in
+        the analytical export.
+      </p>
+    </details>
     <details>
       <summary data-walkthrough="analysis-drivers"
         >Add preliminary drivers of change (optional)</summary

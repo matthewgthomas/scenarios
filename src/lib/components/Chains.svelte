@@ -47,6 +47,10 @@
   } = $props();
   let selectedChain = $state('');
   let editorOpen = $state(false);
+  let creating = $state(false);
+  let draftTitle = $state('');
+  let draftExplanation = $state('');
+  let draftItems = $state<Record<string, string | null>>({});
   let choosing = $state(false);
   let returnToChooser = $state(false);
   let selectedDriver = $state('');
@@ -161,33 +165,37 @@
     next();
   }
   function addChain() {
+    draftTitle = '';
+    draftExplanation = '';
+    draftItems = {};
+    creating = true;
+  }
+  function createChain() {
+    if (!draftTitle.trim()) return;
     const newId = id('chain');
-    change(
-      (p) =>
-        p.chains.push({
-          id: newId,
-          title: 'Untitled scenario',
-          kind: 'main',
-          colour: (p.chains.length % 6) + 1,
-          items: Object.fromEntries(rows.map((d) => [d.id, null])),
-          revision: 1,
-          selected: false,
-          archived: false,
-          explanation: null,
-          approvedRevision: null,
-          review: false,
-          notes: [],
-          origins: [],
-          wildcardDriverIds: [],
-          distinctiveness: 'Analyst-created chain'
-        }),
-      'Chain added. Give it a name and choose how your uncertainties combine.'
-    );
+    const items = { ...$state.snapshot(draftItems) };
+    change((p) => {
+      p.chains.push({
+        id: newId,
+        title: draftTitle.trim(),
+        kind: 'main',
+        colour: (p.chains.length % 6) + 1,
+        items,
+        revision: 1,
+        selected: false,
+        archived: false,
+        explanation: draftExplanation,
+        approvedRevision: null,
+        review: false,
+        notes: [],
+        origins: [],
+        wildcardDriverIds: [],
+        distinctiveness: 'Analyst-created combination'
+      });
+    }, 'Scenario combination created. Include it in your set when ready.');
     selectedChain = newId;
-    selectedDriver = rows[0]?.id ?? '';
     showAll = true;
-    returnToChooser = false;
-    editorOpen = true;
+    creating = false;
   }
   async function removeChain(chainId: string) {
     saveExplanation();
@@ -267,10 +275,10 @@
 
 <div class="stage-heading">
   <div>
-    <h1 data-walkthrough="stage-heading">Construct hypothesis chains.</h1>
+    <h1 data-walkthrough="stage-heading">Build scenario combinations.</h1>
     <p>
-      Each hypothesis chain combines one hypothesis per critical uncertainty into a possible
-      scenario.
+      Choose one alternative outcome per uncertainty and explain how those choices fit together.
+      These “hypothesis chains” describe a combination, rather than a chronological sequence.
     </p>
   </div>
   <details class="chain-help">
@@ -285,7 +293,7 @@
   <li class:step-done={candidates.length > 0}>
     <span class="step-number">1</span>
     <div>
-      <strong>Create hypothesis chains</strong><small
+      <strong>Create scenario combinations</strong><small
         >Generate ideas with AI or build your own.</small
       >
     </div>
@@ -307,8 +315,8 @@
   </li>
 </ol>
 <StageActions
-  generate={{ label: 'Generate chains', onclick: () => request('chains') }}
-  add={{ label: 'Add chain', onclick: addChain }}
+  generate={{ label: 'Generate combinations', onclick: () => request('chains') }}
+  add={{ label: 'Add combination', onclick: addChain }}
 >
   {#snippet tools()}<button
       class="secondary"
@@ -462,10 +470,13 @@
                       editorOpen = true;
                     }}
                     aria-haspopup="dialog"
-                    aria-label={`${c.title}: ${d.title} — ${h?.title ?? 'Unresolved'}`}
+                    aria-label={`${c.title}: ${d.title} — ${h?.title ?? (Object.hasOwn(c.items, d.id) ? 'Deliberately unresolved' : 'Not chosen yet')}`}
                   >
                     <span
-                      >{h?.title ?? 'Unresolved'}{#if h?.archived}<small class="review-text"
+                      >{h?.title ??
+                        (Object.hasOwn(c.items, d.id)
+                          ? 'Deliberately unresolved'
+                          : 'Not chosen yet')}{#if h?.archived}<small class="review-text"
                           >Removed state · review suggested</small
                         >{/if}</span
                     ><ChevronDown size={16} /></button
@@ -479,8 +490,8 @@
     <GitBranch size={36} />
     <h3>What could happen when these futures meet?</h3>
     <p>
-      Use Generate chains for a first set of ideas, or Add chain to follow your own thinking. Every
-      combination stays editable.
+      Use Generate combinations for a first set of ideas, or Add combination to follow your own
+      thinking. Every combination stays editable.
     </p>
   </div>{/if}
 
@@ -528,6 +539,60 @@
         >{/if}
     </div>
   </footer>{/if}
+
+{#if creating}<Modal title="Create a scenario combination" close={() => (creating = false)} wide>
+    <form
+      class="editor-form"
+      onsubmit={(e) => {
+        e.preventDefault();
+        createChain();
+      }}
+    >
+      <p>
+        Combine alternative outcomes, then explain how they fit together. Nothing is saved until you
+        choose Create combination.
+      </p>
+      <label
+        >Scenario name<input
+          required
+          bind:value={draftTitle}
+          placeholder="Name this possible future"
+        /></label
+      >
+      {#each rows as d}<label
+          >{d.title}<select
+            value={Object.hasOwn(draftItems, d.id) ? (draftItems[d.id] ?? '__unresolved') : ''}
+            onchange={(e) => {
+              const value = e.currentTarget.value;
+              if (value) draftItems[d.id] = value === '__unresolved' ? null : value;
+            }}
+          >
+            <option value="" disabled>Not chosen yet</option>
+            {#each statesFor(p, d.id).filter((h) => h.approved) as h}<option value={h.id}
+                >{h.title}</option
+              >{/each}
+            <option value="__unresolved">Deliberately leave unresolved</option>
+          </select></label
+        >{/each}
+      <label
+        >What connects these choices? (optional)<textarea
+          rows="4"
+          bind:value={draftExplanation}
+          placeholder="How might these outcomes reinforce or challenge each other?"
+        ></textarea></label
+      >
+      <p class="small muted">
+        You can finish choosing outcomes later. Every uncertainty needs an outcome or an explicit
+        decision to leave it unresolved before approval.
+      </p>
+      <div class="dialog-actions">
+        <button type="button" class="secondary" onclick={() => (creating = false)}>Cancel</button
+        ><button type="submit" class="primary" disabled={!draftTitle.trim()}
+          >Create combination</button
+        >
+      </div>
+    </form>
+  </Modal>{/if}
 
 {#if choosing}<Modal title="Choose chains to write" close={() => (choosing = false)} wide>
     <p class="chooser-intro">
@@ -707,22 +772,30 @@
         <label
           >{driver.title} hypothesis<select
             id="chain-hypothesis"
-            value={chain.items[driver.id] ?? ''}
+            value={Object.hasOwn(chain.items, driver.id)
+              ? (chain.items[driver.id] ?? '__unresolved')
+              : ''}
             onchange={(e) => {
               const value = e.currentTarget.value;
+              if (!value) return;
               change(
-                (p) => setChainItem(p, chain.id, driver.id, value || null),
+                (p) =>
+                  setChainItem(p, chain.id, driver.id, value === '__unresolved' ? null : value),
                 'Hypothesis changed. Earlier reasoning and writing are preserved.'
               );
             }}
-            ><option value="">Unresolved</option>{#each statesFor(p, driver.id) as h}<option
-                value={h.id}>{h.title}{h.approved ? '' : ' (not approved)'}</option
+            ><option value="" disabled>Not chosen yet</option><option value="__unresolved"
+              >Deliberately leave unresolved</option
+            >{#each statesFor(p, driver.id) as h}<option value={h.id}
+                >{h.title}{h.approved ? '' : ' (not approved)'}</option
               >{/each}</select
           ></label
         >
         <p>
           {p.hypotheses.find((h) => h.id === chain.items[driver.id])?.description ??
-            'This uncertainty is intentionally unresolved. It will remain explicit in writing and exports.'}
+            (Object.hasOwn(chain.items, driver.id)
+              ? 'You have deliberately left this uncertainty unresolved. It stays explicit in writing and exports.'
+              : 'No outcome has been chosen yet. Choose an approved hypothesis, or deliberately leave this uncertainty unresolved.')}
         </p>
         {#if chain.wildcardDriverIds.length}<div class="notice review">
             <strong>Additional drivers to review · unscored</strong

@@ -11,6 +11,7 @@
     CircleHelp
   } from '@lucide/svelte';
   import Modal from './Modal.svelte';
+  import ResearchNotes from './ResearchNotes.svelte';
   import StageGuide from './StageGuide.svelte';
   import StageActions from './StageActions.svelte';
   import ScoreStrip from './ScoreStrip.svelte';
@@ -52,12 +53,15 @@
   let tableSort = $state<TableSortKey>('disagreement');
   let tableDirection = $state<'ascending' | 'descending'>('descending');
   let error = $state('');
+  let scaleOpen = $state(false);
   let attentionOnly = $state(false);
   let missingOnly = $state(false);
-  let impact = $state(3);
-  let uncertainty = $state(3);
+  let impact = $state<number | undefined>();
+  let uncertainty = $state<number | undefined>();
   let assessmentOrder = $state<string[]>([]);
-  let scoreDrafts = $state<Record<string, { impact: number; uncertainty: number }>>({});
+  let scoreDrafts = $state<
+    Record<string, { impact: number | undefined; uncertainty: number | undefined }>
+  >({});
   const drivers = $derived(activeDrivers(p));
   const hasModelScores = $derived(
     drivers.some((d) => d.ratings.some((r) => r.driverRevision === d.revision))
@@ -84,7 +88,10 @@
   const assessmentIds = $derived(assessmentOrder.filter((id) => drivers.some((d) => d.id === id)));
   const assessmentIndex = $derived(assessmentIds.indexOf(selectedId));
   const expectedModels = $derived(p.overrides['2'] ?? p.models);
-  const comparisonModels = $derived(p.example ? comparisonModelIds([], drivers) : expectedModels);
+  const aiRequested = $derived(p.runs.some((r) => r.task === 'ratings'));
+  const comparisonModels = $derived(
+    p.example ? comparisonModelIds([], drivers) : aiRequested ? expectedModels : []
+  );
   const modelIds = $derived(comparisonModelIds(comparisonModels, drivers));
   const comparisons = $derived(
     new Map(drivers.map((d) => [d.id, scoreComparison(d, comparisonModels)]))
@@ -170,8 +177,12 @@
     selectedId = driverId;
     editorOpen = true;
     const c = coordinates(drivers.find((d) => d.id === driverId)!);
-    impact = scoreDrafts[driverId]?.impact ?? c.impact ?? 3;
-    uncertainty = scoreDrafts[driverId]?.uncertainty ?? c.uncertainty ?? 3;
+    impact = Object.hasOwn(scoreDrafts, driverId)
+      ? scoreDrafts[driverId].impact
+      : (c.impact ?? undefined);
+    uncertainty = Object.hasOwn(scoreDrafts, driverId)
+      ? scoreDrafts[driverId].uncertainty
+      : (c.uncertainty ?? undefined);
   }
   function inspectGroup(group: typeof drivers) {
     const current = group.findIndex((d) => d.id === selectedId);
@@ -183,7 +194,6 @@
       p.chains.forEach((c) => {
         snapshotChain(p, c);
         c.revision++;
-        if (!d.selected && !(driverId in c.items)) c.items[driverId] = null;
       });
       d.selected = !d.selected;
       flagDownstream(
@@ -232,30 +242,16 @@
         : 'Explore the differences in how AI models assess the potential humanitarian impact and uncertainty of each driver, or score each driver yourself.'}
     </p>
   </div>
-  <details class="scale-help">
-    <summary aria-label="Understand the 1–5 scales" title="Understand the 1–5 scales">
-      <CircleHelp size={20} />
-    </summary>
-    <div class="table-scroll">
-      <table class="data-table">
-        <thead
-          ><tr
-            ><th>Score</th><th>Humanitarian impact</th><th>Uncertainty about future trajectory</th
-            ></tr
-          ></thead
-        ><tbody
-          >{#each [['Negligible consequences', 'Highly predictable'], ['Limited consequences', 'Relatively predictable'], ['Substantial consequences for some populations', 'Several credible trajectories'], ['Serious or widespread consequences', 'Considerable uncertainty'], ['Severe, potentially systemic consequences', 'Highly uncertain, radically different plausible outcomes']] as row, i}<tr
-              ><th scope="row">{i + 1}</th><td>{row[0]}</td><td>{row[1]}</td></tr
-            >{/each}</tbody
-        >
-      </table>
-    </div>
-  </details>
+  <button
+    class="icon-button"
+    aria-label="Understand the 1–5 scales"
+    onclick={() => (scaleOpen = true)}><CircleHelp size={20} /></button
+  >
 </div>
 <StageGuide
   title={selection
     ? selectedCount
-      ? `${selectedCount} critical uncertainties selected`
+      ? `${selectedCount} critical ${selectedCount === 1 ? 'uncertainty' : 'uncertainties'} selected`
       : 'Choose the uncertainties to explore through your scenarios'
     : `${drivers.length - pending.length} of ${drivers.length} assessments approved`}
   description={selection
@@ -608,7 +604,15 @@
         <h2>{selected.title}</h2>
         <p>{selected.summary}</p>
         {#if !selection}
-          <ModelScoreComparison driver={selected} expectedModels={comparisonModels} {modelIds} />
+          {#if selected.ratings.length || aiRequested}
+            <ModelScoreComparison driver={selected} expectedModels={comparisonModels} {modelIds} />
+          {:else}<details class="spaced">
+              <summary>AI comparisons (optional)</summary>
+              <p class="small muted">
+                AI scoring has not been requested. You can assess this driver yourself or use
+                Generate scores later.
+              </p>
+            </details>{/if}
         {:else}{#each selected.ratings as r}<details>
               <summary
                 >{modelName(r.modelId)} · impact {r.impact}, uncertainty {r.uncertainty}{r.driverRevision !==
@@ -619,7 +623,7 @@
               <p>{r.rationale}</p>
               <p class="small muted">{r.modelId}</p>
             </details>{/each}{#if !selected.ratings.length}<p class="notice review">
-              No model scores returned. You can enter your own scores manually.
+              No AI scoring requested for this driver. Enter your own judgement below.
             </p>{/if}{/if}
         <p class="small muted">
           {selected.decision?.revision === selected.revision
@@ -629,6 +633,13 @@
       </div>
       <div>
         <h3>Your assessment</h3>
+        <p class="small muted">
+          {selected.decision?.revision === selected.revision
+            ? 'Your saved, approved scores.'
+            : coordinates(selected).impact !== null
+              ? 'Starting values from available AI scores. Review before approving.'
+              : 'No scores chosen yet. Enter your judgement from 1 to 5; no starting score is recommended.'}
+        </p>
         <div class="form-row">
           <label
             >Humanitarian impact<input
@@ -636,6 +647,7 @@
               min="1"
               max="5"
               step="0.5"
+              placeholder="Not scored"
               bind:value={impact}
             /></label
           ><label
@@ -644,16 +656,22 @@
               min="1"
               max="5"
               step="0.5"
+              placeholder="Not scored"
               bind:value={uncertainty}
             /></label
           >
         </div>
+        <ResearchNotes driver={selected} {change} />
         <button
           class="primary"
-          disabled={!(impact >= 1 && impact <= 5 && uncertainty >= 1 && uncertainty <= 5)}
+          disabled={impact === undefined ||
+            uncertainty === undefined ||
+            !(impact >= 1 && impact <= 5 && uncertainty >= 1 && uncertainty <= 5)}
           onclick={() => {
+            if (impact === undefined || uncertainty === undefined) return;
+            const scores = { impact, uncertainty };
             change((p) => {
-              approveDriverScores(p, selected.id, impact, uncertainty);
+              approveDriverScores(p, selected.id, scores.impact, scores.uncertainty);
             }, 'Analyst assessment approved.');
             editorOpen = false;
           }}><Check size={16} /> Approve these scores</button
@@ -691,12 +709,35 @@
     </div>
   </Modal>{/if}
 
+{#if scaleOpen}<Modal title="Understanding the 1–5 scales" close={() => (scaleOpen = false)} wide>
+    <p>
+      Scores are ordinal judgements, not probabilities. Consider who is affected and how impacts
+      differ between groups.
+    </p>
+    <div class="table-scroll">
+      <table class="data-table scoring-scale">
+        <thead
+          ><tr
+            ><th>Score</th><th>Humanitarian impact</th><th>Uncertainty about future trajectory</th
+            ></tr
+          ></thead
+        ><tbody
+          >{#each [['Negligible consequences', 'Highly predictable'], ['Limited consequences', 'Relatively predictable'], ['Substantial consequences for some populations', 'Several credible trajectories'], ['Serious or widespread consequences', 'Considerable uncertainty'], ['Severe, potentially systemic consequences', 'Highly uncertain, radically different plausible outcomes']] as row, i}<tr
+              ><th scope="row">{i + 1}</th><td>{row[0]}</td><td>{row[1]}</td></tr
+            >{/each}</tbody
+        >
+      </table>
+    </div>
+    <div class="dialog-actions">
+      <button class="primary" onclick={() => (scaleOpen = false)}>Done</button>
+    </div>
+  </Modal>{/if}
 {#if error}<p role="alert" class="notice error">{error}</p>{/if}
 <footer class="stage-footer" data-walkthrough="stage-complete">
   <div>
     <strong
       >{selection
-        ? `${selectedCount} critical uncertainties`
+        ? `${selectedCount} critical ${selectedCount === 1 ? 'uncertainty' : 'uncertainties'}`
         : `${drivers.filter((d) => d.decision?.revision === d.revision).length} of ${drivers.length} assessments approved`}</strong
     ><small
       >{selection
@@ -704,7 +745,7 @@
         : !pending.length
           ? 'Next, choose the drivers whose different futures could change your story.'
           : missing.length
-            ? `${missing.length} drivers still need scores. Open the next one to enter your judgement.`
+            ? `${missing.length} ${missing.length === 1 ? 'driver still needs' : 'drivers still need'} scores. Open the next one to enter your judgement.`
             : 'Review available AI scores before accepting the remaining medians.'}</small
     >
   </div>
@@ -742,6 +783,30 @@
 </footer>
 
 <style>
+  .scoring-scale {
+    width: 100%;
+    table-layout: fixed;
+  }
+  .scoring-scale th:first-child {
+    width: 3.5rem;
+    min-width: 0;
+  }
+  .scoring-scale thead th {
+    white-space: normal;
+  }
+  .scoring-scale th,
+  .scoring-scale td {
+    padding: 12px 8px;
+    overflow-wrap: anywhere;
+  }
+  @media (max-width: 480px) {
+    .scoring-scale {
+      font-size: 0.8125rem;
+    }
+    .scoring-scale th:first-child {
+      width: 3.25rem;
+    }
+  }
   .column-sort {
     display: inline-flex;
     align-items: center;

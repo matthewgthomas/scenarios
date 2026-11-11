@@ -93,7 +93,7 @@
     tags = '';
     categories = [];
   }
-  function save() {
+  function save(approve = false) {
     if (!title.trim()) return;
     const driverTags = [
       ...new Set([
@@ -134,7 +134,7 @@
               ? structuredClone(p.drivers.find((d) => d.id === sourceId)?.origins ?? [])
               : [],
             revision: 1,
-            approved: false,
+            approved: approve,
             selected: false,
             archived: false,
             ratings: []
@@ -142,8 +142,13 @@
           flagDownstream(p, 1, `${title.trim()} added. Reassess scores and dependent work.`);
         }
         p.completed = p.completed.filter((s) => s !== 1);
+        if (activeDrivers(p).length && activeDrivers(p).every((d) => d.approved)) complete(p, 1);
       },
-      editing ? 'Driver saved. Dependent decisions may need review.' : 'Driver added.'
+      editing
+        ? 'Driver saved. Dependent decisions may need review.'
+        : approve
+          ? 'Driver added and approved.'
+          : 'Driver added.'
     );
     selected = [];
     closeEditor();
@@ -210,7 +215,7 @@
     ? 'Start collecting drivers of change'
     : pending.length
       ? `${drivers.length} drivers in your list, ${pending.length} to approve`
-      : `Your ${drivers.length} drivers are approved`}
+      : `Your ${drivers.length === 1 ? 'driver is' : `${drivers.length} drivers are`} approved`}
   description="A driver is a force that could shape your question, such as energy costs or access to housing. Add your own or use AI, refine the list (using the Suggest merges button if you want AI assistance), then approve every driver you want to keep."
   ready={drivers.length > 0 && !pending.length}
 >
@@ -356,7 +361,9 @@
     <p>
       {selectionMode(p, '1') === 'fusion'
         ? 'Fusion’s panel will consider'
-        : 'Your chosen AI models will independently consider'} political, economic, social, technological,
+        : p.modelSetupStatus === 'skipped'
+          ? 'Consider'
+          : 'Your chosen AI models will independently consider'} political, economic, social, technological,
       legal and environmental change, as well as looking beyond these categories.
     </p>
     <p class="small muted">
@@ -420,6 +427,12 @@
             onclick={() => remove([editing])}><Trash2 size={16} /> Remove</button
           >{/if}
         <button type="button" class="secondary" onclick={closeEditor}>Cancel</button>
+        {#if !editing && !sourceId}<button
+            type="button"
+            class="secondary"
+            disabled={!title.trim()}
+            onclick={() => save(true)}>Add and approve</button
+          >{/if}
         <button type="submit" class="primary" disabled={!title.trim()}
           >{mergeIds.length ? 'Save merged driver' : editing ? 'Save driver' : 'Add driver'}</button
         >
@@ -436,7 +449,7 @@
           : 'Your first driver is a good starting point'}</strong
       ><small
         >{drivers.length
-          ? `Continue with all ${drivers.length} drivers. You can return and refine them later.`
+          ? `Continue with ${drivers.length === 1 ? 'this driver' : `all ${drivers.length} drivers`}. You can return and refine them later.`
           : 'Add a force that could shape your question, or generate ideas with AI.'}</small
       >
     </div>

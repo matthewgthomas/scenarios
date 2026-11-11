@@ -167,6 +167,7 @@ export function contextFor(
   const context: Record<string, unknown> = {
     question: p.question,
     horizon: p.horizon,
+    ...(p.backgroundAssumptions?.trim() ? { backgroundAssumptions: p.backgroundAssumptions } : {}),
     mode: 'quick'
   };
   if (task === 'consolidate') {
@@ -232,9 +233,12 @@ export function contextFor(
         items: c.items,
         revision: c.revision,
         explanation: chainExplanation(c),
-        novelDrivers: c.wildcardDriverIds.map((driverId) =>
-          p.drivers.find((d) => d.id === driverId)
-        )
+        novelDrivers: c.wildcardDriverIds.flatMap((driverId) => {
+          const d = p.drivers.find((d) => d.id === driverId);
+          return d
+            ? [{ id: d.id, title: d.title, summary: d.summary, assessment: d.assessment }]
+            : [];
+        })
       }));
   if (task === 'narrative' || task === 'narrative_edit')
     context.narrative = {

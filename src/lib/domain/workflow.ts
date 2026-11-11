@@ -18,6 +18,7 @@ import {
 export function skipModelSetup(p: Project): boolean {
   if (prerequisite(p, MODEL_SETUP_STAGE)) return false;
   complete(p, MODEL_SETUP_STAGE);
+  p.modelSetupStatus = 'skipped';
   p.stage = 1;
   return true;
 }
@@ -25,6 +26,13 @@ export function skipModelSetup(p: Project): boolean {
 export function chainReadiness(p: Project) {
   const selected = activeChains(p).filter((c) => c.selected);
   const candidateIssues = activeChains(p).flatMap((c) => [
+    ...uncertainties(p)
+      .filter((d) => !Object.hasOwn(c.items, d.id))
+      .map((d) => ({
+        chainId: c.id,
+        driverId: d.id,
+        message: `${c.title}: choose an outcome for ${d.title}, or deliberately leave it unresolved.`
+      })),
     ...uncertainties(p)
       .filter(
         (d) =>

@@ -11,6 +11,7 @@
   import { FUSION_MODEL } from '$lib/domain/model-settings';
   import { skipModelSetup } from '$lib/domain/workflow';
   import type { Model } from '$lib/ai/models';
+  import { planRequests } from '$lib/ai/openrouter';
   import StageModelSettings from './StageModelSettings.svelte';
   import ExerciseBudget from './ExerciseBudget.svelte';
   let {
@@ -51,6 +52,9 @@
       (step === 'connection' || modelsReady) &&
       (step !== 'budget' || (budgetValid && p.budget !== null && p.budget > 0))
   );
+  const driverEstimate = $derived(
+    planRequests(p, catalogue, 'drivers', selectedModels).estimatedTotal
+  );
   const labels = ['Connect OpenRouter', 'Choose models', 'Set a budget'];
   async function go(next: (typeof modelSetupSteps)[number]) {
     budgetValid = true;
@@ -63,6 +67,7 @@
     if (!ready) return;
     change((p) => {
       complete(p, MODEL_SETUP_STAGE);
+      p.modelSetupStatus = 'configured';
       p.stage = 1;
     }, 'Models and budget configured. Ready to explore drivers.');
   }
@@ -139,22 +144,15 @@
   {:else if step === 'models'}
     <div class="learning-copy">
       <p>
-        In a web chatbot, the service usually chooses the AI for you. Here, you can choose which
-        models help with your analysis. Different models may notice different drivers of change or
-        suggest different futures. Their suggestions are starting points for your judgement.
-      </p>
-      <p>
-        One model is enough to get started. With individual models, each responds separately and
-        each paid model adds to the cost. Fusion asks a panel and brings its answers together into
-        one response; it can take longer and its cost varies. You’ll confirm each request before it
-        runs.
+        Start with one model and review its first result. Add other perspectives whenever they would
+        help your analysis.
       </p>
       <details class="model-learning-details">
         <summary>What do prices, tokens and thinking effort mean?</summary>
         <p>
-          A token is a small piece of text, often part of a word. Input is the text the model reads;
+          A token is a small piece of text, often part of a word. Input is the text the AI model reads;
           output is what it writes. Prices per million tokens help you compare models; they are not
-          the price of a single question. The app estimates the cost of your request before you run
+          the price of a single question. Scenario Designer estimates the cost of your request before you run
           it.
         </p>
         <p>
@@ -164,6 +162,12 @@
         </p>
       </details>
     </div>
+    <p class="notice">
+      Generating a starting list of drivers with your current selection: {driverEstimate === null
+        ? 'connect and load model prices to see an estimate'
+        : `estimated allowance $${driverEstimate.toFixed(4)} USD`}. You’ll confirm the actual task
+      and cost before each run; setup does not run a model.
+    </p>
     <StageModelSettings {p} {change} {catalogue} {loading} {loaded} {status} {refresh} />
     {#if !modelsReady}<p class="notice review" role="status">
         {loading

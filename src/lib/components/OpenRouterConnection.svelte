@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { Check, ExternalLink, LockKeyhole } from '@lucide/svelte';
+  import { Check, CheckCircle2, CircleAlert, ExternalLink, LockKeyhole } from '@lucide/svelte';
   let {
     connectionKey = $bindable(''),
     connected,
     testing,
     status,
+    failed = false,
     onkeychange,
     ontest,
     onforget
@@ -13,6 +14,7 @@
     connected: boolean;
     testing: boolean;
     status: string;
+    failed?: boolean;
     onkeychange: () => void;
     ontest: () => void;
     onforget: () => void;
@@ -134,7 +136,19 @@
   </button>
   {#if connectionKey}<button class="text-button" onclick={onforget}>Forget key</button>{/if}
 </div>
-{#if status}<p role="status" class="connection-status" class:approved={connected}>{status}</p>{/if}
+{#if status}
+  {#if connected}
+    <div role="status" aria-atomic="true" class="connection-status connection-confirmed">
+      <CheckCircle2 size={24} aria-hidden="true" />
+      <div><strong>Connected</strong><p>{status.replace(/^Connected\.\s*/, '')}</p></div>
+    </div>
+  {:else if failed}
+    <div role="alert" aria-atomic="true" class="connection-status connection-failed">
+      <CircleAlert size={24} aria-hidden="true" />
+      <div><strong>{status.startsWith('This key was not accepted.') ? 'Key not accepted' : 'Connection check failed'}</strong><p>{status}</p></div>
+    </div>
+  {:else}<p role="status" class="connection-status">{status}</p>{/if}
+{/if}
 <p class="small external-links">
   <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noreferrer"
     >Manage keys <ExternalLink size={12} /></a
@@ -143,3 +157,38 @@
     >Add credits <ExternalLink size={12} /></a
   >
 </p>
+
+<style>
+  .connection-confirmed,
+  .connection-failed {
+    --connection-status-color: var(--cg-status-approved-text);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 18px;
+    border: 1px solid var(--connection-status-color);
+    border-left-width: 4px;
+    border-radius: var(--cg-radius-control);
+    background: var(--cg-status-approved-bg);
+    color: var(--connection-status-color);
+    animation: connection-confirmed 800ms ease-out;
+  }
+  .connection-failed {
+    --connection-status-color: var(--cg-status-error-text);
+    background: var(--cg-status-error-bg);
+  }
+  .connection-confirmed :global(svg),
+  .connection-failed :global(svg) {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .connection-confirmed strong, .connection-failed strong { font-size: 1rem; }
+  .connection-confirmed p, .connection-failed p { margin: 4px 0 0; }
+  @keyframes connection-confirmed {
+    from { box-shadow: 0 0 0 5px color-mix(in srgb, var(--connection-status-color) 25%, transparent); }
+    to { box-shadow: 0 0 0 0 transparent; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .connection-confirmed, .connection-failed { animation: none; }
+  }
+</style>

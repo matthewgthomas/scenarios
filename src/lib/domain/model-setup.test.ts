@@ -67,6 +67,7 @@ describe('guided model setup and saved-project compatibility', () => {
     const reopened = parseProject(JSON.parse(projectJSON(restored)));
     expect(prerequisite(reopened, 1)).toBeNull();
     expect(reopened.completed).toContain(MODEL_SETUP_STAGE);
+    expect(reopened.modelSetupStatus).toBe('skipped');
     expect(reopened.runs).toEqual([]);
   });
 

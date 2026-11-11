@@ -57,7 +57,7 @@
     type Change,
     type Run
   } from '$lib/domain/project';
-  import { exampleProject, hasExerciseEdits } from '$lib/domain/example';
+  import { finishedExampleProject, hasExerciseEdits } from '$lib/domain/example';
   import {
     listProjects,
     saveProject,
@@ -103,10 +103,12 @@
   } from '$lib/domain/model-settings';
   import { prerequisiteStage } from '$lib/domain/workflow';
   import PageWalkthrough from '$lib/components/PageWalkthrough.svelte';
+  import ExampleJourney from '$lib/components/ExampleJourney.svelte';
   import { walkthroughId } from '$lib/walkthroughs';
 
   let project = $state<Project | null>(null);
   let examplePreview = $state(false);
+  let guidedExample = $state(false);
   let projects = $state<Project[]>([]);
   let loaded = $state(false);
   let saveState = $state('');
@@ -118,6 +120,7 @@
   let deleteId = $state('');
   let key = $state('');
   let keyStatus = $state('');
+  let keyCheckFailed = $state(false);
   let testing = $state(false);
   let verifiedKey = $state<string | null>(null);
   const connected = $derived(Boolean(key.trim() && verifiedKey === key.trim()));
@@ -181,6 +184,11 @@
       : null
   );
   const paidEstimate = $derived(paidPlan?.estimatedTotal ?? null);
+  const scoringDriverCount = $derived(
+    paidTargets?.length ??
+      p?.drivers.filter((d) => !d.archived && d.approved && d.origin !== 'wildcard').length ??
+      0
+  );
   const paidCandidateCount = $derived(
     paidTask === 'chains'
       ? (paidPlan?.requests.reduce(
@@ -279,6 +287,7 @@
     }
     project = structuredClone($state.snapshot(value));
     examplePreview = preview;
+    guidedExample = preview && value.stage === 0;
     undoStack = [];
     redoStack = [];
     lastUndoAt = 0;
@@ -371,6 +380,7 @@
   }
   function keyChanged() {
     keyStatus = '';
+    keyCheckFailed = false;
     verifiedKey = null;
     catalogueForKey = null;
     catalogueLoaded = false;
@@ -382,6 +392,7 @@
     testing = true;
     verifiedKey = null;
     keyStatus = '';
+    keyCheckFailed = false;
     const sessionKey = key.trim();
     try {
       const result = await testKey(sessionKey);
@@ -392,11 +403,13 @@
         : 'Connected. Your key is accepted, but its spending allowance is used up. Review its limit on OpenRouter before making paid requests.';
       await loadCatalogue();
     } catch (e) {
-      if (sessionKey === key.trim())
+      if (sessionKey === key.trim()) {
+        keyCheckFailed = true;
         keyStatus =
           e instanceof Error
             ? e.message
             : 'Connection failed. Check your internet connection and try again.';
+      }
     } finally {
       testing = false;
     }
@@ -492,6 +505,10 @@
         { reasoningEfforts: paidEfforts, fusionAllowance }
       );
       started = true;
+      if (project?.modelSetupStatus === 'skipped')
+        change((p) => {
+          p.modelSetupStatus = 'configured';
+        });
       if (singleContributor && paidMode === 'individual' && !p?.overrides[String(p?.stage)])
         change((p) => (p.writer = paidModels[0]));
       dialog = '';
@@ -582,6 +599,7 @@
     {connected}
     {testing}
     status={keyStatus}
+    failed={keyCheckFailed}
     onkeychange={keyChanged}
     ontest={checkConnection}
     onforget={forgetKey}
@@ -623,30 +641,35 @@
       <nav aria-label="Workflow stages">
         {#each workflowStages as { id: i, title: stage }}<button
             class:current={p.stage === i}
-            class:stage-completed={stageIsComplete(p, i)}
+            class:stage-completed={stageIsComplete(p, i) &&
+              !(i === MODEL_SETUP_STAGE && p.modelSetupStatus === 'skipped')}
             aria-current={p.stage === i ? 'step' : undefined}
             onclick={() => navigate(i)}
             ><span class="stage-number"
-              >{stageNeedsReview(p, i)
-                ? '◒'
-                : stageIsComplete(p, i)
-                  ? '✓'
-                  : i === 0 || i === MODEL_SETUP_STAGE
-                    ? '◇'
-                    : i === 8
-                      ? '↗'
-                      : i}</span
+              >{i === MODEL_SETUP_STAGE && p.modelSetupStatus === 'skipped'
+                ? '–'
+                : stageNeedsReview(p, i)
+                  ? '◒'
+                  : stageIsComplete(p, i)
+                    ? '✓'
+                    : i === 0 || i === MODEL_SETUP_STAGE
+                      ? '◇'
+                      : i === 8
+                        ? '↗'
+                        : i}</span
             ><span
               >{stage}<small
-                >{stageNeedsReview(p, i)
-                  ? 'Review suggested'
-                  : stageIsComplete(p, i)
-                    ? 'Complete'
-                    : p.stage === i
-                      ? 'Working'
-                      : prerequisite(p, i)
-                        ? 'Blocked'
-                        : 'Not started'}</small
+                >{i === MODEL_SETUP_STAGE && p.modelSetupStatus === 'skipped'
+                  ? 'Skipped'
+                  : stageNeedsReview(p, i)
+                    ? 'Review suggested'
+                    : stageIsComplete(p, i)
+                      ? 'Complete'
+                      : p.stage === i
+                        ? 'Working'
+                        : prerequisite(p, i)
+                          ? 'Blocked'
+                          : 'Not started'}</small
               ></span
             ></button
           >{/each}
@@ -672,7 +695,7 @@
           <small
             >{p.modelMode === 'fusion'
               ? 'Fusion · combined perspectives'
-              : `${p.models.length} models · manage selection`}</small
+              : `${p.models.length} ${p.models.length === 1 ? 'model' : 'models'} · manage selection`}</small
           ></button
         ><button
           class="sidebar-spend"
@@ -776,14 +799,19 @@
         {:else if p}
           {#if p.example}<div class="example-notice">
               <BookOpen size={16} /><span
-                >Example exercise. Scores, reasoning and drafts are authored illustrations, not live
-                model results.{#if examplePreview}{' '}
+                >Example analysis. Scores, reasoning, approvals and stories are
+                illustrations, not live model results.{#if examplePreview}{' '}
                   Saved to Your exercises only when you make edits.{/if}</span
               >
-              <button class="secondary" onclick={home} disabled={busy || leaving}
-                >Exit example <ArrowLeft size={16} /></button
-              >
             </div>{/if}
+          {#if p.example}<ExampleJourney
+              {p}
+              guided={guidedExample}
+              onexit={home}
+              exitDisabled={busy || leaving}
+              {navigate}
+              onguided={(value) => (guidedExample = value)}
+            />{/if}
           {#if stageNeedsReview(p, p.stage)}<div class="notice review">
               <AlertTriangle size={18} /><span
                 >Review suggested after an upstream change. Your decisions and edits are preserved.</span
@@ -953,8 +981,9 @@
                 ><button
                   data-walkthrough="home-example"
                   class="text-button"
-                  onclick={() => openProject(exampleProject(), true)}
-                  >Explore an example <ArrowRight size={17} /></button
+                  onclick={() => {
+                    openProject(finishedExampleProject(), true);
+                  }}>Explore an example <ArrowRight size={17} /></button
                 >
               </div>
               <span class="home-small"
@@ -1112,7 +1141,29 @@
               : `Generate ${paidTask === 'ratings' ? (paidMode === 'fusion' ? 'combined scores' : 'independent scores') : paidTask}`}
     wide
     close={() => (dialog = '')}
-    ><p>Review the models and estimated cost before sending this analysis to OpenRouter.</p>
+    ><section class="request-disclosure" aria-label="Information and research settings">
+      <strong>What information will be sent</strong>
+      <p class="small">
+        Your analytical question and horizon, plus the drivers, hypotheses and scenario text needed
+        for this task, go through OpenRouter to the selected providers. Your research notes and
+        source links are kept locally; background assumptions are included in the request.
+      </p>
+      <p class="small">
+        <strong>Web research: {paidMode === 'fusion' ? 'may be used by Fusion' : 'off'}</strong>. {paidMode ===
+        'fusion'
+          ? 'Fusion can consult web sources.'
+          : 'Individual models use existing knowledge and the context you provide; they do not search the web or open source links.'}
+      </p>
+      <details>
+        <summary>Inspect the exact task information</summary>
+        <pre class="request-context">{JSON.stringify(
+            paidPlan?.requests.map((r) => r.context) ?? [],
+            null,
+            2
+          )}</pre>
+      </details>
+    </section>
+    <p>Review this task and its estimated cost before running.</p>
     {#if paidTask === 'narrative_edit'}<p class="small">
         <strong>Editing request:</strong>
         {paidNarrativeOptions?.instructions?.trim() ||
@@ -1192,7 +1243,19 @@
       </p>
     {/if}
     <div class="estimate-box">
-      <span>{paidMode === 'fusion' ? 'Planning allowance' : 'Estimated maximum allowance'}</span
+      <span
+        >{paidMode === 'fusion' ? 'Planning allowance' : 'Estimated allowance'} for {paidTask ===
+        'ratings'
+          ? `scoring ${scoringDriverCount} ${scoringDriverCount === 1 ? 'driver' : 'drivers'}`
+          : paidTask === 'drivers'
+            ? 'generating a driver list'
+            : paidTask === 'chains'
+              ? `creating ${paidCandidateCount} combinations`
+              : paidTask === 'hypotheses'
+                ? 'developing alternative outcomes'
+                : paidTask === 'consolidate'
+                  ? 'reviewing overlap'
+                  : 'one writing proposal'}</span
       ><strong
         >{paidEstimate === null
           ? paidMode === 'fusion'
@@ -1214,7 +1277,7 @@
       >
     </div>
     {#if paidTask === 'chains'}<p class="small muted">
-        {#if retryId}The saved request scope is retained for this retry.{:else}Generate chains
+        {#if retryId}The saved request scope is retained for this retry.{:else}Generate combinations
           requests three candidates per model; Explore a disruption requests one per model.{/if} Every
         chain includes all selected uncertainties. Retry / replace repeats only the failed batch.
       </p>{/if}

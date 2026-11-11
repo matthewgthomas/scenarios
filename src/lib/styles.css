@@ -3520,29 +3520,15 @@ dialog::backdrop {
   margin: 8px 0 20px;
   max-width: 72ch;
 }
-.stage-model-advanced {
-  margin: 0 0 24px;
-  border-bottom: 1px solid var(--cg-border);
-  padding: 0 0 16px;
+.model-settings-disclosure {
+  border-top: 1px solid var(--cg-border);
+  padding-top: 16px;
 }
-.stage-model-advanced > summary {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-weight: 600;
+.model-settings-disclosure > summary {
   cursor: pointer;
-  padding: 8px 0;
-}
-.stage-model-advanced > summary::before {
-  content: '▸';
-}
-.stage-model-advanced[open] > summary::before {
-  content: '▾';
-}
-.stage-model-advanced > summary .muted {
-  font-weight: 400;
+  color: var(--cg-action);
+  font-weight: 700;
+  margin-bottom: 16px;
 }
 .stage-model-custom-count {
   color: var(--cg-action);
@@ -3799,4 +3785,31 @@ body .driver-popover.page-walkthrough {
   .driver-layer {
     display: none !important;
   }
+}
+
+/* Keep request scope visible before optional AI configuration. */
+.request-disclosure {
+  border: 1px solid var(--cg-border);
+  border-left: 3px solid var(--cg-action);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+.request-disclosure p {
+  max-width: 75ch;
+  margin: 8px 0;
+}
+.request-disclosure summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--cg-action);
+}
+.request-context {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+}
+.research-context > label {
+  display: block;
 }

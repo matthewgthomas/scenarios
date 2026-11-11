@@ -251,7 +251,7 @@
           {#if !canPerform(choosing, c.id)}<p class="small muted">
               {choosing === 'generate' && busy
                 ? 'Wait for the current model operation to finish.'
-                : 'Approve this chain in Construct chains first.'}
+                : 'Approve this chain in Build scenario combinations first.'}
             </p>{/if}
         </li>
       {/each}
@@ -326,8 +326,8 @@
         snapshots are preserved.
       </p>{/if}
     {#if chain.approvedRevision !== chain.revision}<p class="notice review">
-        Approve this chain’s current revision in Construct chains before starting a new draft or
-        requesting AI help. You can keep editing an existing narrative.
+        Approve this chain’s current revision in Build scenario combinations before starting a new
+        draft or requesting AI help. You can keep editing an existing narrative.
       </p>{/if}
     {#if uncertainties(p).some((d) => !chain.items[d.id])}<p class="notice review">
         Intentionally unresolved: {uncertainties(p)

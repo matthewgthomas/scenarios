@@ -1,12 +1,10 @@
 import { z } from 'zod';
 
 export const FUSION_MODEL = 'openrouter/fusion';
-export const defaultModels = [
-  '~anthropic/claude-sonnet-latest',
-  'mistralai/mistral-large-4-0',
-  '~moonshotai/kimi-latest'
-];
+export const defaultModels = ['~anthropic/claude-sonnet-latest'];
 export const suggestedModels = [
+  ...defaultModels,
+  'mistralai/mistral-large-4-0',
   '~anthropic/claude-opus-latest',
   '~openai/gpt-sol-latest',
   '~google/gemini-pro-latest',

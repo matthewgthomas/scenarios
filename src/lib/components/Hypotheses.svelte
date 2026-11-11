@@ -119,7 +119,7 @@
     title = '';
     description = '';
   }
-  function save() {
+  function save(approve = false) {
     if (!editing || !title.trim()) return;
     const draft = editing;
     change(
@@ -144,7 +144,7 @@
             description: description.trim(),
             origins: source ? structuredClone(source.origins) : [],
             revision: 1,
-            approved: false,
+            approved: approve,
             archived: false
           });
         }
@@ -152,7 +152,9 @@
       },
       draft.id
         ? 'Hypothesis saved. Review and approve this uncertainty again.'
-        : 'Hypothesis added. Review and approve it when ready.'
+        : approve
+          ? 'Hypothesis added and approved.'
+          : 'Hypothesis added. Review and approve it when ready.'
     );
     activeId = draft.driverId;
     editing = null;
@@ -208,7 +210,7 @@
     if (!review.canComplete) return;
     change((p) => {
       approveHypotheses(p);
-    }, 'All retained hypotheses approved. Ready to construct hypothesis chains.');
+    }, 'All retained hypotheses approved. Ready to build scenario combinations.');
     next();
   }
 </script>
@@ -269,7 +271,7 @@
         >{#if review.missing.length}Fill the gaps below to unlock approval.{:else if review.pending}{review.pending}
           {review.pending === 1 ? 'hypothesis needs' : 'hypotheses need'} approval. Review your set, then
           approve and continue.{:else}All {review.total} hypotheses are approved. You can continue to
-          construct hypothesis chains.{/if}</span
+          build scenario combinations.{/if}</span
       >
     </div>
   </div>
@@ -512,7 +514,7 @@
         <div class="uncertainty-review-actions">
           <p>
             {#if active.status === 'approved'}All hypotheses for this uncertainty are approved.{:else}Keep
-              all the alternatives you want available when constructing hypothesis chains.{/if}
+              all the alternatives you want available when building scenario combinations.{/if}
           </p>
           {#if active.pending}<button
               class="secondary"
@@ -559,10 +561,10 @@
       ><small>Add at least one for each before approving your set.</small>
     {:else if review.pending}<strong>Ready to approve your hypotheses?</strong><small
         >Approve all {review.total} retained hypotheses across {review.groups.length} uncertainties and
-        move to Construct hypothesis chains.</small
+        move to Build scenario combinations.</small
       >
     {:else}<strong>Your hypotheses are approved</strong><small
-        >Next, combine the alternatives into contrasting scenario chains.</small
+        >Next, combine the alternatives into contrasting scenario combinations.</small
       >{/if}
   </div>
   {#if review.missing.length}<button
@@ -571,8 +573,8 @@
       >Go to missing hypotheses <ArrowRight size={16} /></button
     >
   {:else}<button class="primary" disabled={!review.canComplete} onclick={finish}
-      >{#if review.pending}<Check size={16} /> Approve all & construct hypothesis chains{:else}Construct
-        hypothesis chains <ArrowRight size={16} />{/if}</button
+      >{#if review.pending}<Check size={16} /> Approve all & build scenario combinations{:else}Build
+        scenario combinations <ArrowRight size={16} />{/if}</button
     >{/if}
 </footer>
 
@@ -640,7 +642,12 @@
         </p>{/if}
       <div class="dialog-actions">
         <button type="button" class="secondary" onclick={() => (editing = null)}>Cancel</button
-        ><button type="submit" class="primary" disabled={!title.trim()}
+        >{#if !editing.id && !editing.sourceId}<button
+            type="button"
+            class="secondary"
+            disabled={!title.trim()}
+            onclick={() => save(true)}>Add and approve</button
+          >{/if}<button type="submit" class="primary" disabled={!title.trim()}
           >{editing.mergeIds?.length
             ? 'Save merged hypothesis'
             : editing.id

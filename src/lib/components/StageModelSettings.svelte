@@ -87,48 +87,14 @@
 
 {#if editing === null}
   <div class="stage-model-heading">
-    <h3>Models for the whole exercise</h3>
+    <h3>Models for the whole analysis</h3>
     <p class="muted">
-      A ready-to-use selection for your exercise. Keep these models, try a free option, or let
-      Fusion combine perspectives.
+      First-time users can start with Claude Sonnet. Using a single model makes Scenario Designer
+      a bit easy to use, though at the expense of not capturing multiple perspectives from other AI models.
+      Using only one model is also cheaper: you avoid paying for several parallel responses.
+      This is not an endorsement of Claude's capabilities or judgements.
     </p>
   </div>
-  <details class="stage-model-advanced" bind:open={advancedOpen}>
-    <summary
-      ><span
-        >Use different models by stage <span class="small muted">(advanced, optional)</span></span
-      >{#if customCount}<span class="stage-model-custom-count"
-          >{customCount} {customCount === 1 ? 'custom stage' : 'custom stages'}</span
-        >{/if}</summary
-    >
-    <p class="small muted">
-      Most exercises can use the same models throughout. Change a stage below only if you want a
-      different selection for that part of the work.
-    </p>
-    <ul class="stage-model-list" aria-label="Models by stage">
-      {#each aiModelStages as stage}
-        {@const scope = String(stage)}
-        {@const customized = hasStageModels(p, scope)}
-        <li>
-          <div>
-            <strong>{stages[stage]}</strong><span class="stage-model-source" class:customized
-              >{customized ? 'Custom selection' : 'Uses exercise defaults'}</span
-            >
-            <p>{summary(scope)}</p>
-          </div>
-          <button
-            id={`${uid}-stage-${scope}`}
-            class="secondary small"
-            aria-label={`Change models for ${stages[stage]}`}
-            onclick={() => editStage(scope)}>Change <ChevronRight size={15} /></button
-          >
-        </li>
-      {/each}
-    </ul>
-    <p class="small muted">
-      Select uncertainties and Export don’t run AI models, so they don’t need their own choices.
-    </p>
-  </details>
 {:else}
   <button class="text-button stage-model-back" onclick={back}
     ><ArrowLeft size={16} /> Whole-exercise models</button
@@ -198,18 +164,57 @@
       oneffort={(id, effort) => change((p) => (p.reasoningEfforts[id] = effort))}
     />
   {/key}
+  {#if editing === null}
+  <details class="stage-model-advanced model-settings-disclosure" bind:open={advancedOpen}>
+    <summary
+      ><span
+        >Use different models for each analysis stage (advanced, optional)</span
+      >{#if customCount}<span class="stage-model-custom-count"
+          >{customCount} {customCount === 1 ? 'custom stage' : 'custom stages'}</span
+        >{/if}</summary
+    >
+    <p class="small muted">
+      Most exercises can use the same models throughout. Change a stage below only if you want a
+      different selection for that part of the work.
+    </p>
+    <ul class="stage-model-list" aria-label="Models by stage">
+      {#each aiModelStages as stage}
+        {@const scope = String(stage)}
+        {@const customized = hasStageModels(p, scope)}
+        <li>
+          <div>
+            <strong>{stages[stage]}</strong><span class="stage-model-source" class:customized
+              >{customized ? 'Custom selection' : 'Uses exercise defaults'}</span
+            >
+            <p>{summary(scope)}</p>
+          </div>
+          <button
+            id={`${uid}-stage-${scope}`}
+            class="secondary small"
+            aria-label={`Change models for ${stages[stage]}`}
+            onclick={() => editStage(scope)}>Change <ChevronRight size={15} /></button
+          >
+        </li>
+      {/each}
+    </ul>
+    <p class="small muted">
+      Select uncertainties and Export don’t run AI models, so they don’t need their own choices.
+    </p>
+  </details>
+  {/if}
   <p class="small muted">
     Thinking effort is shared wherever a model is used. You can also change it for a single run.
   </p>
   {#if editing === null}<div class="picker-settings-actions">
       <button
-        class="text-button small"
+        class="text-button secondary"
         onclick={() =>
           change((p) => {
             p.models = [...defaultModels];
             p.writer = defaultModels[0];
             p.modelMode = 'individual';
-          })}>Restore default models</button
+            p.reasoningEfforts[defaultModels[0]] = 'medium';
+          })}>Use recommended starter model</button
       >
     </div>{/if}
 {/if}

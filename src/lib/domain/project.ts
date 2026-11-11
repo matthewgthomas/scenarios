@@ -8,7 +8,7 @@ export const stages = [
   'Assess drivers',
   'Select uncertainties',
   'Develop hypotheses',
-  'Construct chains',
+  'Build scenario combinations',
   'Write & review scenarios',
   'Write & review scenarios',
   'Export',
@@ -63,6 +63,14 @@ const driver = z.object({
   selected: z.boolean(),
   ratings: z.array(rating),
   decision: decision.optional(),
+  evidence: z
+    .object({
+      sources: z.array(z.string()),
+      notes: z.string(),
+      rationale: z.string(),
+      perspectives: z.string()
+    })
+    .optional(),
   archived: z.boolean().default(false),
   assessment: z.string().optional(),
   history: z
@@ -96,6 +104,7 @@ const chain = z.object({
   title: z.string().min(1),
   kind: z.enum(['main', 'wildcard']),
   colour: z.number().int().min(1).max(6),
+  // An absent key is not chosen yet; explicit null is deliberately unresolved.
   items: z.record(z.string(), z.string().nullable()),
   revision: z.number(),
   selected: z.boolean(),
@@ -218,6 +227,9 @@ export const projectSchema = z.object({
   revision: z.number(),
   stage: z.number().int().min(0).max(MODEL_SETUP_STAGE),
   modelSetupStep: z.enum(modelSetupSteps).default('connection'),
+  modelSetupStatus: z.enum(['not_started', 'skipped', 'configured']).optional(),
+  researchNotes: z.string().optional(),
+  backgroundAssumptions: z.string().optional(),
   example: z.boolean(),
   budget: z.number().positive().nullable(),
   models: z.array(z.string()).min(1),
@@ -367,6 +379,7 @@ export function newProject(): Project {
     revision: 1,
     stage: 0,
     modelSetupStep: 'connection',
+    modelSetupStatus: 'not_started',
     example: false,
     budget: 5,
     models: [...defaultModels],
@@ -374,7 +387,7 @@ export function newProject(): Project {
     writer: defaultModels[0],
     modelMode: 'individual',
     modelModeOverrides: {},
-    reasoningEfforts: {},
+    reasoningEfforts: { [defaultModels[0]]: 'medium' },
     mainCount: 3,
     wildcardCount: 0,
     completed: [],
@@ -514,7 +527,8 @@ export function prerequisite(p: Project, stage: number): string | null {
     return 'Select and approve your critical uncertainties.';
   if (stage >= 5 && !uncertainties(p).every((d) => statesFor(p, d.id).some((h) => h.approved)))
     return 'Approve at least one hypothesis for each uncertainty.';
-  if (stage >= 6 && !approvedChainSet(p)) return 'Approve selected chains in Construct chains.';
+  if (stage >= 6 && !approvedChainSet(p))
+    return 'Approve selected combinations in Build scenario combinations.';
   return null;
 }
 export function parseProject(value: unknown): Project {

@@ -202,3 +202,19 @@ export function exampleProject(): Project {
   });
   return p;
 }
+
+/** A complete authored set for the guided example, without recording user approvals. */
+export function finishedExampleProject(): Project {
+  const p = exampleProject();
+  p.stage = 0;
+  p.modelSetupStatus = 'skipped';
+  p.completed.push(5, 6, 7);
+  p.chains.forEach((c) => {
+    c.approvedRevision = c.revision;
+  });
+  p.narratives.forEach((n) => {
+    n.final = n.working;
+    n.finalAt = now();
+  });
+  return p;
+}

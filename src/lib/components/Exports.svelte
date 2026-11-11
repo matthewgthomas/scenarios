@@ -118,8 +118,8 @@
   <FileText size={27} />
   <h2>Narratives & analytical report</h2>
   <p>
-    Download narratives only or include the drivers, scores, hypotheses, hypothesis chains and
-    operation record.
+    Download narratives only or include research notes, source links, analyst rationale, background
+    assumptions, drivers, scores, hypotheses, scenario combinations and the operation record.
   </p>
   <div class="export-options" data-walkthrough="export-options">
     <label class="check-label"
@@ -148,7 +148,8 @@
         text{missing.length ? ` (${missing.length} without a narrative)` : ''}
       </li>
       {#if full}<li>
-          Drivers, scores, hypotheses, chains and the operation record
+          Research notes, source links, analyst rationale, background assumptions, drivers, scores,
+          hypotheses, scenario combinations and the operation record
         </li>{/if}{#if annotations}<li>Chain hypotheses and assumptions</li>{/if}
     </ul>
   </div>

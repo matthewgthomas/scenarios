@@ -45,7 +45,7 @@
     drivers: 'Generate drivers',
     ratings: 'Assess drivers',
     hypotheses: 'Generate hypotheses',
-    chains: 'Generate chains',
+    chains: 'Generate combinations',
     coherence: 'Check coherence',
     narrative: 'Draft narrative',
     narrative_edit: 'Edit narrative',
