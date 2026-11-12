@@ -1,6 +1,14 @@
 # Quick Mode implementation verification
 
-Latest review: 11 November 2026. Earlier sections record their original checks. This records checks actually performed; it is not a certification or a completed analyst pilot. Research requirements in the original acceptance checklist are intentionally outside this implementation's scope.
+Latest review: 12 November 2026. Earlier sections record their original checks. This records checks actually performed; it is not a certification or a completed analyst pilot. Research requirements in the original acceptance checklist are intentionally outside this implementation's scope.
+
+## PDF and Word report redesign — 12 November 2026
+
+- Replaced line-by-line Markdown conversion with one structured report model and dedicated PDF/Word renderers. Every document includes a selected-critical-uncertainty overview, an impact/uncertainty matrix with a complete driver key and score provenance, paired scenario comparisons and connected hypothesis cards. Research, detailed annotations and the analytical record retain their existing options. Markdown, clipboard and JSON behavior is unchanged.
+- Added editable Word headings/tables, a high-resolution inline matrix with alternative text, native PDF vectors, real embedded regular/bold/italic/bold-italic Nunito Sans faces, section labels and pagination. Missing scores, provisional medians, explicit unresolved choices, removed states, draft/final status and review flags remain visible. Oversized cards and comparison rows continue without reducing font size, with repeated identifiers and table headers.
+- All 268 tests across 18 files pass, including eight new report/formatting regressions. Svelte/TypeScript checking reports zero errors or warnings; the production build succeeds. Existing dependency annotation, unused external import and bundle-size warnings remain.
+- Chromium verified both download buttons and all ten PDF/Word downloads across the authored example, a full analytical record, rich formatting with fractional/missing scores and unresolved/removed states, an empty exercise, and seven scenarios/nine uncertainties with very long hypothesis titles and paragraphs. Browser runtime/console errors: none. No paid inference calls were made.
+- Rendered all five Word fixtures with the bundled LibreOffice renderer and all five PDFs with Poppler. Reviewed page images and inspected figure, formatting and continuation details at full size. Text-bound checks found no content outside the page boundaries. Text extraction retained recorded research/rationale/assumptions, ending sentinels, accented Latin and Cyrillic text. These are Chromium and bundled-LibreOffice checks, not a Microsoft Word or full cross-browser certification. QA scripts, downloads, rendered pages and bounds audits are ignored under `output/exports/`.
 
 ## Behaviour-preserving cleanup — 11 November 2026
 
@@ -202,7 +210,7 @@ Keyboard semantics, labels, visible focus, native table controls, modal focus re
 
 ## Export checks
 
-The browser-generated PDF was inspected using Poppler and pypdf. It was a two-page A4 document with embedded Nunito Sans, readable text and page numbering. The first page was rendered and visually reviewed: no clipping, missing glyphs or overlapping text were observed. Extracted text retained the manually added note and `Unresolved uncertainties: Income support`. The DOCX ZIP contained a well-formed `word/document.xml`; a full Word/LibreOffice rendering review remains to be completed. The JSON backup contained all three narratives and three combinations; all advisory checklist arrays were empty.
+The original browser-generated PDF was inspected using Poppler and pypdf, including embedded Nunito Sans, readable text, unresolved choices and page numbering. The redesigned PDF and Word rendering checks are recorded in the 12 November section above. Word documents have also been rendered with the bundled LibreOffice renderer. The earlier JSON backup check retained all three narratives and combinations.
 
 Artifacts generated during QA are ignored under `output/playwright/`; the application does not depend on them. Examples include `home.png`, `chains-light.png`, `chains-1024.png`, `chains-dark-1280.png`, `narrative.png`, `scenarios.pdf`, `scenarios.docx` and `roundtrip.scenario.json`.
 
@@ -210,7 +218,7 @@ Artifacts generated during QA are ignored under `output/playwright/`; the applic
 
 1. Run authenticated browser-to-OpenRouter calls from the deployed GitHub Pages origin, using the selected models and a spending-limited key. Check CORS/preflight, model-specific JSON behaviour, complete large rating batches, returned usage costs and insufficient-credit responses. Transport behaviour is covered by mocks, not a paid live-model evaluation.
 2. Run the full Chrome/Firefox/Safari/Edge and keyboard/screen-reader checks in `design/ACCEPTANCE.md`, including real 200% zoom, long labels, 1/3/7 scenarios and 2/5/9 uncertainties. Current reflow checks cover representative layouts, not this entire combinatorial set.
-3. Visually review DOCX and longer full-record PDF exports, non-Latin text coverage and extreme paragraph/heading lengths. Narrative PDF rendering was verified; arbitrary documents are not guaranteed by one fixture.
+3. Broaden export glyph/script coverage and check the redesigned Word reports in Microsoft Word in addition to bundled LibreOffice. Current fixtures cover accented Latin/Cyrillic text, long full analytical records and extreme hypothesis/paragraph lengths; arbitrary documents are not guaranteed by these fixtures.
 4. Complete the five-analyst pilot and assess methodological quality, information density and the model ensemble. Agreement is never treated as proof, and scenario outputs are not forecasts.
 5. Review dependency advisories before public release. Installation resolved the reported critical/moderate PDF and test-runner issues; six low-severity upstream framework/tooling advisories remained at the recorded installation. No automatic major-version migration was performed.
 

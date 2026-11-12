@@ -9,7 +9,6 @@ import {
   statesFor,
   type Project
 } from '$lib/domain/project';
-import pdfFontUrl from '$lib/assets/NunitoSans-Regular.ttf?url';
 
 export function download(content: BlobPart, filename: string, type: string) {
   const blob = new Blob([content], { type });
@@ -105,116 +104,19 @@ export function markdown(p: Project, annotations = false, full = false): string 
   return text;
 }
 export async function exportDocx(p: Project, annotations: boolean, full: boolean) {
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import('docx');
-  const paragraphs = markdown(p, annotations, full)
-    .split('\n')
-    .map((line) => {
-      const level = line.match(/^(#{1,4}) /)?.[1].length;
-      const headings = [
-        HeadingLevel.TITLE,
-        HeadingLevel.HEADING_1,
-        HeadingLevel.HEADING_2,
-        HeadingLevel.HEADING_3
-      ];
-      const runs = line
-        .replace(/^#{1,4} /, '')
-        .split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g)
-        .filter(Boolean)
-        .map(
-          (t) =>
-            new TextRun({
-              text: t.replace(/^\*{1,2}|\*{1,2}$/g, ''),
-              bold: t.startsWith('**'),
-              italics: t.startsWith('*') && !t.startsWith('**')
-            })
-        );
-      return new Paragraph({
-        children: runs,
-        ...(level ? { heading: headings[level - 1], keepNext: true } : {}),
-        spacing: { after: 140 },
-        ...(line.startsWith('- ')
-          ? { bullet: { level: 0 }, children: [new TextRun(line.slice(2))] }
-          : {})
-      });
-    });
-  const doc = new Document({
-    creator: 'Scenario Designer',
-    title: p.title,
-    styles: {
-      default: {
-        document: {
-          run: { font: 'Calibri', size: 22, color: '233D33' },
-          paragraph: { spacing: { line: 300 } }
-        }
-      }
-    },
-    sections: [
-      {
-        properties: { page: { margin: { top: 1134, bottom: 1134, left: 1134, right: 1134 } } },
-        children: paragraphs
-      }
-    ]
-  });
+  const { buildReport } = await import('./report');
+  const { renderDocx } = await import('./word');
   download(
-    await (await Packer.toBlob(doc)).arrayBuffer(),
+    await renderDocx(buildReport(p, annotations, full)),
     `${filename(p)}${full ? '-full-record' : ''}.docx`,
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   );
 }
 export async function exportPDF(p: Project, annotations: boolean, full: boolean) {
-  const { jsPDF } = await import('jspdf');
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  // A bundled Unicode font keeps place names and analytical text intact in PDF.
-  const fontResponse = await fetch(pdfFontUrl);
-  if (fontResponse.ok) {
-    const bytes = new Uint8Array(await fontResponse.arrayBuffer());
-    let binary = '';
-    for (const byte of bytes) binary += String.fromCharCode(byte);
-    doc.addFileToVFS('NunitoSans.ttf', btoa(binary));
-    doc.addFont('NunitoSans.ttf', 'NunitoSans', 'normal');
-    doc.setFont('NunitoSans');
-  }
-  let y = 23;
-  const lines = markdown(p, annotations, full).split('\n');
-  for (const line of lines) {
-    if (!line.trim()) {
-      y += 3;
-      continue;
-    }
-    const level = line.match(/^(#{1,4}) /)?.[1].length;
-    const fontSize = level === 1 ? 23 : level === 2 ? 17 : level ? 13 : 10.5;
-    doc.setFontSize(fontSize);
-    doc.setTextColor(35, 61, 51);
-    const clean = line.replace(/^#{1,4} /, '').replace(/\*{1,2}/g, '');
-    const wrapped: string[] = doc.splitTextToSize(clean, 164);
-    const lineHeight = fontSize * 0.48;
-    if (level && y + lineHeight * Math.min(3, wrapped.length + 1) > 272) {
-      doc.addPage();
-      y = 23;
-    }
-    for (const text of wrapped) {
-      if (y + lineHeight > 277) {
-        doc.addPage();
-        y = 23;
-      }
-      doc.text(text, 23, y);
-      y += lineHeight;
-    }
-    y += level ? 4 : 1;
-  }
-  const pages = doc.getNumberOfPages();
-  for (let page = 1; page <= pages; page++) {
-    doc.setPage(page);
-    doc.setFontSize(8);
-    doc.setTextColor(84, 107, 96);
-    doc.text(
-      `Scenario Designer${showModeLabels ? ' | Quick Mode' : ''} | ${page} / ${pages}`,
-      23,
-      287
-    );
-  }
+  const { buildReport } = await import('./report');
+  const { renderPDF } = await import('./pdf');
   download(
-    doc.output('arraybuffer'),
+    await renderPDF(buildReport(p, annotations, full)),
     `${filename(p)}${full ? '-full-record' : ''}.pdf`,
     'application/pdf'
   );

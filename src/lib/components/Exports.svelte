@@ -119,7 +119,9 @@
   <h2>Narratives & analytical report</h2>
   <p>
     Download narratives only or include research notes, source links, analyst rationale, background
-    assumptions, drivers, scores, hypotheses, scenario combinations and the operation record.
+    assumptions, drivers, scores, hypotheses, scenario combinations and the operation record. Word
+    and PDF always include a visual overview of your chosen critical uncertainties, the impact and
+    uncertainty matrix, a scenario comparison and individual hypothesis chains.
   </p>
   <div class="export-options" data-walkthrough="export-options">
     <label class="check-label"
@@ -146,6 +148,10 @@
         {selected.length}
         {selected.length === 1 ? 'selected scenario' : 'selected scenarios'} using the current working
         text{missing.length ? ` (${missing.length} without a narrative)` : ''}
+      </li>
+      <li>
+        Word and PDF: chosen critical uncertainties, assessment matrix, scenario comparison and
+        hypothesis chains
       </li>
       {#if full}<li>
           Research notes, source links, analyst rationale, background assumptions, drivers, scores,
