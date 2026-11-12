@@ -59,6 +59,19 @@
     void import('./Editor.svelte').then((module) => (RichEditor = module.default));
   });
   const chains = $derived(activeChains(p).filter((c) => c.selected));
+  const draftableChains = $derived(
+    chains.filter(
+      (c) =>
+        !p.narratives.some(
+          (n) =>
+            n.chainId === c.id &&
+            n.drafts.some(
+              (d) =>
+                d.modelId !== 'authored/example' && d.kind !== 'edit' && d.status !== 'dismissed'
+            )
+        )
+    )
+  );
   const chain = $derived(chains.find((c) => c.id === selectedId) ?? chains[0]);
   const narrative = $derived(p.narratives.find((n) => n.chainId === chain?.id));
   const editable = $derived(chain ? canWriteNarrative(p, chain.id) : false);
@@ -108,7 +121,7 @@
     const c = chains.find((c) => c.id === chainId);
     if (!c) return false;
     return action === 'generate'
-      ? !busy && c.approvedRevision === c.revision
+      ? !busy && c.approvedRevision === c.revision && draftableChains.some((c) => c.id === chainId)
       : action === 'write' && canWriteNarrative(p, c.id);
   }
   function perform(action: WritingAction, chainId: string) {
@@ -235,7 +248,7 @@
         : 'Which story would you like to write or review?'}
     </p>
     <ul class="scenario-choices">
-      {#each chains as c (c.id)}
+      {#each choosing === 'generate' ? draftableChains : chains as c (c.id)}
         <li>
           <ActionButton
             kind={choosing === 'generate' ? 'generate' : 'add'}
@@ -488,6 +501,15 @@
         <div class="toolbar-group spaced">
           <ActionButton
             kind="generate"
+            label="Generate draft"
+            disabled={busy || chain.approvedRevision !== chain.revision}
+            onclick={() => {
+              editorOpen = false;
+              request('narrative', chain.id);
+            }}
+          />
+          <ActionButton
+            kind="generate"
             label="Ask AI to edit this draft"
             disabled={busy ||
               !narrative?.working.trim() ||
@@ -498,9 +520,6 @@
             }}
           />
         </div>
-        <p class="small muted">
-          For a new starting draft, use Generate draft in the page action bar.
-        </p>
       </details>{/key}
     {#if proposals.length}<section class="narrative-proposals" aria-label="AI proposals">
         <h2 id={proposalsHeadingId} bind:this={proposalsHeading} tabindex="-1">
