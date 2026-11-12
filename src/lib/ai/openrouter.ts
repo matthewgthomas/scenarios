@@ -1045,7 +1045,25 @@ export function launch(
                       input: messages,
                       max_output_tokens: next.maxOutputTokens,
                       tool_choice: 'required',
-                      plugins: [{ id: 'fusion', reasoning: { effort: 'high' } }]
+                      plugins: [
+                        {
+                          id: 'fusion',
+                          // OpenRouter's Quality panel; edit this list to change panel members.
+                          /*
+                          analysis_models: [
+                            // Default Quality panel models (as of November 2026)
+                            //'~anthropic/claude-opus-latest',
+                            //'~openai/gpt-sol-latest',
+                            //'~google/gemini-pro-latest'
+                            // Frontier models (as of November 2026)
+                            'anthropic/claude-fable-5.2',
+                            'google/gemini-4-carbon',
+                            '~openai/gpt-astra-latest'
+                          ],
+                          */
+                          reasoning: { effort: 'high' }
+                        }
+                      ]
                     }
                   : {
                       model: next.modelId,

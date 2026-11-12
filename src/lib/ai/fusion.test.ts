@@ -115,7 +115,19 @@ describe('Fusion planning and accounting', () => {
     expect(url).toMatch(/\/responses$/);
     expect(body.model).toBe(FUSION_MODEL);
     expect(body.tool_choice).toBe('required');
-    expect(body.plugins).toEqual([{ id: 'fusion', reasoning: { effort: 'high' } }]);
+    expect(body.plugins).toEqual([
+      {
+        id: 'fusion',
+        /*
+        analysis_models: [
+          '~anthropic/claude-opus-latest',
+          '~openai/gpt-sol-latest',
+          '~google/gemini-pro-latest'
+        ],
+        */
+        reasoning: { effort: 'high' }
+      }
+    ]);
     expect(body.input[0].content).not.toContain('no web tools');
     expect(h.get().drivers).toHaveLength(1);
     expect(h.get().runs[0]).toMatchObject({
