@@ -19,6 +19,7 @@ import {
 
 import { FUSION_MODEL, type ReasoningEffort } from '$lib/domain/model-settings';
 import { effectiveEffort, outputAllowance, type Model } from './models';
+import { requestError } from './errors';
 export { getModels, type Model } from './models';
 
 export async function testKey(key: string) {
@@ -998,7 +999,6 @@ export function launch(
         const abortRequest = () => requestController.abort();
         controller.signal.addEventListener('abort', abortRequest, { once: true });
         const timeout = setTimeout(abortRequest, next.modelId === FUSION_MODEL ? 600_000 : 180_000);
-        let response: Response;
         let data: CompletionResponse = {};
         try {
           const messages = [
@@ -1028,7 +1028,7 @@ export function launch(
             }
           ];
           const fusion = next.modelId === FUSION_MODEL;
-          response = await fetch(
+          const response = await fetch(
             `https://openrouter.ai/api/v1/${fusion ? 'responses' : 'chat/completions'}`,
             {
               method: 'POST',
@@ -1077,30 +1077,21 @@ export function launch(
               )
             }
           );
-          if (response.ok) {
-            const result = await response.json();
-            data = fusion ? fusionCompletion(result) : result;
+          if (!response.ok) {
+            if ([400, 401, 402, 403, 404, 422, 429].includes(response.status))
+              mutateRun(next.id, (r) => {
+                r.unknownCharge = false;
+              });
+            const payload: unknown = await response.json().catch(() => null);
+            throw new Error(
+              requestError(response.status, payload, key, response.headers.get('Retry-After'))
+            );
           }
+          const result = await response.json();
+          data = fusion ? fusionCompletion(result) : result;
         } finally {
           clearTimeout(timeout);
           controller.signal.removeEventListener('abort', abortRequest);
-        }
-        if (!response.ok) {
-          if ([400, 401, 402, 403, 404, 422, 429].includes(response.status))
-            mutateRun(next.id, (r) => {
-              r.unknownCharge = false;
-            });
-          throw new Error(
-            (
-              {
-                401: 'Key not accepted. Replace it in Model settings.',
-                402: 'Insufficient OpenRouter credit. Add credits before retrying.',
-                429: 'Rate limited. Wait, then explicitly retry this model.',
-                404: 'Model unavailable. Choose a replacement in Model settings.'
-              } as Record<number, string>
-            )[response.status] ??
-              `OpenRouter request failed (${response.status}). Retry or choose another model.`
-          );
         }
         const choice = data.choices?.[0];
         const raw = choice?.message?.content;

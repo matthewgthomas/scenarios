@@ -11,6 +11,7 @@ import {
 } from '$lib/domain/project';
 import { chainReadiness, approveChainSet } from '$lib/domain/workflow';
 import { assessmentResults, mergeResults } from '$lib/domain/task-results';
+import { FUSION_MODEL } from '$lib/domain/model-settings';
 import {
   launch,
   applyOutput,
@@ -1288,6 +1289,47 @@ describe('hypothesis response failures', () => {
 });
 
 describe('independent OpenRouter orchestration', () => {
+  it.each([models[0], { ...models[0], id: FUSION_MODEL }])(
+    'retains actionable, redacted credit errors without retrying or reserving rejected work ($id)',
+    async (model) => {
+      vi.stubGlobal('navigator', { onLine: true });
+      const fetcher = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: {
+              message: 'Key limit exceeded for test-key',
+              metadata: { limit_source: 'openrouter_key_limit', raw: 'private metadata' }
+            }
+          }),
+          { status: 402 }
+        )
+      );
+      vi.stubGlobal('fetch', fetcher);
+      const h = harness();
+      await launch(h.get, h.change, 'test-key', [model], 'drivers', [model.id]).done;
+      const run = h.get().runs[0];
+      expect(run.status).toBe('failed');
+      expect(run.error).toContain('Adding account credits does not raise the key’s limit');
+      expect(run.error).toContain('Key limit exceeded for [redacted]');
+      expect(JSON.stringify(h.get())).not.toMatch(/test-key|private metadata/);
+      expect(run.unknownCharge).toBe(false);
+      expect(run.confirmed).toBeNull();
+      expect(reserved(h.get())).toBe(0);
+      expect(h.get().drivers).toHaveLength(0);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    }
+  );
+  it('keeps a useful credit error when OpenRouter returns a non-JSON rejection', async () => {
+    vi.stubGlobal('navigator', { onLine: true });
+    const fetcher = vi.fn().mockResolvedValue(new Response('<html>Error</html>', { status: 402 }));
+    vi.stubGlobal('fetch', fetcher);
+    const h = harness();
+    await launch(h.get, h.change, 'test-key', models, 'drivers', [models[0].id]).done;
+    expect(h.get().runs[0].error).toContain('API key’s spending limit');
+    expect(h.get().runs[0].unknownCharge).toBe(false);
+    expect(reserved(h.get())).toBe(0);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it('sends the same context independently, uses exact IDs, and never enables research tools', async () => {
     vi.stubGlobal('navigator', { onLine: true });
     const fetcher = vi

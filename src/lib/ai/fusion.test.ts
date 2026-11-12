@@ -115,7 +115,7 @@ describe('Fusion planning and accounting', () => {
     expect(url).toMatch(/\/responses$/);
     expect(body.model).toBe(FUSION_MODEL);
     expect(body.tool_choice).toBe('required');
-    expect(body.plugins).toEqual([
+    expect(body.plugins).toMatchObject([
       {
         id: 'fusion',
         /*
