@@ -18,6 +18,8 @@ AI remains optional and human analyst judgement remains central. New capabilitie
 
 ## Research Mode and an approved evidence base
 
+Partially implemented: OpenRouter's Model Fusion includes web search / deep research.
+
 - Offer a choice between existing-knowledge analysis and Research Mode during setup.
 - Run independent source discovery, retaining each model's searches and findings before sharing results.
 - Store sources and findings with URLs, titles, publishers, dates where verifiable, retrieval timestamps, discovery attribution and supporting passages or locators when available.
@@ -55,6 +57,14 @@ Let analysts choose two critical uncertainties, define contrasting ends for each
 Automatically update the suggested AI model list using [Artificial Analysis AA Briefcase rankings](https://artificialanalysis.ai/evaluations/aa-briefcase), matched to available OpenRouter model identifiers and capabilities. Show the ranking source and refresh date, consider developer diversity and cost, and preserve users' existing model choices.
 
 The ranking page currently states that there is no publicly available API. Confirm a permitted, reliable data feed or scheduled import before implementing automatic refreshes. Keep a last-known-good list if updates fail, and make clear that benchmark performance is not a direct measure of foresight quality.
+
+## Add fast models to the model picker
+
+Add a tab listing models based on their output speed and/or time to first token.
+
+## Let users choose their OpenRouter Fusion panel
+
+At the moment, Scenario Designer defaults to the 'Quality' panel of models when using [Fusion](https://openrouter.ai/fusion/). Let users choose their own panel.
 
 ## Estimate environmental impact of designing your scenarios with AI assistance
 
@@ -123,3 +133,8 @@ Outstanding validation, rather than missing core workflow features.
 - Run an initial pilot with approximately five humanitarian analysts; compare scenario quality and active working time with solo practice, and assess agency, enjoyment and trust.
 - Add local stage-timing measurements to support the pilot without central telemetry by default. Treat the 1–2 hour working-session goal as a target to evaluate.
 - Resolve issues found in the pilot and publish the limits of the validation evidence.
+
+## Multilingual scenario design
+
+- Present the Scenario Design app in multiple languages.
+- Let users choose what language(s) they'd like the AI models to respond in.
